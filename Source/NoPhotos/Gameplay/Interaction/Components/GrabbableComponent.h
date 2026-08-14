@@ -5,7 +5,7 @@
 #include "GrabbableComponent.generated.h"
 
 UCLASS(ClassGroup=(Interaction), meta=(BlueprintSpawnableComponent))
-class PHYSICSANIMATIONTEXT_API UGrabbableComponent : public UActorComponent
+class NOPHOTOS_API UGrabbableComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
