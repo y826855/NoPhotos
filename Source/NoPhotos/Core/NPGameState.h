@@ -40,6 +40,9 @@ public:
 	bool IsRoomHost(const APlayerState* PlayerState) const;
 
 	UFUNCTION(BlueprintPure, Category = "Room")
+	bool IsRoomMemberReady(const APlayerState* PlayerState) const;
+
+	UFUNCTION(BlueprintPure, Category = "Room")
 	bool CanHostStartGame() const;
 
 	UPROPERTY(BlueprintAssignable, Category = "Room")

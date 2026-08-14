@@ -21,7 +21,10 @@ public:
 	bool HostRoom();
 
 	UFUNCTION(BlueprintCallable, Category = "Room")
-	bool JoinLocalRoom();
+	bool FindRooms();
+
+	UFUNCTION(BlueprintCallable, Category = "Room")
+	bool JoinRoom(int32 RoomNumber);
 
 	UFUNCTION(BlueprintCallable, Category = "Room")
 	void SetReady(bool bIsReady);
@@ -29,8 +32,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Room")
 	void RequestStartGame();
 
+	UFUNCTION(BlueprintCallable, Category = "Room")
+	void ExitRoom();
+
 	UFUNCTION(BlueprintPure, Category = "Room")
 	bool IsRoomHost() const;
+
+	UFUNCTION(BlueprintPure, Category = "Room")
+	bool IsRoomReady() const;
 
 	UFUNCTION(BlueprintPure, Category = "Room")
 	bool CanStartGame() const;
@@ -43,4 +52,14 @@ protected:
 
 	UFUNCTION(Server, Reliable)
 	void ServerRequestStartGame();
+
+	UFUNCTION(Server, Reliable)
+	void ServerRequestExitRoom();
+
+public:
+	UFUNCTION(Client, Reliable)
+	void ClientBeginHostMigration(const FString& MigrationId, bool bBecomeHost);
+
+	UFUNCTION(Client, Reliable)
+	void ClientLeaveRoom();
 };
