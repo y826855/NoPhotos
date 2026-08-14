@@ -23,22 +23,7 @@ public class NoPhotos : ModuleRules
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 
-		PublicIncludePaths.AddRange(new string[] {
-			"NoPhotos",
-			"NoPhotos/Variant_Platforming",
-			"NoPhotos/Variant_Platforming/Animation",
-			"NoPhotos/Variant_Combat",
-			"NoPhotos/Variant_Combat/AI",
-			"NoPhotos/Variant_Combat/Animation",
-			"NoPhotos/Variant_Combat/Gameplay",
-			"NoPhotos/Variant_Combat/Interfaces",
-			"NoPhotos/Variant_Combat/UI",
-			"NoPhotos/Variant_SideScrolling",
-			"NoPhotos/Variant_SideScrolling/AI",
-			"NoPhotos/Variant_SideScrolling/Gameplay",
-			"NoPhotos/Variant_SideScrolling/Interfaces",
-			"NoPhotos/Variant_SideScrolling/UI"
-		});
+		PublicIncludePaths.Add(ModuleDirectory);
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
