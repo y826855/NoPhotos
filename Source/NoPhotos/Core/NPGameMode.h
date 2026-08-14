@@ -7,6 +7,7 @@
 #include "NPGameMode.generated.h"
 
 class APlayerState;
+class ANPPlayerController;
 class UWorld;
 
 UCLASS()
@@ -23,14 +24,22 @@ public:
 	bool ActivateRoom(APlayerController* HostPlayer);
 	void SetPlayerReady(APlayerController* PlayerController, bool bIsReady);
 	void TryStartGame(APlayerController* RequestingPlayer);
+	void RequestExitRoom(ANPPlayerController* RequestingPlayer);
 
 protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Room")
 	TSoftObjectPtr<UWorld> GameLevel;
 
 private:
+	void FinishHostMigrationExit();
+
 	bool bRoomActive = false;
 
 	UPROPERTY()
 	TObjectPtr<APlayerState> HostPlayerState;
+
+	UPROPERTY()
+	TObjectPtr<ANPPlayerController> PendingExitingHost;
+
+	FTimerHandle HostMigrationExitTimer;
 };
