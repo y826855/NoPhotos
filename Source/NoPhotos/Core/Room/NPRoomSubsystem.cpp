@@ -103,11 +103,18 @@ void UNPRoomSubsystem::Deinitialize()
 	PendingExitAction = ENPRoomExitAction::None;
 	PendingMigrationId.Reset();
 	ReturnMapPath.Reset();
+	bCleaningSessionAfterNetworkFailure = false;
 	Super::Deinitialize();
 }
 
 bool UNPRoomSubsystem::HostRoom()
 {
+	if (bCleaningSessionAfterNetworkFailure)
+	{
+		NPRoomLog::Warning(this, TEXT("방 생성 생략: 연결이 끊긴 이전 방 정보를 정리 중입니다."));
+		return false;
+	}
+
 	UWorld* World = GetWorld();
 	if (!World)
 	{
@@ -187,6 +194,12 @@ bool UNPRoomSubsystem::HostRoom()
 
 bool UNPRoomSubsystem::FindRooms()
 {
+	if (bCleaningSessionAfterNetworkFailure)
+	{
+		NPRoomLog::Warning(this, TEXT("방 목록 검색 생략: 연결이 끊긴 이전 방 정보를 정리 중입니다."));
+		return false;
+	}
+
 	if (const UWorld* World = GetWorld(); World && World->GetNetMode() == NM_Client)
 	{
 		NPRoomLog::Warning(this, TEXT("방 목록 검색 생략: 이미 다른 방에 참가 중입니다."));
@@ -243,6 +256,12 @@ bool UNPRoomSubsystem::FindRooms()
 
 bool UNPRoomSubsystem::JoinRoom(const int32 RoomNumber)
 {
+	if (bCleaningSessionAfterNetworkFailure)
+	{
+		NPRoomLog::Warning(this, TEXT("방 참가 생략: 연결이 끊긴 이전 방 정보를 정리 중입니다."));
+		return false;
+	}
+
 	if (const UWorld* World = GetWorld(); World && World->GetNetMode() == NM_Client)
 	{
 		NPRoomLog::Warning(this, TEXT("방 참가 생략: 이미 다른 방에 참가 중입니다."));
@@ -404,6 +423,33 @@ void UNPRoomSubsystem::HandleDestroySessionComplete(const FName SessionName, con
 			? TEXT("온라인 방 나가기 완료")
 			: TEXT("온라인 방 나가기 결과를 확인하지 못했지만 메뉴 이동을 계속합니다."));
 	TravelToStandaloneMenu();
+}
+
+void UNPRoomSubsystem::HandleNetworkFailureSessionCleanupComplete(
+	const FName SessionName,
+	const bool bWasSuccessful)
+{
+	if (SessionName != NAME_GameSession)
+	{
+		return;
+	}
+
+	bCleaningSessionAfterNetworkFailure = false;
+
+	if (!bWasSuccessful)
+	{
+		if (IOnlineSubsystem* OnlineSubsystem = Online::GetSubsystem(GetWorld()))
+		{
+			if (const IOnlineSessionPtr SessionInterface = OnlineSubsystem->GetSessionInterface(); SessionInterface.IsValid())
+			{
+				SessionInterface->RemoveNamedSession(NAME_GameSession);
+			}
+		}
+
+		NPRoomLog::Warning(this, TEXT("이전 온라인 방의 종료 응답을 확인하지 못해 로컬 방 정보를 제거했습니다."));
+	}
+
+	NPRoomLog::Info(this, TEXT("연결이 끊긴 이전 방 정보 정리 완료. list로 새 방을 검색할 수 있습니다."));
 }
 
 void UNPRoomSubsystem::TravelToStandaloneMenu()
@@ -851,4 +897,41 @@ void UNPRoomSubsystem::HandleNetworkFailure(
 	}
 
 	NPRoomLog::Warning(this, FailureMessage);
+
+	const bool bShouldCleanupSession = FailureType == ENetworkFailure::ConnectionTimeout
+		|| FailureType == ENetworkFailure::PendingConnectionFailure
+		|| FailureType == ENetworkFailure::ConnectionLost;
+	if (!bShouldCleanupSession || bCleaningSessionAfterNetworkFailure)
+	{
+		return;
+	}
+
+	IOnlineSubsystem* OnlineSubsystem = Online::GetSubsystem(FailureWorld);
+	const IOnlineSessionPtr SessionInterface = OnlineSubsystem ? OnlineSubsystem->GetSessionInterface() : nullptr;
+	if (!SessionInterface.IsValid() || !SessionInterface->GetNamedSession(NAME_GameSession))
+	{
+		return;
+	}
+
+	SessionSearch.Reset();
+	ListedRoomResultIndices.Reset();
+	bSearchingForMigration = false;
+	FailureWorld->GetTimerManager().ClearTimer(MigrationSearchTimer);
+	PendingExitAction = ENPRoomExitAction::None;
+	PendingMigrationId.Reset();
+
+	bCleaningSessionAfterNetworkFailure = true;
+	NPRoomLog::Info(this, TEXT("연결이 끊긴 이전 온라인 방 정보 정리 중..."));
+
+	const FOnDestroySessionCompleteDelegate CleanupCompleteDelegate =
+		FOnDestroySessionCompleteDelegate::CreateUObject(
+			this,
+			&UNPRoomSubsystem::HandleNetworkFailureSessionCleanupComplete);
+	if (!SessionInterface->DestroySession(NAME_GameSession, CleanupCompleteDelegate))
+	{
+		SessionInterface->RemoveNamedSession(NAME_GameSession);
+		bCleaningSessionAfterNetworkFailure = false;
+		NPRoomLog::Warning(this, TEXT("이전 온라인 방 정리 요청을 시작하지 못해 로컬 방 정보를 제거했습니다."));
+		NPRoomLog::Info(this, TEXT("이제 list로 새 방을 검색할 수 있습니다."));
+	}
 }

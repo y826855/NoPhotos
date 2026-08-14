@@ -57,6 +57,7 @@ private:
 	void HandleFindSessionsComplete(bool bWasSuccessful);
 	void HandleJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result);
 	void HandleDestroySessionComplete(FName SessionName, bool bWasSuccessful);
+	void HandleNetworkFailureSessionCleanupComplete(FName SessionName, bool bWasSuccessful);
 	void HandlePostLoadMap(UWorld* LoadedWorld);
 	void BeginExit(ENPRoomExitAction ExitAction, const FString& MigrationId);
 	void TravelToStandaloneMenu();
@@ -79,6 +80,7 @@ private:
 	FString ReturnMapPath;
 	int32 MigrationSearchAttempts = 0;
 	bool bSearchingForMigration = false;
+	bool bCleaningSessionAfterNetworkFailure = false;
 	bool bHasLoggedOnlineServiceStatus = false;
 	TArray<FNPRoomDebugMessage> DebugMessages;
 };
