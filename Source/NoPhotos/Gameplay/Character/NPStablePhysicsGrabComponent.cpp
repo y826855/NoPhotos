@@ -137,15 +137,26 @@ void UNPStablePhysicsGrabComponent::TryGrab()
 		UPrimitiveComponent* PrimitiveComponent = Overlap.GetComponent();
 		AActor* OwnerActor = PrimitiveComponent ? PrimitiveComponent->GetOwner() : nullptr;
 
-		// 소유 Actor에 GrabbableComponent가 있을 때만 잡을 수 있습니다.
-		if (PrimitiveComponent
-			&& PrimitiveComponent->IsSimulatingPhysics()
-			&& OwnerActor
-			&& OwnerActor->FindComponentByClass<UGrabbableComponent>())
+		if (!PrimitiveComponent || !OwnerActor)
 		{
-			Grab(PrimitiveComponent);
-			return;
+			continue;
 		}
+
+		UGrabbableComponent* GrabbableComponent =
+			OwnerActor->FindComponentByClass<UGrabbableComponent>();
+		if (!GrabbableComponent)
+		{
+			continue;
+		}
+
+		GrabbableComponent->NotifyGrabStarted(PrimitiveComponent);
+		if (!PrimitiveComponent->IsSimulatingPhysics())
+		{
+			continue;
+		}
+
+		Grab(PrimitiveComponent);
+		return;
 	}
 }
 
