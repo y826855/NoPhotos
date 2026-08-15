@@ -23,8 +23,16 @@ void ANPPlayerController::BeginPlay()
 
 	if (IsLocalController())
 	{
+		if (UGameInstance* GameInstance = GetGameInstance())
+		{
+			if (UNPRoomSubsystem* RoomSubsystem = GameInstance->GetSubsystem<UNPRoomSubsystem>())
+			{
+				RoomSubsystem->LogOnlineServiceStatus();
+			}
+		}
+
 		EnableCheats();
-		NPRoomLog::Info(this, TEXT("방 테스트 명령어 활성화: create, join, ready, start"));
+		NPRoomLog::Info(this, TEXT("방 테스트 명령어 활성화: create, list, join {방번호}, ready, start, out game"));
 	}
 }
 
@@ -44,22 +52,29 @@ bool ANPPlayerController::HostRoom()
 		return false;
 	}
 
-	if (!RoomSubsystem->HostRoom())
-	{
-		return false;
-	}
-
-	ANPGameMode* NPGameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ANPGameMode>() : nullptr;
-	if (!NPGameMode)
-	{
-		NPRoomLog::Warning(this, TEXT("호스트 생성 실패: ANPGameMode를 찾지 못했습니다."));
-		return false;
-	}
-
-	return NPGameMode->ActivateRoom(this);
+	return RoomSubsystem->HostRoom();
 }
 
-bool ANPPlayerController::JoinLocalRoom()
+bool ANPPlayerController::FindRooms()
+{
+	if (!IsLocalController())
+	{
+		NPRoomLog::Warning(this, TEXT("방 목록 검색 실패: 로컬 PlayerController가 아닙니다."));
+		return false;
+	}
+
+	UGameInstance* GameInstance = GetGameInstance();
+	UNPRoomSubsystem* RoomSubsystem = GameInstance ? GameInstance->GetSubsystem<UNPRoomSubsystem>() : nullptr;
+	if (!RoomSubsystem)
+	{
+		NPRoomLog::Warning(this, TEXT("방 목록 검색 실패: RoomSubsystem을 찾지 못했습니다."));
+		return false;
+	}
+
+	return RoomSubsystem->FindRooms();
+}
+
+bool ANPPlayerController::JoinRoom(const int32 RoomNumber)
 {
 	if (!IsLocalController())
 	{
@@ -75,7 +90,7 @@ bool ANPPlayerController::JoinLocalRoom()
 		return false;
 	}
 
-	return RoomSubsystem->JoinLocalRoom();
+	return RoomSubsystem->JoinRoom(RoomNumber);
 }
 
 void ANPPlayerController::SetReady(const bool bIsReady)
@@ -92,10 +107,42 @@ void ANPPlayerController::RequestStartGame()
 	ServerRequestStartGame();
 }
 
+void ANPPlayerController::ExitRoom()
+{
+	if (!IsLocalController())
+	{
+		NPRoomLog::Warning(this, TEXT("방 나가기 실패: 로컬 PlayerController가 아닙니다."));
+		return;
+	}
+
+	if (IsRoomHost())
+	{
+		NPRoomLog::Info(this, TEXT("호스트 방 나가기 요청"));
+		ServerRequestExitRoom();
+		return;
+	}
+
+	UGameInstance* GameInstance = GetGameInstance();
+	UNPRoomSubsystem* RoomSubsystem = GameInstance ? GameInstance->GetSubsystem<UNPRoomSubsystem>() : nullptr;
+	if (!RoomSubsystem)
+	{
+		NPRoomLog::Warning(this, TEXT("방 나가기 실패: RoomSubsystem을 찾지 못했습니다."));
+		return;
+	}
+
+	RoomSubsystem->LeaveRoom();
+}
+
 bool ANPPlayerController::IsRoomHost() const
 {
 	const ANPGameState* NPGameState = GetWorld() ? GetWorld()->GetGameState<ANPGameState>() : nullptr;
 	return NPGameState && NPGameState->IsRoomHost(PlayerState);
+}
+
+bool ANPPlayerController::IsRoomReady() const
+{
+	const ANPGameState* NPGameState = GetWorld() ? GetWorld()->GetGameState<ANPGameState>() : nullptr;
+	return NPGameState && NPGameState->IsRoomMemberReady(PlayerState);
 }
 
 bool ANPPlayerController::CanStartGame() const
@@ -130,5 +177,44 @@ void ANPPlayerController::ServerRequestStartGame_Implementation()
 	}
 
 	NPRoomLog::Warning(this, TEXT("게임 시작 처리 실패: ANPGameMode를 찾지 못했습니다."));
+}
+
+void ANPPlayerController::ServerRequestExitRoom_Implementation()
+{
+	if (ANPGameMode* NPGameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ANPGameMode>() : nullptr)
+	{
+		NPGameMode->RequestExitRoom(this);
+		return;
+	}
+
+	NPRoomLog::Warning(this, TEXT("호스트 방 나가기 실패: ANPGameMode를 찾지 못했습니다."));
+}
+
+void ANPPlayerController::ClientBeginHostMigration_Implementation(
+	const FString& MigrationId,
+	const bool bBecomeHost)
+{
+	UGameInstance* GameInstance = GetGameInstance();
+	UNPRoomSubsystem* RoomSubsystem = GameInstance ? GameInstance->GetSubsystem<UNPRoomSubsystem>() : nullptr;
+	if (!RoomSubsystem)
+	{
+		NPRoomLog::Warning(this, TEXT("호스트 이전 실패: RoomSubsystem을 찾지 못했습니다."));
+		return;
+	}
+
+	RoomSubsystem->BeginHostMigration(MigrationId, bBecomeHost);
+}
+
+void ANPPlayerController::ClientLeaveRoom_Implementation()
+{
+	UGameInstance* GameInstance = GetGameInstance();
+	UNPRoomSubsystem* RoomSubsystem = GameInstance ? GameInstance->GetSubsystem<UNPRoomSubsystem>() : nullptr;
+	if (!RoomSubsystem)
+	{
+		NPRoomLog::Warning(this, TEXT("방 나가기 실패: RoomSubsystem을 찾지 못했습니다."));
+		return;
+	}
+
+	RoomSubsystem->LeaveRoom();
 }
 

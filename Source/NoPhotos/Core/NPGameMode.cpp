@@ -5,10 +5,13 @@
 
 #include "NPGameState.h"
 #include "NPPlayerController.h"
+#include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "Room/NPRoomLog.h"
+#include "Room/NPRoomSubsystem.h"
+#include "TimerManager.h"
 
 ANPGameMode::ANPGameMode()
 {
@@ -35,6 +38,14 @@ void ANPGameMode::PostLogin(APlayerController* NewPlayer)
 	if (ANPGameState* NPGameState = GetGameState<ANPGameState>())
 	{
 		NPGameState->AddRoomMember(NewPlayer->PlayerState, false);
+		if (UGameInstance* GameInstance = GetGameInstance())
+		{
+			if (UNPRoomSubsystem* RoomSubsystem = GameInstance->GetSubsystem<UNPRoomSubsystem>())
+			{
+				RoomSubsystem->UpdateRoomPlayerCount(NPGameState->GetRoomMembers().Num());
+			}
+		}
+
 		NPRoomLog::Info(
 			this,
 			FString::Printf(
@@ -63,6 +74,16 @@ void ANPGameMode::Logout(AController* Exiting)
 	if (ANPGameState* NPGameState = GetGameState<ANPGameState>())
 	{
 		NPGameState->RemoveRoomMember(ExitingPlayerState);
+		if (ExitingPlayerState != HostPlayerState)
+		{
+			if (UGameInstance* GameInstance = GetGameInstance())
+			{
+				if (UNPRoomSubsystem* RoomSubsystem = GameInstance->GetSubsystem<UNPRoomSubsystem>())
+				{
+					RoomSubsystem->UpdateRoomPlayerCount(NPGameState->GetRoomMembers().Num());
+				}
+			}
+		}
 	}
 
 	if (ExitingPlayerState == HostPlayerState)
@@ -167,6 +188,113 @@ void ANPGameMode::TryStartGame(APlayerController* RequestingPlayer)
 	}
 
 	const FString GameLevelPath = GameLevel.ToSoftObjectPath().GetLongPackageName();
+	if (UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (UNPRoomSubsystem* RoomSubsystem = GameInstance->GetSubsystem<UNPRoomSubsystem>())
+		{
+			RoomSubsystem->MarkRoomInGame();
+		}
+	}
+
 	NPRoomLog::Info(this, FString::Printf(TEXT("게임 시작 승인: ServerTravel -> %s"), *GameLevelPath));
 	GetWorld()->ServerTravel(GameLevelPath);
+}
+
+void ANPGameMode::RequestExitRoom(ANPPlayerController* RequestingPlayer)
+{
+	if (!IsValid(RequestingPlayer) || !IsValid(RequestingPlayer->PlayerState))
+	{
+		NPRoomLog::Warning(this, TEXT("호스트 방 나가기 실패: 요청 플레이어가 유효하지 않습니다."));
+		return;
+	}
+
+	if (!bRoomActive)
+	{
+		NPRoomLog::Warning(this, TEXT("호스트 이전은 대기방에서만 지원합니다. 현재 방을 종료합니다."));
+		RequestingPlayer->ClientLeaveRoom();
+		return;
+	}
+
+	if (RequestingPlayer->PlayerState != HostPlayerState)
+	{
+		NPRoomLog::Warning(this, TEXT("호스트 이전 실패: 요청 플레이어가 현재 호스트가 아닙니다."));
+		return;
+	}
+
+	ANPGameState* NPGameState = GetGameState<ANPGameState>();
+	if (!NPGameState)
+	{
+		NPRoomLog::Warning(this, TEXT("호스트 이전 실패: ANPGameState를 찾지 못했습니다."));
+		return;
+	}
+
+	APlayerState* NextHostPlayerState = nullptr;
+	for (const FNPPlayerRoomInfo& RoomMember : NPGameState->GetRoomMembers())
+	{
+		if (!RoomMember.bIsHost && IsValid(RoomMember.PlayerState))
+		{
+			NextHostPlayerState = RoomMember.PlayerState;
+			break;
+		}
+	}
+
+	ANPPlayerController* NextHostController = nullptr;
+	if (NextHostPlayerState)
+	{
+		for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator; ++Iterator)
+		{
+			ANPPlayerController* PlayerController = Cast<ANPPlayerController>(Iterator->Get());
+			if (PlayerController && PlayerController->PlayerState == NextHostPlayerState)
+			{
+				NextHostController = PlayerController;
+				break;
+			}
+		}
+	}
+
+	bRoomActive = false;
+	HostPlayerState = nullptr;
+
+	if (!NextHostController)
+	{
+		NPRoomLog::Info(this, TEXT("마지막 참가자인 호스트가 퇴장합니다. Steam 방을 삭제합니다."));
+		RequestingPlayer->ClientLeaveRoom();
+		return;
+	}
+
+	const FString MigrationId = FGuid::NewGuid().ToString(EGuidFormats::Digits);
+	for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator; ++Iterator)
+	{
+		ANPPlayerController* PlayerController = Cast<ANPPlayerController>(Iterator->Get());
+		if (!PlayerController || PlayerController == RequestingPlayer)
+		{
+			continue;
+		}
+
+		PlayerController->ClientBeginHostMigration(MigrationId, PlayerController == NextHostController);
+	}
+
+	NPRoomLog::Info(
+		this,
+		FString::Printf(
+			TEXT("대기방 호스트 이전 시작: NextHost=%s"),
+			*NextHostPlayerState->GetPlayerName()));
+
+	PendingExitingHost = RequestingPlayer;
+	GetWorldTimerManager().SetTimer(
+		HostMigrationExitTimer,
+		this,
+		&ANPGameMode::FinishHostMigrationExit,
+		1.0f,
+		false);
+}
+
+void ANPGameMode::FinishHostMigrationExit()
+{
+	if (IsValid(PendingExitingHost))
+	{
+		PendingExitingHost->ClientLeaveRoom();
+	}
+
+	PendingExitingHost = nullptr;
 }

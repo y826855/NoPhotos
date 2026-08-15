@@ -1,8 +1,7 @@
 #include "NPRoomCheatManager.h"
 
 #include "NPRoomLog.h"
-// #include "Core/NPPlayerController.h"
-#include "NPPlayerController.h"
+#include "Core/NPPlayerController.h"
 
 void UNPRoomCheatManager::Create()
 {
@@ -15,11 +14,22 @@ void UNPRoomCheatManager::Create()
 	NPRoomLog::Warning(this, TEXT("create 실패: ANPPlayerController를 찾지 못했습니다."));
 }
 
-void UNPRoomCheatManager::Join()
+void UNPRoomCheatManager::List()
 {
 	if (ANPPlayerController* NPPlayerController = Cast<ANPPlayerController>(GetPlayerController()))
 	{
-		NPPlayerController->JoinLocalRoom();
+		NPPlayerController->FindRooms();
+		return;
+	}
+
+	NPRoomLog::Warning(this, TEXT("list 실패: ANPPlayerController를 찾지 못했습니다."));
+}
+
+void UNPRoomCheatManager::Join(const int32 RoomNumber)
+{
+	if (ANPPlayerController* NPPlayerController = Cast<ANPPlayerController>(GetPlayerController()))
+	{
+		NPPlayerController->JoinRoom(RoomNumber);
 		return;
 	}
 
@@ -60,4 +70,21 @@ void UNPRoomCheatManager::Start()
 	}
 
 	NPPlayerController->RequestStartGame();
+}
+
+void UNPRoomCheatManager::Out(const FString& Command)
+{
+	if (!Command.Equals(TEXT("game"), ESearchCase::IgnoreCase))
+	{
+		NPRoomLog::Warning(this, TEXT("out 실패: out game 형식으로 입력해 주세요."));
+		return;
+	}
+
+	if (ANPPlayerController* NPPlayerController = Cast<ANPPlayerController>(GetPlayerController()))
+	{
+		NPPlayerController->ExitRoom();
+		return;
+	}
+
+	NPRoomLog::Warning(this, TEXT("out game 실패: ANPPlayerController를 찾지 못했습니다."));
 }
