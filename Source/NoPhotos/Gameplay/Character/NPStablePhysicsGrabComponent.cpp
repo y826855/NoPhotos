@@ -5,6 +5,7 @@
 #include "DrawDebugHelpers.h"
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "Gameplay/Interaction/Components/GrabbableComponent.h"
 
 UNPStablePhysicsGrabComponent::UNPStablePhysicsGrabComponent()
@@ -21,6 +22,19 @@ UNPStablePhysicsGrabComponent::UNPStablePhysicsGrabComponent()
 	SetAngularTwistLimit(ACM_Limited, 45.0f);
 }
 
+void UNPStablePhysicsGrabComponent::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		SetLinearBreakable(true, GrabLinearBreakThreshold);
+		OnConstraintBroken.AddDynamic(
+			this,
+			&UNPStablePhysicsGrabComponent::HandleConstraintBroken);
+	}
+}
+
 void UNPStablePhysicsGrabComponent::Initialize(
 	USkeletalMeshComponent* InPhysicsMesh,
 	FName InHandBoneName)
@@ -34,6 +48,7 @@ void UNPStablePhysicsGrabComponent::SetGrabRequested(bool bRequested)
 	bGrabRequested = bRequested;
 	if (!bGrabRequested)
 	{
+		bWaitForGrabRelease = false;
 		ReleaseGrab();
 	}
 }
@@ -44,6 +59,16 @@ void UNPStablePhysicsGrabComponent::SetGrabSimulationEnabled(bool bEnabled)
 	if (!bGrabSimulationEnabled)
 	{
 		ReleaseGrab();
+	}
+}
+
+void UNPStablePhysicsGrabComponent::SetLinearBreakThreshold(
+	float InLinearBreakThreshold)
+{
+	GrabLinearBreakThreshold = FMath::Max(InLinearBreakThreshold, 0.0f);
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		SetLinearBreakable(true, GrabLinearBreakThreshold);
 	}
 }
 
@@ -102,12 +127,26 @@ void UNPStablePhysicsGrabComponent::TickComponent(
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	if (bGrabSimulationEnabled && bGrabRequested && !IsHoldingObject())
+	if (bGrabSimulationEnabled
+		&& bGrabRequested
+		&& !bWaitForGrabRelease
+		&& !IsHoldingObject())
 	{
 		TryGrab();
 	}
 
 	DrawGrabDebug();
+}
+
+void UNPStablePhysicsGrabComponent::HandleConstraintBroken(int32)
+{
+	if (!IsHoldingObject())
+	{
+		return;
+	}
+
+	bWaitForGrabRelease = true;
+	ReleaseGrab();
 }
 
 void UNPStablePhysicsGrabComponent::TryGrab()
@@ -144,7 +183,7 @@ void UNPStablePhysicsGrabComponent::TryGrab()
 
 		UGrabbableComponent* GrabbableComponent =
 			OwnerActor->FindComponentByClass<UGrabbableComponent>();
-		if (!GrabbableComponent)
+		if (!GrabbableComponent || !GrabbableComponent->CanBeGrabbed())
 		{
 			continue;
 		}

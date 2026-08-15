@@ -21,6 +21,8 @@ public:
 	/** 캐릭터 프로필에서 찾은 이동 중심과 발 본 이름을 적용합니다. */
 	void ConfigureBoneNames(FName InPelvisBodyName, FName InLeftFootBoneName, FName InRightFootBoneName);
 	void SetTargetPelvisHeight(float InTargetPelvisHeight);
+	void SetMaxMoveSpeed(float InMaxMoveSpeed);
+	void SetJumpVelocityChange(float InJumpVelocityChange);
 
 	/** 카메라 기준으로 계산된 월드 공간 이동 방향을 전달받습니다. */
 	void SetMoveInput(const FVector& InMoveInput);
@@ -70,7 +72,6 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Bones")
 	FName RightFootBoneName = TEXT("foot_r");
 
-	UPROPERTY(EditAnywhere, Category="Movement", meta=(ClampMin="0.0"))
 	float MaxMoveSpeed = 350.0f;
 
 	UPROPERTY(EditAnywhere, Category="Movement", meta=(ClampMin="0.0"))
@@ -123,7 +124,6 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Ground Support", meta=(ClampMin="0.0"))
 	float GroundProbeRadius = 10.0f;
 
-	UPROPERTY(EditAnywhere, Category="Jump", meta=(ClampMin="0.0"))
 	float JumpVelocityChange = 350.0f;
 
 private:

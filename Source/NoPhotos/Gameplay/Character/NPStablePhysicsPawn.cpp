@@ -153,6 +153,10 @@ void ANPStablePhysicsPawn::ApplyCharacterProfile()
 		CharacterProfile->LeftFootBoneName,
 		CharacterProfile->RightFootBoneName);
 	PhysicsMovement->SetTargetPelvisHeight(CharacterProfile->PelvisHeight);
+	PhysicsMovement->SetMaxMoveSpeed(CharacterProfile->MaxMoveSpeed);
+	PhysicsMovement->SetJumpVelocityChange(CharacterProfile->JumpVelocityChange);
+	RightHandGrab->SetLinearBreakThreshold(
+		CharacterProfile->GrabLinearBreakThreshold);
 }
 
 void ANPStablePhysicsPawn::RefreshCharacterProfileIfChanged()

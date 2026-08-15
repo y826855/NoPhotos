@@ -26,6 +26,7 @@ public:
 
 	/** false이면 탐색과 Constraint 생성을 수행하지 않습니다. */
 	void SetGrabSimulationEnabled(bool bEnabled);
+	void SetLinearBreakThreshold(float InLinearBreakThreshold);
 
 	FOnStableGrabChanged OnGrabbedComponentChanged;
 
@@ -45,6 +46,8 @@ public:
 	void ClearReplicatedGrab();
 
 protected:
+	virtual void BeginPlay() override;
+
 	virtual void TickComponent(
 		float DeltaTime,
 		ELevelTick TickType,
@@ -53,10 +56,15 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Grab", meta=(ClampMin="0.0"))
 	float GrabRadius = 18.0f;
 
+	float GrabLinearBreakThreshold = 200000.0f;
+
 	UPROPERTY(EditAnywhere, Category="Grab Debug")
 	bool bDrawGrabDebug = true;
 
 private:
+	UFUNCTION()
+	void HandleConstraintBroken(int32 ConstraintIndex);
+
 	void TryGrab();
 	void Grab(UPrimitiveComponent* PrimitiveComponent);
 	void ReleaseGrab();
@@ -72,4 +80,5 @@ private:
 	FName GrabbedBoneName = NAME_None;
 	bool bGrabSimulationEnabled = true;
 	bool bGrabRequested = false;
+	bool bWaitForGrabRelease = false;
 };
