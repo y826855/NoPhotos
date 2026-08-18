@@ -124,6 +124,7 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Camera", meta=(ClampMin="0.0"))
 	float CameraTargetHeight = 60.0f;
 
+#pragma region Pawn Debug Settings
 	UPROPERTY(EditAnywhere, Category="Facing Debug")
 	bool bDrawFacingDebug = true;
 
@@ -132,6 +133,7 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category="Facing Debug", meta=(ClampMin="1.0"))
 	float FacingDebugArrowLength = 150.0f;
+#pragma endregion
 
 	/** 메시의 로컬 +X축과 실제 캐릭터 정면 사이의 각도를 보정합니다. */
 	UPROPERTY(EditAnywhere, Category="Facing", meta=(ClampMin="-180.0", ClampMax="180.0"))
@@ -162,6 +164,15 @@ private:
 	void ApplyPhysicalAnimationGroups();
 	void ConfigurePelvisStability();
 	void UpdateCameraTarget();
+
+	void UpdateRightHandIK(float DeltaSeconds);
+	void Move(const FInputActionValue& Value);
+	void Look(const FInputActionValue& Value);
+	void Jump();
+	void StartRightHand();
+	void StopRightHand();
+
+#pragma region Pawn Debug Functions
 	void DrawFacingDebug() const;
 	void DrawPhysicalProfileDebug() const;
 	void DrawPhysicalProfileBone(
@@ -174,12 +185,8 @@ private:
 		FName EndBoneName,
 		const FColor& Color,
 		float Rigidity) const;
-	void UpdateRightHandIK(float DeltaSeconds);
-	void Move(const FInputActionValue& Value);
-	void Look(const FInputActionValue& Value);
-	void Jump();
-	void StartRightHand();
-	void StopRightHand();
+#pragma endregion
+
 
 	bool bRightHandActive = false;
 	uint32 AppliedCharacterProfileRevision = 0;
