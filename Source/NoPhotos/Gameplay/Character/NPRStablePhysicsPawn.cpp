@@ -57,10 +57,16 @@ void ANPRStablePhysicsPawn::GetLifetimeReplicatedProps(
 	DOREPLIFETIME(ANPRStablePhysicsPawn, ReplicatedAnimationAcceleration);
 	DOREPLIFETIME(ANPRStablePhysicsPawn, bReplicatedAnimationIsFalling);
 	DOREPLIFETIME(ANPRStablePhysicsPawn, ReplicatedAnimationForwardDirection);
+	DOREPLIFETIME_CONDITION(
+		ANPRStablePhysicsPawn,
+		ReplicatedViewRotation,
+		COND_SkipOwner);
 }
 
 void ANPRStablePhysicsPawn::Tick(float DeltaSeconds)
 {
+	UpdateViewRotationReplication(DeltaSeconds);
+
 	if (!HasAuthority())
 	{
 		FVector ServerForward = FVector(ReplicatedAnimationForwardDirection);
@@ -180,10 +186,30 @@ void ANPRStablePhysicsPawn::ApplyRightHandState(bool bActive)
 	}
 }
 
+FRotator ANPRStablePhysicsPawn::GetTargetViewRotation() const
+{
+	if (IsLocallyControlled() && Controller)
+	{
+		return Controller->GetControlRotation();
+	}
+
+	return ReplicatedViewRotation;
+}
+
 void ANPRStablePhysicsPawn::ServerSetMoveInput_Implementation(
 	FVector_NetQuantizeNormal WorldMoveInput)
 {
 	Super::ApplyMoveInput(FVector(WorldMoveInput));
+}
+
+void ANPRStablePhysicsPawn::ServerSetViewRotation_Implementation(
+	uint16 CompressedYaw,
+	uint16 CompressedPitch)
+{
+	SetReplicatedViewRotation(FRotator(
+		FRotator::DecompressAxisFromShort(CompressedPitch),
+		FRotator::DecompressAxisFromShort(CompressedYaw),
+		0.0f));
 }
 
 void ANPRStablePhysicsPawn::ServerStopMove_Implementation()
@@ -271,6 +297,47 @@ UPrimitiveComponent* ANPRStablePhysicsPawn::ResolveReplicatedGrabbedComponent() 
 	}
 
 	return nullptr;
+}
+
+void ANPRStablePhysicsPawn::UpdateViewRotationReplication(float DeltaSeconds)
+{
+	if (HasAuthority())
+	{
+		if (IsLocallyControlled())
+		{
+			SetReplicatedViewRotation(Super::GetTargetViewRotation());
+		}
+		return;
+	}
+
+	if (!IsLocallyControlled() || !Controller)
+	{
+		return;
+	}
+
+	ViewRotationSendAccumulator += DeltaSeconds;
+	if (ViewRotationSendAccumulator < 0.05f)
+	{
+		return;
+	}
+
+	ViewRotationSendAccumulator -= 0.05f;
+	const FRotator ViewRotation = Controller->GetControlRotation();
+	ServerSetViewRotation(
+		FRotator::CompressAxisToShort(ViewRotation.Yaw),
+		FRotator::CompressAxisToShort(ViewRotation.Pitch));
+}
+
+void ANPRStablePhysicsPawn::SetReplicatedViewRotation(
+	const FRotator& NewViewRotation)
+{
+	ReplicatedViewRotation = FRotator(
+		FMath::Clamp(
+			FRotator::NormalizeAxis(NewViewRotation.Pitch),
+			-89.9f,
+			89.9f),
+		FRotator::NormalizeAxis(NewViewRotation.Yaw),
+		0.0f);
 }
 
 void ANPRStablePhysicsPawn::DrawGrabNetworkDebug() const

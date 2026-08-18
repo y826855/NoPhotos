@@ -418,7 +418,31 @@ void UNPStablePhysicsCharacterProfile::PostEditChangeProperty(
 			JumpVelocityChange)
 		|| PropertyName == GET_MEMBER_NAME_CHECKED(
 			UNPStablePhysicsCharacterProfile,
-			GrabLinearBreakThreshold))
+			GrabLinearBreakThreshold)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
+			RightHandReachDistance)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
+			RightElbowOutwardDistance)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
+			RightHandIKBlendSpeed)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
+			MaxSpineBendAngle)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
+			MaxSpineLeanBackAngle)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
+			SpineBendStartViewPitch)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
+			SpineLeanBackStartViewPitch)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
+			SpinePitchInterpSpeed))
 	{
 		++SettingsRevision;
 	}
