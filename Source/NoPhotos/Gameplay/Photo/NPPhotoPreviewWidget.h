@@ -24,9 +24,15 @@ public:
 	UTextureRenderTarget2D* GetDisplayedPhoto() const { return DisplayedPhoto; }
 
 protected:
+	virtual void NativeDestruct() override;
+
 	/** WBP에 같은 이름의 Image가 있으면 C++에서 Render Target을 바로 연결합니다. */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UImage> PhotoImage;
+
+	/** 촬영 이미지를 화면에 표시하는 시간입니다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Photo", meta=(ClampMin="0.0"))
+	float PreviewDuration = 2.0f;
 
 	/** WBP에서 플래시, 페이드 등의 연출을 시작할 수 있습니다. */
 	UFUNCTION(BlueprintImplementableEvent, Category="Photo", meta=(DisplayName="On Photo Displayed"))
@@ -35,4 +41,6 @@ protected:
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<UTextureRenderTarget2D> DisplayedPhoto;
+
+	FTimerHandle PreviewHideTimer;
 };
