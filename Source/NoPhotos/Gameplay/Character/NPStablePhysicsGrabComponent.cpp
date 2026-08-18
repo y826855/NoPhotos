@@ -72,6 +72,17 @@ void UNPStablePhysicsGrabComponent::SetLinearBreakThreshold(
 	}
 }
 
+void UNPStablePhysicsGrabComponent::SetMovementIntent(
+	const FVector& WorldMovementIntent)
+{
+	MovementIntent = WorldMovementIntent.GetClampedToMaxSize(1.0f);
+}
+
+void UNPStablePhysicsGrabComponent::NotifyJumpIntent()
+{
+	JumpIntentRemainingTime = JumpIntentDuration;
+}
+
 FTransform UNPStablePhysicsGrabComponent::GetGrabConstraintFrame(
 	EConstraintFrame::Type Frame) const
 {
@@ -100,7 +111,9 @@ void UNPStablePhysicsGrabComponent::ApplyReplicatedGrab(
 		? PrimitiveComponent->GetOwner()->FindComponentByClass<UGrabbableComponent>()
 		: nullptr;
 	GrabbedBoneName = BoneName;
-	LastDebugLinearForce = FVector::ZeroVector;
+	// 디버그 전용: 복제된 Grab 대상의 디버그 누적 상태를 초기화합니다.
+	ResetGrabDebug();
+
 	if (GrabbedGrabbableComponent)
 	{
 		GrabbedGrabbableComponent->NotifyGrabStarted(GrabbedComponent);
@@ -154,7 +167,11 @@ void UNPStablePhysicsGrabComponent::TickComponent(
 	{
 		UpdateGrabForce(DeltaTime);
 	}
+	JumpIntentRemainingTime = FMath::Max(
+		JumpIntentRemainingTime - DeltaTime,
+		0.0f);
 
+	// 디버그 전용: 현재 Grab 범위와 힘 정보를 월드에 표시합니다.
 	DrawGrabDebug();
 }
 
@@ -224,7 +241,9 @@ bool UNPStablePhysicsGrabComponent::Grab(
 	GrabbedComponent = PrimitiveComponent;
 	GrabbedGrabbableComponent = GrabbableComponent;
 	GrabbedBoneName = NAME_None;
-	LastDebugLinearForce = FVector::ZeroVector;
+	// 디버그 전용: 새로운 Grab 대상의 디버그 누적 상태를 초기화합니다.
+	ResetGrabDebug();
+
 	SetWorldLocation(PhysicsMesh->GetSocketLocation(HandBoneName));
 
 	// Constraint를 통해 손 Body와 물체가 서로 물리적인 힘을 주고받습니다.
@@ -259,15 +278,38 @@ void UNPStablePhysicsGrabComponent::UpdateGrabForce(float DeltaTime)
 	FVector AngularImpulse = FVector::ZeroVector;
 	GetConstraintForce(LinearImpulse, AngularImpulse);
 	const FVector LinearForce = LinearImpulse / DeltaTime;
-	if (LinearForce.Size() >= GrabDebugMinimumForce)
+	const FVector RelicForce = -LinearForce;
+
+	FVector UserIntent = MovementIntent;
+	if (JumpIntentRemainingTime > 0.0f)
 	{
-		LastDebugLinearForce = LinearForce;
+		UserIntent += FVector::UpVector;
 	}
+	UserIntent = UserIntent.GetClampedToMaxSize(1.0f);
+
+	FVector IntentAlignedForce = FVector::ZeroVector;
+	float IntentForceAlignment = 0.0f;
+	const FVector UserIntentDirection = UserIntent.GetSafeNormal();
+	if (!UserIntentDirection.IsNearlyZero() && !RelicForce.IsNearlyZero())
+	{
+		IntentForceAlignment = FVector::DotProduct(
+			RelicForce.GetSafeNormal(),
+			UserIntentDirection);
+		const float IntentForceMagnitude = FMath::Max(
+			FVector::DotProduct(
+				RelicForce,
+				UserIntentDirection),
+			0.0f);
+		IntentAlignedForce = UserIntentDirection * IntentForceMagnitude;
+	}
+	// 디버그 전용: 힘과 유저 의도를 평활화하고 표시용 일치도를 갱신합니다.
+	UpdateGrabDebug(DeltaTime, RelicForce, UserIntent);
 
 	// Chaos 출력은 Constraint impulse이므로 DeltaTime으로 나눠 force로 변환합니다.
 	GrabbedGrabbableComponent->NotifyGrabForce(
-		LinearForce,
-		AngularImpulse / DeltaTime);
+		IntentAlignedForce,
+		-AngularImpulse / DeltaTime,
+		IntentForceAlignment);
 }
 
 void UNPStablePhysicsGrabComponent::ReleaseGrab()
@@ -290,6 +332,52 @@ void UNPStablePhysicsGrabComponent::ReleaseGrab()
 	OnGrabbedComponentChanged.Broadcast(nullptr);
 }
 
+#pragma region Grab Debug Functions
+void UNPStablePhysicsGrabComponent::ResetGrabDebug()
+{
+	LastDebugRelicForce = FVector::ZeroVector;
+	SmoothedDebugUserIntent = FVector::ZeroVector;
+	LastDebugIntentForceAlignment = 0.0f;
+}
+void UNPStablePhysicsGrabComponent::UpdateGrabDebug(
+	float DeltaTime,
+	const FVector& RelicForce,
+	const FVector& UserIntent)
+{
+	if (RelicForce.Size() >= GrabDebugMinimumForce)
+	{
+		if (LastDebugRelicForce.IsNearlyZero())
+		{
+			LastDebugRelicForce = RelicForce;
+		}
+		else
+		{
+			const float ForceSmoothingAlpha = 1.0f - FMath::Exp(
+				-GrabDebugForceSmoothingSpeed * DeltaTime);
+			LastDebugRelicForce = FMath::Lerp(
+				LastDebugRelicForce,
+				RelicForce,
+				ForceSmoothingAlpha);
+		}
+	}
+
+	const float IntentSmoothingAlpha = 1.0f - FMath::Exp(
+		-GrabDebugIntentSmoothingSpeed * DeltaTime);
+	SmoothedDebugUserIntent = FMath::Lerp(
+		SmoothedDebugUserIntent,
+		UserIntent,
+		IntentSmoothingAlpha);
+	if (!SmoothedDebugUserIntent.IsNearlyZero()
+		&& !LastDebugRelicForce.IsNearlyZero())
+	{
+		LastDebugIntentForceAlignment = FVector::DotProduct(
+			SmoothedDebugUserIntent.GetSafeNormal(),
+			LastDebugRelicForce.GetSafeNormal());
+		return;
+	}
+
+	LastDebugIntentForceAlignment = 0.0f;
+}
 void UNPStablePhysicsGrabComponent::DrawGrabDebug() const
 {
 	if (!bDrawGrabDebug
@@ -326,37 +414,76 @@ void UNPStablePhysicsGrabComponent::DrawGrabDebug() const
 
 		if (GrabbedGrabbableComponent)
 		{
-			const FVector LinearForce = LastDebugLinearForce;
-			const FVector ForceDirection = LinearForce.GetSafeNormal();
-			const FVector ForceStart = HandLocation;
-			if (!ForceDirection.IsNearlyZero())
-			{
-				DrawDebugDirectionalArrow(
-					GetWorld(),
-					ForceStart,
-					ForceStart + ForceDirection * 100.0f,
-					20.0f,
-					FColor::Cyan,
-					false,
-					0.0f,
-					0,
-					4.0f);
-			}
-
-			const FString ForceText = FString::Printf(
-				TEXT("Grab Force: %.0f / %.0f\n%s"),
-				LinearForce.Size(),
-				GrabLinearBreakThreshold,
-				*LinearForce.ToCompactString());
-			DrawDebugString(
-				GetWorld(),
-				ForceStart + FVector(0.0f, 0.0f, 30.0f),
-				ForceText,
-				nullptr,
-				FColor::Cyan,
-				0.0f,
-				false,
-				1.0f);
+			// 디버그 전용: 잡은 지점에 힘과 의도 방향을 표시합니다.
+			DrawGrabForceDebug(HandLocation);
 		}
 	}
 }
+void UNPStablePhysicsGrabComponent::DrawGrabForceDebug(
+	const FVector& ForceStart) const
+{
+	const FVector ForceDirection = LastDebugRelicForce.GetSafeNormal();
+	const FVector IntentDirection =
+		SmoothedDebugUserIntent.GetSafeNormal();
+	if (!ForceDirection.IsNearlyZero())
+	{
+		DrawDebugDirectionalArrow(
+			GetWorld(),
+			ForceStart,
+			ForceStart + ForceDirection * 100.0f,
+			20.0f,
+			FColor::Cyan,
+			false,
+			0.0f,
+			0,
+			4.0f);
+	}
+	if (!IntentDirection.IsNearlyZero())
+	{
+		DrawDebugDirectionalArrow(
+			GetWorld(),
+			ForceStart,
+			ForceStart + SmoothedDebugUserIntent * 80.0f,
+			16.0f,
+			FColor::Yellow,
+			false,
+			0.0f,
+			0,
+			4.0f);
+	}
+
+	const float AlignedForce = FMath::Max(
+		FVector::DotProduct(LastDebugRelicForce, IntentDirection),
+		0.0f);
+	FColor AlignmentColor = FColor::Red;
+	if (LastDebugIntentForceAlignment >= 0.7f)
+	{
+		AlignmentColor = FColor::Green;
+	}
+	else if (LastDebugIntentForceAlignment > 0.0f)
+	{
+		AlignmentColor = FColor::Yellow;
+	}
+
+	const FString ForceText = FString::Printf(
+		TEXT("Relic Force (Cyan): %.0f / %.0f\n")
+		TEXT("User Intent (Yellow): %s\n")
+		TEXT("Alignment: %.2f\n")
+		TEXT("Aligned Force: %.0f\n%s"),
+		LastDebugRelicForce.Size(),
+		GrabLinearBreakThreshold,
+		*SmoothedDebugUserIntent.ToCompactString(),
+		LastDebugIntentForceAlignment,
+		AlignedForce,
+		*LastDebugRelicForce.ToCompactString());
+	DrawDebugString(
+		GetWorld(),
+		ForceStart + FVector(0.0f, 0.0f, 30.0f),
+		ForceText,
+		nullptr,
+		AlignmentColor,
+		0.0f,
+		false,
+		1.0f);
+}
+#pragma endregion

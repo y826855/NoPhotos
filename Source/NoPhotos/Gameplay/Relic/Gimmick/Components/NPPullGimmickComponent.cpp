@@ -80,7 +80,8 @@ void UNPPullGimmickComponent::HandleGrabStarted(UPrimitiveComponent*)
 
 void UNPPullGimmickComponent::HandleGrabForceUpdated(
 	const FVector& LinearForce,
-	const FVector&)
+	const FVector&,
+	float IntentForceAlignment)
 {
 	if (IsCompleted() || PullDirection.IsNearlyZero())
 	{
@@ -100,7 +101,9 @@ void UNPPullGimmickComponent::HandleGrabForceUpdated(
 	CurrentAttemptMaxLinearForce = FMath::Max(
 		CurrentAttemptMaxLinearForce,
 		LinearForce.Size());
-	const bool bExceedsThreshold = PullForce >= PullForceThreshold;
+	const bool bExceedsThreshold =
+		PullForce >= PullForceThreshold
+		&& IntentForceAlignment >= MinimumIntentAlignment;
 
 	if (bExceedsThreshold
 		&& !bPullForceExceeded

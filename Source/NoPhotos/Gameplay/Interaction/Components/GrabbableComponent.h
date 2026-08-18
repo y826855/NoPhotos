@@ -7,7 +7,11 @@
 class UPrimitiveComponent;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnGrabStarted, UPrimitiveComponent*);
-DECLARE_MULTICAST_DELEGATE_TwoParams(FOnGrabForceUpdated, const FVector&, const FVector&);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(
+	FOnGrabForceUpdated,
+	const FVector&,
+	const FVector&,
+	float);
 DECLARE_MULTICAST_DELEGATE(FOnGrabEnded);
 
 UCLASS(ClassGroup=(Interaction), meta=(BlueprintSpawnableComponent))
@@ -36,7 +40,10 @@ public:
 	UPrimitiveComponent* ResolveGrabTarget(UPrimitiveComponent* DetectedComponent) const;
 
 	void NotifyGrabStarted(UPrimitiveComponent* GrabbedComponent);
-	void NotifyGrabForce(const FVector& LinearForce, const FVector& AngularForce);
+	void NotifyGrabForce(
+		const FVector& LinearForce,
+		const FVector& AngularForce,
+		float IntentForceAlignment);
 	void NotifyGrabEnded();
 
 	FOnGrabStarted OnGrabStarted;

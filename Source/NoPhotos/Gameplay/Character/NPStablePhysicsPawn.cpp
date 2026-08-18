@@ -75,6 +75,9 @@ void ANPStablePhysicsPawn::BeginPlay()
 	ApplyCharacterProfile();
 	PhysicsMovement->Initialize(PhysicsMesh, CharacterForwardYawOffset);
 	RightHandGrab->Initialize(PhysicsMesh, RightHandBoneName);
+	PhysicsMovement->OnJumpApplied.AddUObject(
+		RightHandGrab,
+		&UNPStablePhysicsGrabComponent::NotifyJumpIntent);
 	InitializePhysicalAnimation();
 	UpdateCameraTarget();
 	CameraBoom->AddTickPrerequisiteActor(this);

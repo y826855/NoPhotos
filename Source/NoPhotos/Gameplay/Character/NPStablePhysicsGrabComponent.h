@@ -28,6 +28,8 @@ public:
 	/** false이면 탐색과 Constraint 생성을 수행하지 않습니다. */
 	void SetGrabSimulationEnabled(bool bEnabled);
 	void SetLinearBreakThreshold(float InLinearBreakThreshold);
+	void SetMovementIntent(const FVector& WorldMovementIntent);
+	void NotifyJumpIntent();
 
 	FOnStableGrabChanged OnGrabbedComponentChanged;
 
@@ -59,11 +61,22 @@ protected:
 
 	float GrabLinearBreakThreshold = 200000.0f;
 
+	UPROPERTY(EditAnywhere, Category="Grab Intent", meta=(ClampMin="0.0"))
+	float JumpIntentDuration = 0.15f;
+
+#pragma region Grab Debug Settings
 	UPROPERTY(EditAnywhere, Category="Grab Debug")
 	bool bDrawGrabDebug = true;
 
 	UPROPERTY(EditAnywhere, Category="Grab Debug", meta=(ClampMin="0.0"))
 	float GrabDebugMinimumForce = 100.0f;
+
+	UPROPERTY(EditAnywhere, Category="Grab Debug", meta=(ClampMin="0.0"))
+	float GrabDebugForceSmoothingSpeed = 8.0f;
+
+	UPROPERTY(EditAnywhere, Category="Grab Debug", meta=(ClampMin="0.0"))
+	float GrabDebugIntentSmoothingSpeed = 12.0f;
+#pragma endregion
 
 private:
 	UFUNCTION()
@@ -75,7 +88,6 @@ private:
 		UGrabbableComponent* GrabbableComponent);
 	void UpdateGrabForce(float DeltaTime);
 	void ReleaseGrab();
-	void DrawGrabDebug() const;
 
 	UPROPERTY(Transient)
 	USkeletalMeshComponent* PhysicsMesh = nullptr;
@@ -91,5 +103,22 @@ private:
 	bool bGrabSimulationEnabled = true;
 	bool bGrabRequested = false;
 	bool bWaitForGrabRelease = false;
-	FVector LastDebugLinearForce = FVector::ZeroVector;
+	FVector MovementIntent = FVector::ZeroVector;
+	float JumpIntentRemainingTime = 0.0f;
+
+#pragma region Grab Debug Functions
+	void ResetGrabDebug();
+	void UpdateGrabDebug(
+		float DeltaTime,
+		const FVector& RelicForce,
+		const FVector& UserIntent);
+	void DrawGrabDebug() const;
+	void DrawGrabForceDebug(const FVector& ForceStart) const;
+#pragma endregion
+
+#pragma region Grab Debug State
+	FVector LastDebugRelicForce = FVector::ZeroVector;
+	FVector SmoothedDebugUserIntent = FVector::ZeroVector;
+	float LastDebugIntentForceAlignment = 0.0f;
+#pragma endregion
 };

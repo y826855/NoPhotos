@@ -41,7 +41,8 @@ void UGrabbableComponent::NotifyGrabStarted(UPrimitiveComponent* GrabbedComponen
 
 void UGrabbableComponent::NotifyGrabForce(
 	const FVector& LinearForce,
-	const FVector& AngularForce)
+	const FVector& AngularForce,
+	float IntentForceAlignment)
 {
 	if (!bIsGrabbed)
 	{
@@ -52,7 +53,8 @@ void UGrabbableComponent::NotifyGrabForce(
 	CurrentAngularGrabForce = AngularForce;
 	OnGrabForceUpdated.Broadcast(
 		CurrentLinearGrabForce,
-		CurrentAngularGrabForce);
+		CurrentAngularGrabForce,
+		IntentForceAlignment);
 }
 
 void UGrabbableComponent::NotifyGrabEnded()

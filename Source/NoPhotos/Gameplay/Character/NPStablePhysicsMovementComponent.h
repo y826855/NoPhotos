@@ -6,6 +6,8 @@
 
 class USkeletalMeshComponent;
 
+DECLARE_MULTICAST_DELEGATE(FOnStablePhysicsJumpApplied);
+
 /** 물리 시뮬레이션 중인 스켈레탈 메시에 힘 기반 이동과 자세 제어를 적용합니다. */
 UCLASS(ClassGroup=(Physics), meta=(BlueprintSpawnableComponent))
 class NOPHOTOS_API UNPStablePhysicsMovementComponent : public UActorComponent
@@ -36,6 +38,8 @@ public:
 		bool bInIsFalling);
 
 	void RequestJump();
+	FOnStablePhysicsJumpApplied OnJumpApplied;
+
 	bool HasFacingDirection() const { return bHasFacingDirection; }
 	FVector GetFacingDirection() const { return FacingDirection; }
 

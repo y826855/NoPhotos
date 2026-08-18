@@ -289,4 +289,5 @@ void UNPStablePhysicsMovementComponent::UpdateJumpPhysics()
 		true);
 	bGrounded = false;
 	bIsFalling = true;
+	OnJumpApplied.Broadcast();
 }
