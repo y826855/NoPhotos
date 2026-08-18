@@ -75,6 +75,9 @@ void ANPStablePhysicsPawn::BeginPlay()
 	ApplyCharacterProfile();
 	PhysicsMovement->Initialize(PhysicsMesh, CharacterForwardYawOffset);
 	RightHandGrab->Initialize(PhysicsMesh, RightHandBoneName);
+	PhysicsMovement->OnJumpApplied.AddUObject(
+		RightHandGrab,
+		&UNPStablePhysicsGrabComponent::NotifyJumpIntent);
 	InitializePhysicalAnimation();
 	UpdateCameraTarget();
 	CameraBoom->AddTickPrerequisiteActor(this);
@@ -86,7 +89,9 @@ void ANPStablePhysicsPawn::Tick(float DeltaSeconds)
 
 	RefreshCharacterProfileIfChanged();
 	UpdateCameraTarget();
+	// 디버그 전용: 카메라, 캐릭터와 이동 입력의 정면 방향을 표시합니다.
 	DrawFacingDebug();
+	// 디버그 전용: 피지컬 애니메이션 프로필의 본별 강성을 표시합니다.
 	DrawPhysicalProfileDebug();
 	UpdateRightHandIK(DeltaSeconds);
 }
@@ -153,6 +158,10 @@ void ANPStablePhysicsPawn::ApplyCharacterProfile()
 		CharacterProfile->LeftFootBoneName,
 		CharacterProfile->RightFootBoneName);
 	PhysicsMovement->SetTargetPelvisHeight(CharacterProfile->PelvisHeight);
+	PhysicsMovement->SetMaxMoveSpeed(CharacterProfile->MaxMoveSpeed);
+	PhysicsMovement->SetJumpVelocityChange(CharacterProfile->JumpVelocityChange);
+	RightHandGrab->SetLinearBreakThreshold(
+		CharacterProfile->GrabLinearBreakThreshold);
 }
 
 void ANPStablePhysicsPawn::RefreshCharacterProfileIfChanged()
@@ -239,6 +248,132 @@ void ANPStablePhysicsPawn::UpdateCameraTarget()
 	CameraRoot->SetWorldLocation(TargetLocation);
 }
 
+void ANPStablePhysicsPawn::UpdateRightHandIK(float DeltaSeconds)
+{
+	const float TargetAlpha = bRightHandActive ? 1.0f : 0.0f;
+	RightHandIKAlpha = FMath::FInterpTo(
+		RightHandIKAlpha,
+		TargetAlpha,
+		DeltaSeconds,
+		RightHandIKBlendSpeed);
+
+	if (PhysicsMesh->GetBoneIndex(RightShoulderBoneName) == INDEX_NONE)
+	{
+		return;
+	}
+
+	const FVector ShoulderLocation = PhysicsMesh->GetSocketLocation(RightShoulderBoneName);
+	const FRotator FacingRotation = GetVisualFacingRotation();
+	const FVector CharacterForward = FacingRotation.Vector();
+	const FVector CharacterRight = FRotationMatrix(FacingRotation).GetUnitAxis(EAxis::Y);
+	const FVector HandTargetLocation = ShoulderLocation + CharacterForward * RightHandReachDistance;
+	const FVector ElbowTargetLocation = ShoulderLocation
+		+ CharacterForward * (RightHandReachDistance * 0.5f)
+		+ CharacterRight * RightElbowOutwardDistance;
+
+	const FTransform& MeshTransform = PhysicsMesh->GetComponentTransform();
+	RightHandIKLocation = MeshTransform.InverseTransformPosition(HandTargetLocation);
+	RightElbowIKLocation = MeshTransform.InverseTransformPosition(ElbowTargetLocation);
+}
+
+void ANPStablePhysicsPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent);
+	if (!EnhancedInputComponent)
+	{
+		return;
+	}
+
+	if (MoveAction)
+	{
+		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ANPStablePhysicsPawn::Move);
+		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Completed, this, &ANPStablePhysicsPawn::Move);
+		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Canceled, this, &ANPStablePhysicsPawn::Move);
+	}
+	if (LookAction)
+	{
+		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ANPStablePhysicsPawn::Look);
+	}
+	if (MouseLookAction)
+	{
+		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &ANPStablePhysicsPawn::Look);
+	}
+	if (JumpAction)
+	{
+		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ANPStablePhysicsPawn::Jump);
+	}
+	if (RightHandAction)
+	{
+		EnhancedInputComponent->BindAction(RightHandAction, ETriggerEvent::Started, this, &ANPStablePhysicsPawn::StartRightHand);
+		EnhancedInputComponent->BindAction(RightHandAction, ETriggerEvent::Completed, this, &ANPStablePhysicsPawn::StopRightHand);
+		EnhancedInputComponent->BindAction(RightHandAction, ETriggerEvent::Canceled, this, &ANPStablePhysicsPawn::StopRightHand);
+	}
+}
+
+void ANPStablePhysicsPawn::Move(const FInputActionValue& Value)
+{
+	const FVector2D MovementInput = Value.Get<FVector2D>();
+	if (!Controller)
+	{
+		ApplyMoveInput(FVector::ZeroVector);
+		return;
+	}
+
+	const FRotator YawRotation(0.0f, Controller->GetControlRotation().Yaw, 0.0f);
+	const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+	const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+	ApplyMoveInput(
+		ForwardDirection * MovementInput.Y
+		+ RightDirection * MovementInput.X);
+}
+
+void ANPStablePhysicsPawn::Look(const FInputActionValue& Value)
+{
+	const FVector2D LookInput = Value.Get<FVector2D>();
+	AddControllerYawInput(LookInput.X);
+	AddControllerPitchInput(LookInput.Y);
+}
+
+void ANPStablePhysicsPawn::Jump()
+{
+	ApplyJumpRequest();
+}
+
+void ANPStablePhysicsPawn::StartRightHand()
+{
+	ApplyRightHandState(true);
+}
+
+void ANPStablePhysicsPawn::StopRightHand()
+{
+	ApplyRightHandState(false);
+}
+
+void ANPStablePhysicsPawn::ApplyMoveInput(const FVector& WorldMoveInput)
+{
+	PhysicsMovement->SetMoveInput(WorldMoveInput);
+	RightHandGrab->SetMovementIntent(WorldMoveInput);
+}
+
+void ANPStablePhysicsPawn::ApplyJumpRequest()
+{
+	PhysicsMovement->RequestJump();
+}
+
+void ANPStablePhysicsPawn::ApplyRightHandState(bool bActive)
+{
+	SetRightHandVisualState(bActive);
+	RightHandGrab->SetGrabRequested(bActive);
+}
+
+void ANPStablePhysicsPawn::SetRightHandVisualState(bool bActive)
+{
+	bRightHandActive = bActive;
+}
+
+#pragma region Pawn Debug Functions
 void ANPStablePhysicsPawn::DrawFacingDebug() const
 {
 	if (!bDrawFacingDebug
@@ -480,127 +615,4 @@ void ANPStablePhysicsPawn::DrawPhysicalProfileLink(
 		0,
 		1.0f + ClampedRigidity * 0.04f);
 }
-
-void ANPStablePhysicsPawn::UpdateRightHandIK(float DeltaSeconds)
-{
-	const float TargetAlpha = bRightHandActive ? 1.0f : 0.0f;
-	RightHandIKAlpha = FMath::FInterpTo(
-		RightHandIKAlpha,
-		TargetAlpha,
-		DeltaSeconds,
-		RightHandIKBlendSpeed);
-
-	if (PhysicsMesh->GetBoneIndex(RightShoulderBoneName) == INDEX_NONE)
-	{
-		return;
-	}
-
-	const FVector ShoulderLocation = PhysicsMesh->GetSocketLocation(RightShoulderBoneName);
-	const FRotator FacingRotation = GetVisualFacingRotation();
-	const FVector CharacterForward = FacingRotation.Vector();
-	const FVector CharacterRight = FRotationMatrix(FacingRotation).GetUnitAxis(EAxis::Y);
-	const FVector HandTargetLocation = ShoulderLocation + CharacterForward * RightHandReachDistance;
-	const FVector ElbowTargetLocation = ShoulderLocation
-		+ CharacterForward * (RightHandReachDistance * 0.5f)
-		+ CharacterRight * RightElbowOutwardDistance;
-
-	const FTransform& MeshTransform = PhysicsMesh->GetComponentTransform();
-	RightHandIKLocation = MeshTransform.InverseTransformPosition(HandTargetLocation);
-	RightElbowIKLocation = MeshTransform.InverseTransformPosition(ElbowTargetLocation);
-}
-
-void ANPStablePhysicsPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
-{
-	Super::SetupPlayerInputComponent(PlayerInputComponent);
-
-	UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent);
-	if (!EnhancedInputComponent)
-	{
-		return;
-	}
-
-	if (MoveAction)
-	{
-		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ANPStablePhysicsPawn::Move);
-		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Completed, this, &ANPStablePhysicsPawn::Move);
-		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Canceled, this, &ANPStablePhysicsPawn::Move);
-	}
-	if (LookAction)
-	{
-		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ANPStablePhysicsPawn::Look);
-	}
-	if (MouseLookAction)
-	{
-		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &ANPStablePhysicsPawn::Look);
-	}
-	if (JumpAction)
-	{
-		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ANPStablePhysicsPawn::Jump);
-	}
-	if (RightHandAction)
-	{
-		EnhancedInputComponent->BindAction(RightHandAction, ETriggerEvent::Started, this, &ANPStablePhysicsPawn::StartRightHand);
-		EnhancedInputComponent->BindAction(RightHandAction, ETriggerEvent::Completed, this, &ANPStablePhysicsPawn::StopRightHand);
-		EnhancedInputComponent->BindAction(RightHandAction, ETriggerEvent::Canceled, this, &ANPStablePhysicsPawn::StopRightHand);
-	}
-}
-
-void ANPStablePhysicsPawn::Move(const FInputActionValue& Value)
-{
-	const FVector2D MovementInput = Value.Get<FVector2D>();
-	if (!Controller)
-	{
-		ApplyMoveInput(FVector::ZeroVector);
-		return;
-	}
-
-	const FRotator YawRotation(0.0f, Controller->GetControlRotation().Yaw, 0.0f);
-	const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-	const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
-	ApplyMoveInput(
-		ForwardDirection * MovementInput.Y
-		+ RightDirection * MovementInput.X);
-}
-
-void ANPStablePhysicsPawn::Look(const FInputActionValue& Value)
-{
-	const FVector2D LookInput = Value.Get<FVector2D>();
-	AddControllerYawInput(LookInput.X);
-	AddControllerPitchInput(LookInput.Y);
-}
-
-void ANPStablePhysicsPawn::Jump()
-{
-	ApplyJumpRequest();
-}
-
-void ANPStablePhysicsPawn::StartRightHand()
-{
-	ApplyRightHandState(true);
-}
-
-void ANPStablePhysicsPawn::StopRightHand()
-{
-	ApplyRightHandState(false);
-}
-
-void ANPStablePhysicsPawn::ApplyMoveInput(const FVector& WorldMoveInput)
-{
-	PhysicsMovement->SetMoveInput(WorldMoveInput);
-}
-
-void ANPStablePhysicsPawn::ApplyJumpRequest()
-{
-	PhysicsMovement->RequestJump();
-}
-
-void ANPStablePhysicsPawn::ApplyRightHandState(bool bActive)
-{
-	SetRightHandVisualState(bActive);
-	RightHandGrab->SetGrabRequested(bActive);
-}
-
-void ANPStablePhysicsPawn::SetRightHandVisualState(bool bActive)
-{
-	bRightHandActive = bActive;
-}
+#pragma endregion

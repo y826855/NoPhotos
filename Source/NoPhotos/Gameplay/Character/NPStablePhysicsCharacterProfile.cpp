@@ -409,7 +409,16 @@ void UNPStablePhysicsCharacterProfile::PostEditChangeProperty(
 		CharacterForwardYawOffset)
 		|| PropertyName == GET_MEMBER_NAME_CHECKED(
 			UNPStablePhysicsCharacterProfile,
-			PelvisHeight))
+			PelvisHeight)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
+			MaxMoveSpeed)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
+			JumpVelocityChange)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
+			GrabLinearBreakThreshold))
 	{
 		++SettingsRevision;
 	}
