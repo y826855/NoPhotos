@@ -2,16 +2,55 @@
 
 
 #include "NoPhotosPlayerController.h"
+#include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "InputMappingContext.h"
 #include "Blueprint/UserWidget.h"
 #include "NoPhotos.h"
+#include "Gameplay/Photo/NPPhotoCaptureComponent.h"
+#include "Gameplay/Photo/NPPhotoLog.h"
+#include "Gameplay/Photo/NPPhotoPreviewWidget.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "Widgets/Input/SVirtualJoystick.h"
+
+ANoPhotosPlayerController::ANoPhotosPlayerController()
+{
+	PhotoCaptureComponent = CreateDefaultSubobject<UNPPhotoCaptureComponent>(TEXT("PhotoCaptureComponent"));
+}
 
 void ANoPhotosPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (IsLocalController())
+	{
+		if (PhotoCaptureComponent)
+		{
+			PhotoCaptureComponent->OnPhotoCaptured.AddDynamic(
+				this,
+				&ANoPhotosPlayerController::HandlePhotoCaptured);
+		}
+		else
+		{
+			UE_LOG(LogNPPhoto, Error, TEXT("[PhotoUI] PhotoCaptureComponent is null during BeginPlay."));
+		}
+
+		if (PhotoPreviewWidgetClass)
+		{
+			PhotoPreviewWidget = CreateWidget<UNPPhotoPreviewWidget>(this, PhotoPreviewWidgetClass);
+			if (PhotoPreviewWidget)
+			{
+				PhotoPreviewWidget->AddToPlayerScreen();
+				PhotoPreviewWidget->HidePhoto();
+				UE_LOG(LogNPPhoto, Log, TEXT("[PhotoUI] Preview widget created. Widget=%s"), *GetNameSafe(PhotoPreviewWidget));
+			}
+		}
+		else
+		{
+			UE_LOG(LogNPPhoto, Warning, TEXT("[PhotoUI] PhotoPreviewWidgetClass is not assigned."));
+		}
+	}
 
 	// only spawn touch controls on local player controllers
 	if (ShouldUseTouchControls() && IsLocalPlayerController())
@@ -58,6 +97,64 @@ void ANoPhotosPlayerController::SetupInputComponent()
 			}
 		}
 	}
+
+	UEnhancedInputComponent* EnhancedInputComponent =
+		Cast<UEnhancedInputComponent>(InputComponent);
+	if (!EnhancedInputComponent || !TakePhotoAction)
+	{
+		UE_LOG(
+			LogNPPhoto,
+			Warning,
+			TEXT("[Input] Photo binding skipped. EnhancedInput=%s TakePhotoAction=%s"),
+			*GetNameSafe(EnhancedInputComponent),
+			*GetNameSafe(TakePhotoAction));
+		return;
+	}
+
+	EnhancedInputComponent->BindAction(
+		TakePhotoAction,
+		ETriggerEvent::Started,
+		this,
+		&ANoPhotosPlayerController::HandleTakePhotoInput);
+	UE_LOG(LogNPPhoto, Log, TEXT("[Input] Photo action bound. Action=%s"), *GetNameSafe(TakePhotoAction));
+}
+
+void ANoPhotosPlayerController::HandleTakePhotoInput()
+{
+	UE_LOG(
+		LogNPPhoto,
+		Log,
+		TEXT("[Input] Photo input received. Controller=%s Local=%s"),
+		*GetNameSafe(this),
+		IsLocalController() ? TEXT("true") : TEXT("false"));
+
+	if (!PhotoCaptureComponent)
+	{
+		UE_LOG(LogNPPhoto, Error, TEXT("[Input] PhotoCaptureComponent is null."));
+		return;
+	}
+
+	const bool bStarted = PhotoCaptureComponent->TakePhoto();
+	UE_LOG(
+		LogNPPhoto,
+		Log,
+		TEXT("[Input] TakePhoto result=%s"),
+		bStarted ? TEXT("success") : TEXT("failed"));
+}
+
+void ANoPhotosPlayerController::HandlePhotoCaptured(UTextureRenderTarget2D* Photo)
+{
+	if (!PhotoPreviewWidget)
+	{
+		UE_LOG(
+			LogNPPhoto,
+			Warning,
+			TEXT("[PhotoUI] Captured photo cannot be shown because the preview widget is null. Photo=%s"),
+			*GetNameSafe(Photo));
+		return;
+	}
+
+	PhotoPreviewWidget->ShowPhoto(Photo);
 }
 
 bool ANoPhotosPlayerController::ShouldUseTouchControls() const

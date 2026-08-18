@@ -8,11 +8,14 @@
 #include "GameFramework/Controller.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "InputActionValue.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "PhysicsEngine/BodyInstance.h"
 #include "PhysicsEngine/PhysicalAnimationComponent.h"
 #include "PhysicsEngine/PhysicsAsset.h"
 #include "Gameplay/Character/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Character/NPStablePhysicsMovementComponent.h"
+#include "Gameplay/Photo/NPPhotoLog.h"
 
 ANPStablePhysicsPawn::ANPStablePhysicsPawn()
 {
@@ -99,6 +102,55 @@ void ANPStablePhysicsPawn::Tick(float DeltaSeconds)
 FVector ANPStablePhysicsPawn::GetVelocity() const
 {
 	return PhysicsMovement ? PhysicsMovement->GetVelocity() : FVector::ZeroVector;
+}
+
+void ANPStablePhysicsPawn::StopMovementInput()
+{
+	ApplyMoveInput(FVector::ZeroVector);
+}
+
+void ANPStablePhysicsPawn::SetPhotoMovementLocked(bool bLocked)
+{
+	bPhotoMovementLocked = bLocked;
+	if (bPhotoMovementLocked)
+	{
+		StopMovementInput();
+	}
+}
+
+bool ANPStablePhysicsPawn::PlayPhotoShotMontage()
+{
+	if (!PhysicsMesh)
+	{
+		UE_LOG(LogNPPhoto, Error, TEXT("[Montage] PhysicsMesh is null. Pawn=%s"), *GetNameSafe(this));
+		return false;
+	}
+	if (!PhotoShotMontage)
+	{
+		UE_LOG(LogNPPhoto, Warning, TEXT("[Montage] PhotoShotMontage is not assigned. Pawn=%s"), *GetNameSafe(this));
+		return false;
+	}
+
+	UAnimInstance* AnimInstance = PhysicsMesh->GetAnimInstance();
+	if (!AnimInstance)
+	{
+		UE_LOG(LogNPPhoto, Error, TEXT("[Montage] AnimInstance is null. Mesh=%s"), *GetNameSafe(PhysicsMesh));
+		return false;
+	}
+	if (AnimInstance->Montage_IsPlaying(PhotoShotMontage))
+	{
+		UE_LOG(LogNPPhoto, Warning, TEXT("[Montage] PhotoShotMontage is already playing. Montage=%s"), *GetNameSafe(PhotoShotMontage));
+		return false;
+	}
+
+	const float Duration = AnimInstance->Montage_Play(PhotoShotMontage);
+	UE_LOG(
+		LogNPPhoto,
+		Log,
+		TEXT("[Montage] Montage_Play result. Montage=%s Duration=%.2f"),
+		*GetNameSafe(PhotoShotMontage),
+		Duration);
+	return Duration > 0.0f;
 }
 
 float ANPStablePhysicsPawn::GetAnimationGroundSpeed() const
@@ -316,6 +368,11 @@ void ANPStablePhysicsPawn::Move(const FInputActionValue& Value)
 {
 	const FVector2D MovementInput = Value.Get<FVector2D>();
 	if (!Controller)
+	{
+		ApplyMoveInput(FVector::ZeroVector);
+		return;
+	}
+	if (bPhotoMovementLocked)
 	{
 		ApplyMoveInput(FVector::ZeroVector);
 		return;
