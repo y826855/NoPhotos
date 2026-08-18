@@ -31,6 +31,17 @@ bool ANPGameState::IsRoomHost(const APlayerState* PlayerState) const
 	return RoomMember && RoomMember->bIsHost;
 }
 
+bool ANPGameState::IsRoomMemberReady(const APlayerState* PlayerState) const
+{
+	const FNPPlayerRoomInfo* RoomMember = RoomMembers.FindByPredicate(
+		[PlayerState](const FNPPlayerRoomInfo& Member)
+		{
+			return Member.PlayerState == PlayerState;
+		});
+
+	return RoomMember && RoomMember->bIsReady;
+}
+
 bool ANPGameState::CanHostStartGame() const
 {
 	return bCanHostStartGame;
