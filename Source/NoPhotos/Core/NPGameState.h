@@ -67,4 +67,5 @@ private:
 
 	UPROPERTY(ReplicatedUsing = OnRep_CanHostStartGame)
 	bool bCanHostStartGame = false;
+
 };

@@ -7,6 +7,10 @@
 #include "NoPhotosPlayerController.generated.h"
 
 class UInputMappingContext;
+class UInputAction;
+class UTextureRenderTarget2D;
+class UNPPhotoCaptureComponent;
+class UNPPhotoPreviewWidget;
 class UUserWidget;
 
 /**
@@ -17,8 +21,17 @@ UCLASS(abstract)
 class ANoPhotosPlayerController : public APlayerController
 {
 	GENERATED_BODY()
-	
+
+public:
+	ANoPhotosPlayerController();
+
+	UFUNCTION(BlueprintPure, Category="Photo")
+	UNPPhotoCaptureComponent* GetPhotoCaptureComponent() const { return PhotoCaptureComponent; }
+
 protected:
+	/** IMC에서 마우스 우클릭 등에 매핑할 사진 촬영 액션입니다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Input|Photo")
+	TObjectPtr<UInputAction> TakePhotoAction;
 
 	/** Input Mapping Contexts */
 	UPROPERTY(EditAnywhere, Category ="Input|Input Mappings")
@@ -43,10 +56,26 @@ protected:
 	/** Gameplay initialization */
 	virtual void BeginPlay() override;
 
+	/** 촬영 결과를 표시할 WBP 클래스입니다. UNPPhotoPreviewWidget을 부모로 만들어 지정합니다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Photo|UI")
+	TSubclassOf<UNPPhotoPreviewWidget> PhotoPreviewWidgetClass;
+
 	/** Input mapping context setup */
 	virtual void SetupInputComponent() override;
 
 	/** Returns true if the player should use UMG touch controls */
 	bool ShouldUseTouchControls() const;
+
+private:
+	void HandleTakePhotoInput();
+
+	UFUNCTION()
+	void HandlePhotoCaptured(UTextureRenderTarget2D* Photo);
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Photo", meta=(AllowPrivateAccess="true"))
+	TObjectPtr<UNPPhotoCaptureComponent> PhotoCaptureComponent;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNPPhotoPreviewWidget> PhotoPreviewWidget;
 
 };

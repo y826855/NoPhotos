@@ -42,4 +42,5 @@ private:
 	TObjectPtr<ANPPlayerController> PendingExitingHost;
 
 	FTimerHandle HostMigrationExitTimer;
+
 };
