@@ -96,7 +96,15 @@ void UNPStablePhysicsGrabComponent::ApplyReplicatedGrab(
 	}
 
 	GrabbedComponent = PrimitiveComponent;
+	GrabbedGrabbableComponent = PrimitiveComponent->GetOwner()
+		? PrimitiveComponent->GetOwner()->FindComponentByClass<UGrabbableComponent>()
+		: nullptr;
 	GrabbedBoneName = BoneName;
+	LastDebugLinearForce = FVector::ZeroVector;
+	if (GrabbedGrabbableComponent)
+	{
+		GrabbedGrabbableComponent->NotifyGrabStarted(GrabbedComponent);
+	}
 	SetConstrainedComponents(
 		PhysicsMesh,
 		HandBoneName,
@@ -115,9 +123,16 @@ void UNPStablePhysicsGrabComponent::ClearReplicatedGrab()
 		return;
 	}
 
+	UGrabbableComponent* ReleasedGrabbableComponent =
+		GrabbedGrabbableComponent;
 	BreakConstraint();
 	GrabbedComponent = nullptr;
+	GrabbedGrabbableComponent = nullptr;
 	GrabbedBoneName = NAME_None;
+	if (ReleasedGrabbableComponent)
+	{
+		ReleasedGrabbableComponent->NotifyGrabEnded();
+	}
 }
 
 void UNPStablePhysicsGrabComponent::TickComponent(
@@ -133,6 +148,11 @@ void UNPStablePhysicsGrabComponent::TickComponent(
 		&& !IsHoldingObject())
 	{
 		TryGrab();
+	}
+
+	if (bGrabSimulationEnabled && IsHoldingObject())
+	{
+		UpdateGrabForce(DeltaTime);
 	}
 
 	DrawGrabDebug();
@@ -188,21 +208,23 @@ void UNPStablePhysicsGrabComponent::TryGrab()
 			continue;
 		}
 
-		GrabbableComponent->NotifyGrabStarted(PrimitiveComponent);
-		if (!PrimitiveComponent->IsSimulatingPhysics())
+		UPrimitiveComponent* GrabTarget =
+			GrabbableComponent->ResolveGrabTarget(PrimitiveComponent);
+		if (GrabTarget && Grab(GrabTarget, GrabbableComponent))
 		{
-			continue;
+			return;
 		}
-
-		Grab(PrimitiveComponent);
-		return;
 	}
 }
 
-void UNPStablePhysicsGrabComponent::Grab(UPrimitiveComponent* PrimitiveComponent)
+bool UNPStablePhysicsGrabComponent::Grab(
+	UPrimitiveComponent* PrimitiveComponent,
+	UGrabbableComponent* GrabbableComponent)
 {
 	GrabbedComponent = PrimitiveComponent;
+	GrabbedGrabbableComponent = GrabbableComponent;
 	GrabbedBoneName = NAME_None;
+	LastDebugLinearForce = FVector::ZeroVector;
 	SetWorldLocation(PhysicsMesh->GetSocketLocation(HandBoneName));
 
 	// Constraint를 통해 손 Body와 물체가 서로 물리적인 힘을 주고받습니다.
@@ -211,7 +233,41 @@ void UNPStablePhysicsGrabComponent::Grab(UPrimitiveComponent* PrimitiveComponent
 		HandBoneName,
 		GrabbedComponent,
 		NAME_None);
+	if (!ConstraintInstance.IsValidConstraintInstance())
+	{
+		GrabbedComponent = nullptr;
+		GrabbedGrabbableComponent = nullptr;
+		GrabbedBoneName = NAME_None;
+		return false;
+	}
+
+	GrabbedGrabbableComponent->NotifyGrabStarted(GrabbedComponent);
 	OnGrabbedComponentChanged.Broadcast(GrabbedComponent);
+	return true;
+}
+
+void UNPStablePhysicsGrabComponent::UpdateGrabForce(float DeltaTime)
+{
+	if (!GrabbedGrabbableComponent
+		|| !ConstraintInstance.IsValidConstraintInstance()
+		|| DeltaTime <= UE_SMALL_NUMBER)
+	{
+		return;
+	}
+
+	FVector LinearImpulse = FVector::ZeroVector;
+	FVector AngularImpulse = FVector::ZeroVector;
+	GetConstraintForce(LinearImpulse, AngularImpulse);
+	const FVector LinearForce = LinearImpulse / DeltaTime;
+	if (LinearForce.Size() >= GrabDebugMinimumForce)
+	{
+		LastDebugLinearForce = LinearForce;
+	}
+
+	// Chaos 출력은 Constraint impulse이므로 DeltaTime으로 나눠 force로 변환합니다.
+	GrabbedGrabbableComponent->NotifyGrabForce(
+		LinearForce,
+		AngularImpulse / DeltaTime);
 }
 
 void UNPStablePhysicsGrabComponent::ReleaseGrab()
@@ -221,9 +277,16 @@ void UNPStablePhysicsGrabComponent::ReleaseGrab()
 		return;
 	}
 
-	BreakConstraint();
+	UGrabbableComponent* ReleasedGrabbableComponent =
+		GrabbedGrabbableComponent;
 	GrabbedComponent = nullptr;
+	GrabbedGrabbableComponent = nullptr;
 	GrabbedBoneName = NAME_None;
+	BreakConstraint();
+	if (ReleasedGrabbableComponent)
+	{
+		ReleasedGrabbableComponent->NotifyGrabEnded();
+	}
 	OnGrabbedComponentChanged.Broadcast(nullptr);
 }
 
@@ -260,5 +323,40 @@ void UNPStablePhysicsGrabComponent::DrawGrabDebug() const
 			0.0f,
 			0,
 			3.0f);
+
+		if (GrabbedGrabbableComponent)
+		{
+			const FVector LinearForce = LastDebugLinearForce;
+			const FVector ForceDirection = LinearForce.GetSafeNormal();
+			const FVector ForceStart = HandLocation;
+			if (!ForceDirection.IsNearlyZero())
+			{
+				DrawDebugDirectionalArrow(
+					GetWorld(),
+					ForceStart,
+					ForceStart + ForceDirection * 100.0f,
+					20.0f,
+					FColor::Cyan,
+					false,
+					0.0f,
+					0,
+					4.0f);
+			}
+
+			const FString ForceText = FString::Printf(
+				TEXT("Grab Force: %.0f / %.0f\n%s"),
+				LinearForce.Size(),
+				GrabLinearBreakThreshold,
+				*LinearForce.ToCompactString());
+			DrawDebugString(
+				GetWorld(),
+				ForceStart + FVector(0.0f, 0.0f, 30.0f),
+				ForceText,
+				nullptr,
+				FColor::Cyan,
+				0.0f,
+				false,
+				1.0f);
+		}
 	}
 }

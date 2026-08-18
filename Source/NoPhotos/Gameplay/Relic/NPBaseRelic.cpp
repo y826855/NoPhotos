@@ -23,6 +23,7 @@ void ANPBaseRelic::BeginPlay()
 {
 	Super::BeginPlay();
 
+	OnRep_IsDisplayed();
 	GrabbableComponent->OnGrabStarted.AddUObject(
 		this,
 		&ANPBaseRelic::HandleGrabStarted);
@@ -33,25 +34,46 @@ void ANPBaseRelic::GetLifetimeReplicatedProps(
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(ANPBaseRelic, bHasBeenInteracted);
+	DOREPLIFETIME(ANPBaseRelic, bIsDisplayed);
+	DOREPLIFETIME(ANPBaseRelic, bIsUnlocked);
 }
 
-void ANPBaseRelic::ActivatePhysics()
+void ANPBaseRelic::SetUnlocked(bool bUnlocked)
 {
-	if (!HasAuthority() || bHasBeenInteracted)
+	if (!HasAuthority() || bIsUnlocked == bUnlocked)
 	{
 		return;
 	}
 
-	bHasBeenInteracted = true;
-	RelicMesh->SetSimulatePhysics(true);
+	bIsUnlocked = bUnlocked;
+	if (bIsUnlocked && GrabbableComponent->IsGrabbed())
+	{
+		ReleaseFromDisplay();
+	}
 	ForceNetUpdate();
 }
 
-void ANPBaseRelic::HandleGrabStarted(UPrimitiveComponent* GrabbedComponent)
+void ANPBaseRelic::OnRep_IsDisplayed()
 {
-	if (GrabbedComponent == RelicMesh)
+	RelicMesh->SetSimulatePhysics(!bIsDisplayed);
+}
+
+void ANPBaseRelic::ReleaseFromDisplay()
+{
+	if (!HasAuthority() || !bIsDisplayed)
 	{
-		ActivatePhysics();
+		return;
+	}
+
+	bIsDisplayed = false;
+	OnRep_IsDisplayed();
+	ForceNetUpdate();
+}
+
+void ANPBaseRelic::HandleGrabStarted(UPrimitiveComponent*)
+{
+	if (bIsUnlocked)
+	{
+		ReleaseFromDisplay();
 	}
 }

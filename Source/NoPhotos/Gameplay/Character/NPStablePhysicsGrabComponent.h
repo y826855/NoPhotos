@@ -6,6 +6,7 @@
 
 class UPrimitiveComponent;
 class USkeletalMeshComponent;
+class UGrabbableComponent;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnStableGrabChanged, UPrimitiveComponent*);
 
@@ -61,12 +62,18 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Grab Debug")
 	bool bDrawGrabDebug = true;
 
+	UPROPERTY(EditAnywhere, Category="Grab Debug", meta=(ClampMin="0.0"))
+	float GrabDebugMinimumForce = 100.0f;
+
 private:
 	UFUNCTION()
 	void HandleConstraintBroken(int32 ConstraintIndex);
 
 	void TryGrab();
-	void Grab(UPrimitiveComponent* PrimitiveComponent);
+	bool Grab(
+		UPrimitiveComponent* PrimitiveComponent,
+		UGrabbableComponent* GrabbableComponent);
+	void UpdateGrabForce(float DeltaTime);
 	void ReleaseGrab();
 	void DrawGrabDebug() const;
 
@@ -76,9 +83,13 @@ private:
 	UPROPERTY(Transient)
 	UPrimitiveComponent* GrabbedComponent = nullptr;
 
+	UPROPERTY(Transient)
+	UGrabbableComponent* GrabbedGrabbableComponent = nullptr;
+
 	FName HandBoneName = NAME_None;
 	FName GrabbedBoneName = NAME_None;
 	bool bGrabSimulationEnabled = true;
 	bool bGrabRequested = false;
 	bool bWaitForGrabRelease = false;
+	FVector LastDebugLinearForce = FVector::ZeroVector;
 };

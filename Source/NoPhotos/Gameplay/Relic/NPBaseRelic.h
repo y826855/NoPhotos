@@ -19,12 +19,21 @@ public:
 	ANPBaseRelic();
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	UFUNCTION(BlueprintCallable, Category="Relic")
-	void ActivatePhysics();
+	UFUNCTION(BlueprintPure, Category="Relic")
+	bool IsDisplayed() const { return bIsDisplayed; }
+
+	UFUNCTION(BlueprintPure, Category="Relic")
+	bool IsUnlocked() const { return bIsUnlocked; }
+
+	void SetUnlocked(bool bUnlocked);
 
 protected:
 	virtual void BeginPlay() override;
 
+	UFUNCTION()
+	void OnRep_IsDisplayed();
+
+	void ReleaseFromDisplay();
 	void HandleGrabStarted(UPrimitiveComponent* GrabbedComponent);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
@@ -36,6 +45,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Relic")
 	FDataTableRowHandle RelicData;
 
+	UPROPERTY(ReplicatedUsing=OnRep_IsDisplayed, VisibleInstanceOnly, BlueprintReadOnly, Category="Relic")
+	bool bIsDisplayed = true;
+
 	UPROPERTY(Replicated, VisibleInstanceOnly, BlueprintReadOnly, Category="Relic")
-	bool bHasBeenInteracted = false;
+	bool bIsUnlocked = true;
 };

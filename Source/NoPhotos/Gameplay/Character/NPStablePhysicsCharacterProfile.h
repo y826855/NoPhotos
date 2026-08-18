@@ -90,7 +90,7 @@ public:
 	UPROPERTY(EditAnywhere, Category="이동", meta=(DisplayName="점프 속도 변화량", ClampMin="0.0"))
 	float JumpVelocityChange = 350.0f;
 
-	UPROPERTY(EditAnywhere, Category="잡기", meta=(DisplayName="Grab 파괴 임계값", ClampMin="0.0"))
+	UPROPERTY(EditAnywhere, Category="잡기", meta=(DisplayName="Grab 선형 힘 파괴 임계값", ClampMin="0.0"))
 	float GrabLinearBreakThreshold = 200000.0f;
 
 	UPROPERTY(EditAnywhere, Category="물리 느낌", meta=(DisplayName="프리셋"))
