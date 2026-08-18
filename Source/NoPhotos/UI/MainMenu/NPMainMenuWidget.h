@@ -15,6 +15,9 @@ public:
 	UNPMainMenuWidget(const FObjectInitializer& ObjectInitializer);
 
 protected:
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<class UNPUserWidget> RoomListWidgetClass;
+	
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 

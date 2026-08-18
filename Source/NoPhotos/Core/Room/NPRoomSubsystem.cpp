@@ -691,6 +691,8 @@ void UNPRoomSubsystem::HandleFindSessionsComplete(const bool bWasSuccessful)
 	{
 		NPRoomLog::Info(this, TEXT("방 목록: 참가 가능한 대기방이 없습니다."));
 	}
+	
+	OnFindRoomsComplete.Broadcast(ListedRoomResultIndices);
 }
 
 void UNPRoomSubsystem::HandleJoinSessionComplete(

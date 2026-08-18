@@ -36,7 +36,10 @@ void ANPPlayerController::BeginPlay()
 		EnableCheats();
 		NPRoomLog::Info(this, TEXT("방 테스트 명령어 활성화: create, list, join {방번호}, ready, start, out game"));
 		
-		ShowMainMenuUI();
+		if (IsLocalController() && GetNetMode() == NM_Standalone)
+        {
+            ShowMainMenuUI();
+        }
 	}
 }
 
@@ -266,6 +269,22 @@ void ANPPlayerController::ShowLobbyUI()
 
 void ANPPlayerController::ClientShowLobbyUI_Implementation()
 {
-	ShowLobbyUI();
+	UGameInstance* GameInstance = GetGameInstance();
+	if (!IsValid(GameInstance))
+	{
+		return;
+	}
+
+	UNPUIManagerSubsystem* UIManager = GameInstance->GetSubsystem<UNPUIManagerSubsystem>();
+	if (!IsValid(UIManager))
+	{
+		return;
+	}
+
+	UIManager->PopAllWidgets(); 
+	if (LobbyWidgetClass)
+	{
+		UIManager->PushWidget(LobbyWidgetClass);
+	}
 }
 #pragma endregion

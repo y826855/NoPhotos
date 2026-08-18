@@ -11,6 +11,9 @@ class UCanvas;
 class UNetDriver;
 class UWorld;
 
+//UI
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnFindRoomsCompleteDelegate, const TArray<int32>&, RoomIndices);
+
 struct FNPRoomDebugMessage
 {
 	FString Message;
@@ -81,4 +84,13 @@ private:
 	bool bSearchingForMigration = false;
 	bool bHasLoggedOnlineServiceStatus = false;
 	TArray<FNPRoomDebugMessage> DebugMessages;
+	
+#pragma region UI
+public:
+	UPROPERTY(BlueprintAssignable, Category = "Room")
+	FOnFindRoomsCompleteDelegate OnFindRoomsComplete;
+
+	// ListedRoomResultIndices를 외부(UI)에서 참조할 수 있도록 Getter 추가
+	const TArray<int32>& GetListedRoomResultIndices() const { return ListedRoomResultIndices; }
+#pragma endregion
 };

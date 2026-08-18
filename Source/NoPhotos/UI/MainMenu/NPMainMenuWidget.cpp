@@ -2,6 +2,7 @@
 #include "Components/Button.h"
 #include "Core/NPPlayerController.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "SubSystem/NPUIManagerSubsystem.h"
 
 UNPMainMenuWidget::UNPMainMenuWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -59,11 +60,16 @@ void UNPMainMenuWidget::OnHostGameClicked()
 
 void UNPMainMenuWidget::OnJoinGameClicked()
 {
-	if (ANPPlayerController* NPPC = Cast<ANPPlayerController>(GetOwningPlayer()))
+	// 방 목록 UI(WBP_RoomList)를 화면 위에 PopUp 형태로 띄움
+	if (UGameInstance* GI = GetGameInstance())
 	{
-		// 기본적으로 1번 방으로 참가 요청 (이후 방 목록 추가하면서 선택 할 수 있게 늘릴 예정...)
-		const int32 TargetRoomNumber = 1; 
-		const bool bSuccess = NPPC->JoinRoom(TargetRoomNumber);
+		if (UNPUIManagerSubsystem* UIManager = GI->GetSubsystem<UNPUIManagerSubsystem>())
+		{
+			if (IsValid(RoomListWidgetClass))
+			{
+				UIManager->PushWidget(RoomListWidgetClass);
+			}
+		}
 	}
 }
 
