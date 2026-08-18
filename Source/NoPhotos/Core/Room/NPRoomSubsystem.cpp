@@ -1,6 +1,6 @@
 #include "NPRoomSubsystem.h"
 
-#include "Core/NPGameMode.h"
+#include "NPRoomGameMode.h"
 #include "NPRoomLog.h"
 #include "Debug/DebugDrawService.h"
 #include "Engine/Canvas.h"
@@ -8,6 +8,7 @@
 #include "Engine/GameInstance.h"
 #include "Engine/NetDriver.h"
 #include "Engine/World.h"
+#include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/PlatformTime.h"
 #include "Kismet/GameplayStatics.h"
@@ -71,6 +72,16 @@ void UNPRoomSubsystem::Deinitialize()
 			{
 				SessionInterface->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteHandle);
 			}
+
+			if (EndSessionForRoomReturnCompleteHandle.IsValid())
+			{
+				SessionInterface->ClearOnEndSessionCompleteDelegate_Handle(EndSessionForRoomReturnCompleteHandle);
+			}
+
+			if (UpdateWaitingRoomCompleteHandle.IsValid())
+			{
+				SessionInterface->ClearOnUpdateSessionCompleteDelegate_Handle(UpdateWaitingRoomCompleteHandle);
+			}
 		}
 	}
 
@@ -103,6 +114,7 @@ void UNPRoomSubsystem::Deinitialize()
 	PendingExitAction = ENPRoomExitAction::None;
 	PendingMigrationId.Reset();
 	ReturnMapPath.Reset();
+	WaitingRoomRestoredDelegate.Unbind();
 	bCleaningSessionAfterNetworkFailure = false;
 	Super::Deinitialize();
 }
@@ -349,26 +361,33 @@ bool UNPRoomSubsystem::JoinRoom(const int32 RoomNumber)
 	return true;
 }
 
-void UNPRoomSubsystem::LeaveRoom()
+void UNPRoomSubsystem::LeaveRoom(const FString& MenuLevelPath)
 {
-	BeginExit(ENPRoomExitAction::None, FString());
+	BeginExit(ENPRoomExitAction::None, FString(), MenuLevelPath);
 }
 
-void UNPRoomSubsystem::BeginHostMigration(const FString& MigrationId, const bool bBecomeHost)
+void UNPRoomSubsystem::BeginHostMigration(
+	const FString& MigrationId,
+	const bool bBecomeHost,
+	const FString& MenuLevelPath)
 {
 	if (MigrationId.IsEmpty())
 	{
 		NPRoomLog::Warning(this, TEXT("호스트 이전 실패: 이전 토큰이 비어 있습니다."));
-		LeaveRoom();
+		LeaveRoom(MenuLevelPath);
 		return;
 	}
 
 	BeginExit(
 		bBecomeHost ? ENPRoomExitAction::BecomeHost : ENPRoomExitAction::RejoinMigratedRoom,
-		MigrationId);
+		MigrationId,
+		MenuLevelPath);
 }
 
-void UNPRoomSubsystem::BeginExit(const ENPRoomExitAction ExitAction, const FString& MigrationId)
+void UNPRoomSubsystem::BeginExit(
+	const ENPRoomExitAction ExitAction,
+	const FString& MigrationId,
+	const FString& MenuLevelPath)
 {
 	UWorld* World = GetWorld();
 	if (!World)
@@ -379,7 +398,7 @@ void UNPRoomSubsystem::BeginExit(const ENPRoomExitAction ExitAction, const FStri
 
 	PendingExitAction = ExitAction;
 	PendingMigrationId = MigrationId;
-	ReturnMapPath = World->GetPackage()->GetName();
+	ReturnMapPath = MenuLevelPath;
 	MigrationSearchAttempts = 0;
 	bSearchingForMigration = false;
 	World->GetTimerManager().ClearTimer(MigrationSearchTimer);
@@ -581,6 +600,7 @@ void UNPRoomSubsystem::MarkRoomInGame()
 		NPRoomSession::InGameState,
 		EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 	SessionSettings->bAllowJoinInProgress = false;
+	SessionSettings->bAllowInvites = false;
 	SessionSettings->bAllowJoinViaPresence = false;
 	SessionSettings->bShouldAdvertise = false;
 
@@ -630,9 +650,9 @@ void UNPRoomSubsystem::HandleCreateSessionComplete(const FName SessionName, cons
 		return;
 	}
 
-	ANPGameMode* NPGameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ANPGameMode>() : nullptr;
+	ANPRoomGameMode* RoomGameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ANPRoomGameMode>() : nullptr;
 	APlayerController* HostPlayer = GameInstance->GetFirstLocalPlayerController();
-	if (!NPGameMode || !NPGameMode->ActivateRoom(HostPlayer))
+	if (!RoomGameMode || !RoomGameMode->ActivateRoom(HostPlayer))
 	{
 		NPRoomLog::Warning(this, TEXT("방 생성 실패: 방 상태 또는 호스트를 활성화하지 못했습니다."));
 		return;
@@ -651,7 +671,7 @@ void UNPRoomSubsystem::HandleCreateSessionComplete(const FName SessionName, cons
 
 	if (PendingExitAction == ENPRoomExitAction::BecomeHost)
 	{
-		NPRoomLog::Info(this, TEXT("호스트로 지정되었습니다. 게스트 준비 완료 후 start를 입력해 주세요."));
+		NPRoomLog::Info(this, TEXT("호스트로 지정되었습니다. 게스트 참가 후 start를 입력해 주세요."));
 		PendingExitAction = ENPRoomExitAction::None;
 		PendingMigrationId.Reset();
 	}
@@ -934,4 +954,159 @@ void UNPRoomSubsystem::HandleNetworkFailure(
 		NPRoomLog::Warning(this, TEXT("이전 온라인 방 정리 요청을 시작하지 못해 로컬 방 정보를 제거했습니다."));
 		NPRoomLog::Info(this, TEXT("이제 list로 새 방을 검색할 수 있습니다."));
 	}
+}
+
+void UNPRoomSubsystem::RestoreWaitingRoom(FNPOnWaitingRoomRestored CompletionDelegate)
+{
+	if (WaitingRoomRestoredDelegate.IsBound())
+	{
+		CompletionDelegate.ExecuteIfBound(false);
+		return;
+	}
+
+	IOnlineSubsystem* OnlineSubsystem = Online::GetSubsystem(GetWorld());
+	const IOnlineSessionPtr SessionInterface = OnlineSubsystem ? OnlineSubsystem->GetSessionInterface() : nullptr;
+	if (!SessionInterface.IsValid() || !SessionInterface->GetNamedSession(NAME_GameSession))
+	{
+		NPRoomLog::Warning(this, TEXT("대기방 복귀 실패: 유지 중인 온라인 세션을 찾지 못했습니다."));
+		CompletionDelegate.ExecuteIfBound(false);
+		return;
+	}
+
+	WaitingRoomRestoredDelegate = CompletionDelegate;
+	if (SessionInterface->GetSessionState(NAME_GameSession) != EOnlineSessionState::InProgress)
+	{
+		UpdateSessionToWaiting();
+		return;
+	}
+
+	EndSessionForRoomReturnCompleteHandle = SessionInterface->AddOnEndSessionCompleteDelegate_Handle(
+		FOnEndSessionCompleteDelegate::CreateUObject(
+			this,
+			&UNPRoomSubsystem::HandleEndSessionForRoomReturnComplete));
+	if (!SessionInterface->EndSession(NAME_GameSession))
+	{
+		if (EndSessionForRoomReturnCompleteHandle.IsValid())
+		{
+			SessionInterface->ClearOnEndSessionCompleteDelegate_Handle(EndSessionForRoomReturnCompleteHandle);
+			EndSessionForRoomReturnCompleteHandle.Reset();
+		}
+		NPRoomLog::Warning(this, TEXT("대기방 복귀 실패: EndSession 요청을 시작하지 못했습니다."));
+		CompleteWaitingRoomRestore(false);
+	}
+}
+
+bool UNPRoomSubsystem::IsWaitingRoomActive() const
+{
+	IOnlineSubsystem* OnlineSubsystem = Online::GetSubsystem(GetWorld());
+	const IOnlineSessionPtr SessionInterface = OnlineSubsystem ? OnlineSubsystem->GetSessionInterface() : nullptr;
+	const FNamedOnlineSession* NamedSession = SessionInterface.IsValid()
+		? SessionInterface->GetNamedSession(NAME_GameSession)
+		: nullptr;
+	if (!NamedSession)
+	{
+		return false;
+	}
+
+	FString RoomState;
+	NamedSession->SessionSettings.Get(NPRoomSession::RoomStateKey, RoomState);
+	return RoomState == NPRoomSession::WaitingState;
+}
+
+void UNPRoomSubsystem::HandleEndSessionForRoomReturnComplete(
+	const FName SessionName,
+	const bool bWasSuccessful)
+{
+	IOnlineSubsystem* OnlineSubsystem = Online::GetSubsystem(GetWorld());
+	const IOnlineSessionPtr SessionInterface = OnlineSubsystem ? OnlineSubsystem->GetSessionInterface() : nullptr;
+	if (SessionInterface.IsValid() && EndSessionForRoomReturnCompleteHandle.IsValid())
+	{
+		SessionInterface->ClearOnEndSessionCompleteDelegate_Handle(EndSessionForRoomReturnCompleteHandle);
+		EndSessionForRoomReturnCompleteHandle.Reset();
+	}
+
+	if (!bWasSuccessful)
+	{
+		NPRoomLog::Warning(this, TEXT("대기방 복귀 실패: 온라인 세션 종료 상태 전환에 실패했습니다."));
+		CompleteWaitingRoomRestore(false);
+		return;
+	}
+
+	UpdateSessionToWaiting();
+}
+
+void UNPRoomSubsystem::UpdateSessionToWaiting()
+{
+	IOnlineSubsystem* OnlineSubsystem = Online::GetSubsystem(GetWorld());
+	const IOnlineSessionPtr SessionInterface = OnlineSubsystem ? OnlineSubsystem->GetSessionInterface() : nullptr;
+	FOnlineSessionSettings* SessionSettings = SessionInterface.IsValid()
+		? SessionInterface->GetSessionSettings(NAME_GameSession)
+		: nullptr;
+	if (!SessionInterface.IsValid() || !SessionSettings)
+	{
+		NPRoomLog::Warning(this, TEXT("대기방 복귀 실패: 갱신할 온라인 세션 설정을 찾지 못했습니다."));
+		CompleteWaitingRoomRestore(false);
+		return;
+	}
+
+	const AGameStateBase* GameState = GetWorld() ? GetWorld()->GetGameState() : nullptr;
+	const int32 PlayerCount = GameState ? GameState->PlayerArray.Num() : 0;
+	SessionSettings->Set(
+		NPRoomSession::RoomStateKey,
+		NPRoomSession::WaitingState,
+		EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+	SessionSettings->Set(
+		NPRoomSession::PlayerCountKey,
+		FMath::Clamp(PlayerCount, 0, NPRoomSession::MaxPublicConnections),
+		EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+	SessionSettings->bAllowJoinInProgress = true;
+	SessionSettings->bAllowInvites = true;
+	SessionSettings->bAllowJoinViaPresence = true;
+	SessionSettings->bShouldAdvertise = true;
+
+	UpdateWaitingRoomCompleteHandle = SessionInterface->AddOnUpdateSessionCompleteDelegate_Handle(
+		FOnUpdateSessionCompleteDelegate::CreateUObject(
+			this,
+			&UNPRoomSubsystem::HandleUpdateWaitingRoomComplete));
+	if (!SessionInterface->UpdateSession(NAME_GameSession, *SessionSettings, true))
+	{
+		if (UpdateWaitingRoomCompleteHandle.IsValid())
+		{
+			SessionInterface->ClearOnUpdateSessionCompleteDelegate_Handle(UpdateWaitingRoomCompleteHandle);
+			UpdateWaitingRoomCompleteHandle.Reset();
+		}
+		NPRoomLog::Warning(this, TEXT("대기방 복귀 실패: Waiting 세션 갱신 요청을 시작하지 못했습니다."));
+		CompleteWaitingRoomRestore(false);
+	}
+}
+
+void UNPRoomSubsystem::HandleUpdateWaitingRoomComplete(
+	const FName SessionName,
+	const bool bWasSuccessful)
+{
+	IOnlineSubsystem* OnlineSubsystem = Online::GetSubsystem(GetWorld());
+	const IOnlineSessionPtr SessionInterface = OnlineSubsystem ? OnlineSubsystem->GetSessionInterface() : nullptr;
+	if (SessionInterface.IsValid() && UpdateWaitingRoomCompleteHandle.IsValid())
+	{
+		SessionInterface->ClearOnUpdateSessionCompleteDelegate_Handle(UpdateWaitingRoomCompleteHandle);
+		UpdateWaitingRoomCompleteHandle.Reset();
+	}
+
+	if (bWasSuccessful)
+	{
+		NPRoomLog::Info(this, TEXT("온라인 방 상태 복구 완료: Waiting, 신규 참가 및 목록 노출 허용"));
+	}
+	else
+	{
+		NPRoomLog::Warning(this, TEXT("대기방 복귀 실패: Waiting 세션 설정 갱신에 실패했습니다."));
+	}
+
+	CompleteWaitingRoomRestore(bWasSuccessful);
+}
+
+void UNPRoomSubsystem::CompleteWaitingRoomRestore(const bool bWasSuccessful)
+{
+	FNPOnWaitingRoomRestored CompletionDelegate = WaitingRoomRestoredDelegate;
+	WaitingRoomRestoredDelegate.Unbind();
+	CompletionDelegate.ExecuteIfBound(bWasSuccessful);
 }

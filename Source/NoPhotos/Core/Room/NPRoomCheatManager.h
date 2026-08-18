@@ -20,10 +20,13 @@ public:
 	void Join(int32 RoomNumber);
 
 	UFUNCTION(Exec)
-	void Ready();
+	void User();
 
 	UFUNCTION(Exec)
 	void Start();
+
+	UFUNCTION(Exec)
+	void Rehost();
 
 	UFUNCTION(Exec)
 	void Out(const FString& Command);
