@@ -33,6 +33,17 @@ void UNPStablePhysicsMovementComponent::SetTargetPelvisHeight(
 	TargetPelvisHeight = FMath::Max(InTargetPelvisHeight, 0.0f);
 }
 
+void UNPStablePhysicsMovementComponent::SetMaxMoveSpeed(float InMaxMoveSpeed)
+{
+	MaxMoveSpeed = FMath::Max(InMaxMoveSpeed, 0.0f);
+}
+
+void UNPStablePhysicsMovementComponent::SetJumpVelocityChange(
+	float InJumpVelocityChange)
+{
+	JumpVelocityChange = FMath::Max(InJumpVelocityChange, 0.0f);
+}
+
 void UNPStablePhysicsMovementComponent::SetMoveInput(const FVector& InMoveInput)
 {
 	MoveInput = InMoveInput.GetClampedToMaxSize(1.0f);
@@ -278,4 +289,5 @@ void UNPStablePhysicsMovementComponent::UpdateJumpPhysics()
 		true);
 	bGrounded = false;
 	bIsFalling = true;
+	OnJumpApplied.Broadcast();
 }
