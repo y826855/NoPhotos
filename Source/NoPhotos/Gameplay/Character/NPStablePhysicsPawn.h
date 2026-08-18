@@ -70,6 +70,7 @@ protected:
 
 	/** 그랩 판정과 관계없이 오른손 IK에 사용할 시각 상태만 변경합니다. */
 	void SetRightHandVisualState(bool bActive);
+	bool IsRightHandVisualActive() const { return bRightHandActive; }
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	USkeletalMeshComponent* PhysicsMesh;
@@ -154,6 +155,10 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category="Right Hand IK", meta=(ClampMin="0.0"))
 	float RightHandIKBlendSpeed = 10.0f;
+
+	/** 아래쪽 후보를 향할수록 팔꿈치를 추가로 낮추는 거리입니다. */
+	UPROPERTY(EditAnywhere, Category="Right Hand IK", meta=(ClampMin="0.0"))
+	float LowTargetElbowDrop = 25.0f;
 
 private:
 	void ApplyCharacterProfile();

@@ -24,8 +24,13 @@ public:
 	/** 입력을 누르는 동안 그랩을 시도하고, 입력이 끝나면 즉시 놓습니다. */
 	void SetGrabRequested(bool bRequested);
 
-	/** false이면 탐색과 Constraint 생성을 수행하지 않습니다. */
+	/** false이면 Constraint 생성을 수행하지 않습니다. 후보 탐색은 시각 IK를 위해 계속합니다. */
 	void SetGrabSimulationEnabled(bool bEnabled);
+	UFUNCTION(BlueprintPure, Category="Grab")
+	bool HasGrabCandidate() const { return IsValid(CandidateComponent); }
+
+	/** 후보 또는 잡은 물체의 표면 Grab Point를 월드 좌표로 반환합니다. */
+	bool GetVisualGrabPoint(FVector& OutWorldPoint) const;
 
 	FOnStableGrabChanged OnGrabbedComponentChanged;
 
@@ -36,12 +41,14 @@ public:
 	UPrimitiveComponent* GetGrabbedComponent() const { return GrabbedComponent; }
 
 	FName GetGrabbedBoneName() const { return GrabbedBoneName; }
+	FVector GetGrabPointLocal() const { return GrabPointLocal; }
 	FTransform GetGrabConstraintFrame(EConstraintFrame::Type Frame) const;
 	void ApplyReplicatedGrab(
 		UPrimitiveComponent* PrimitiveComponent,
 		FName BoneName,
 		const FTransform& Frame1,
-		const FTransform& Frame2);
+		const FTransform& Frame2,
+		const FVector& InGrabPointLocal);
 	void ClearReplicatedGrab();
 
 protected:
@@ -50,15 +57,37 @@ protected:
 		ELevelTick TickType,
 		FActorComponentTickFunction* ThisTickFunction) override;
 
+	/** 캐릭터 정면에서 후보를 찾는 영역의 전방 길이입니다. */
+	UPROPERTY(EditAnywhere, Category="Grab|Search", meta=(ClampMin="0.0"))
+	float FrontSearchDistance = 220.0f;
+
+	UPROPERTY(EditAnywhere, Category="Grab|Search", meta=(ClampMin="0.0"))
+	float FrontSearchHalfWidth = 90.0f;
+
+	UPROPERTY(EditAnywhere, Category="Grab|Search", meta=(ClampMin="0.0"))
+	float FrontSearchHalfHeight = 110.0f;
+
+	/** PhysicsMesh 원점 기준 탐색 영역 중심의 높이 보정값입니다. */
+	UPROPERTY(EditAnywhere, Category="Grab|Search")
+	float FrontSearchVerticalOffset = -20.0f;
+
 	UPROPERTY(EditAnywhere, Category="Grab", meta=(ClampMin="0.0"))
-	float GrabRadius = 18.0f;
+	float GrabAttachDistance = 25.0f;
+
+	/** 0이면 질량 제한을 사용하지 않습니다. */
+	UPROPERTY(EditAnywhere, Category="Grab", meta=(ClampMin="0.0"))
+	float MaximumGrabMass = 50.0f;
 
 	UPROPERTY(EditAnywhere, Category="Grab Debug")
 	bool bDrawGrabDebug = true;
 
 private:
-	void TryGrab();
-	void Grab(UPrimitiveComponent* PrimitiveComponent);
+	void UpdateCandidate();
+	bool IsValidCandidate(
+		UPrimitiveComponent* PrimitiveComponent,
+		FName BoneName) const;
+	void ClearCandidate();
+	void Grab(UPrimitiveComponent* PrimitiveComponent, FName BoneName, const FVector& WorldGrabPoint);
 	void ReleaseGrab();
 	void DrawGrabDebug() const;
 
@@ -68,8 +97,15 @@ private:
 	UPROPERTY(Transient)
 	UPrimitiveComponent* GrabbedComponent = nullptr;
 
+	UPROPERTY(Transient)
+	UPrimitiveComponent* CandidateComponent = nullptr;
+
 	FName HandBoneName = NAME_None;
 	FName GrabbedBoneName = NAME_None;
+	FName CandidateBoneName = NAME_None;
+	FVector CandidateGrabPoint = FVector::ZeroVector;
+	FVector CandidateGrabPointLocal = FVector::ZeroVector;
+	FVector GrabPointLocal = FVector::ZeroVector;
 	bool bGrabSimulationEnabled = true;
 	bool bGrabRequested = false;
 };

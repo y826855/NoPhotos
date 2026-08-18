@@ -26,6 +26,10 @@ struct FReplicatedStableGrabState
 
 	UPROPERTY()
 	FTransform ConstraintFrame2 = FTransform::Identity;
+
+	/** 잡은 컴포넌트 로컬 공간의 표면 연결점입니다. */
+	UPROPERTY()
+	FVector_NetQuantize10 GrabPointLocal = FVector::ZeroVector;
 };
 
 /** 서버 권한으로 이동과 그랩 물리를 처리하는 Stable Physics Pawn입니다. */

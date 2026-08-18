@@ -3,6 +3,7 @@
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "DrawDebugHelpers.h"
+#include "Camera/CameraComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "Gameplay/Character/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Character/NPStablePhysicsMovementComponent.h"
@@ -225,7 +226,8 @@ void ANPRStablePhysicsPawn::OnRep_GrabState()
 		GrabbedComponent,
 		ReplicatedGrabState.GrabbedBoneName,
 		ReplicatedGrabState.ConstraintFrame1,
-		ReplicatedGrabState.ConstraintFrame2);
+		ReplicatedGrabState.ConstraintFrame2,
+		FVector(ReplicatedGrabState.GrabPointLocal));
 }
 
 void ANPRStablePhysicsPawn::HandleGrabbedComponentChanged(
@@ -240,6 +242,7 @@ void ANPRStablePhysicsPawn::HandleGrabbedComponentChanged(
 			EConstraintFrame::Frame1);
 		ReplicatedGrabState.ConstraintFrame2 = RightHandGrab->GetGrabConstraintFrame(
 			EConstraintFrame::Frame2);
+		ReplicatedGrabState.GrabPointLocal = RightHandGrab->GetGrabPointLocal();
 		ReplicatedServerHandWorldLocation =
 			PhysicsMesh->GetSocketLocation(RightHandBoneName);
 	}

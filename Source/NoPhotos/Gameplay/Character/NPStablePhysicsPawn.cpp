@@ -499,10 +499,20 @@ void ANPStablePhysicsPawn::UpdateRightHandIK(float DeltaSeconds)
 	const FRotator FacingRotation = GetVisualFacingRotation();
 	const FVector CharacterForward = FacingRotation.Vector();
 	const FVector CharacterRight = FRotationMatrix(FacingRotation).GetUnitAxis(EAxis::Y);
-	const FVector HandTargetLocation = ShoulderLocation + CharacterForward * RightHandReachDistance;
+	FVector HandTargetLocation = ShoulderLocation + CharacterForward * RightHandReachDistance;
+	FVector CandidateLocation;
+	if (bRightHandActive && RightHandGrab->GetVisualGrabPoint(CandidateLocation))
+	{
+		HandTargetLocation = CandidateLocation;
+	}
+	const float LowTargetAlpha = FMath::Clamp(
+		(ShoulderLocation.Z - HandTargetLocation.Z) / FMath::Max(RightHandReachDistance, 1.0f),
+		0.0f,
+		1.0f);
 	const FVector ElbowTargetLocation = ShoulderLocation
-		+ CharacterForward * (RightHandReachDistance * 0.5f)
-		+ CharacterRight * RightElbowOutwardDistance;
+		+ (HandTargetLocation - ShoulderLocation) * 0.5f
+		+ CharacterRight * RightElbowOutwardDistance
+		- FVector::UpVector * LowTargetElbowDrop * LowTargetAlpha;
 
 	const FTransform& MeshTransform = PhysicsMesh->GetComponentTransform();
 	RightHandIKLocation = MeshTransform.InverseTransformPosition(HandTargetLocation);
