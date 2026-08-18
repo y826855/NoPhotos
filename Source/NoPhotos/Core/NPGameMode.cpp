@@ -52,6 +52,15 @@ void ANPGameMode::PostLogin(APlayerController* NewPlayer)
 				TEXT("플레이어 입장 완료: Player=%s, Role=Guest, PlayerCount=%d"),
 				*NewPlayer->PlayerState->GetPlayerName(),
 				GetNumPlayers()));
+		
+		if (ANPPlayerController* GuestPC = Cast<ANPPlayerController>(NewPlayer))
+		{
+			if (!GuestPC->IsLocalController())
+			{
+				GuestPC->ClientShowLobbyUI();
+			}
+		}
+		
 		return;
 	}
 

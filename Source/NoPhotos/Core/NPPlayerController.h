@@ -6,6 +6,7 @@
 #include "GameFramework/PlayerController.h"
 #include "NPPlayerController.generated.h"
 
+class UNPUserWidget;
 /**
  * 
  */
@@ -62,4 +63,21 @@ public:
 
 	UFUNCTION(Client, Reliable)
 	void ClientLeaveRoom();
+	
+#pragma region UI
+public: 
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ShowMainMenuUI();
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ShowLobbyUI();
+	UFUNCTION(Client, Reliable)
+	void ClientShowLobbyUI();
+	
+protected:
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UNPUserWidget> MainMenuWidgetClass;
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UNPUserWidget> LobbyWidgetClass;
+	
+#pragma endregion
 };

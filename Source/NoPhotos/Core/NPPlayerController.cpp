@@ -11,6 +11,8 @@
 #include "Room/NPRoomCheatManager.h"
 #include "Room/NPRoomLog.h"
 #include "Room/NPRoomSubsystem.h"
+#include "SubSystem/NPUIManagerSubsystem.h"
+#include "UI/NPUserWidget.h"
 
 ANPPlayerController::ANPPlayerController()
 {
@@ -33,6 +35,8 @@ void ANPPlayerController::BeginPlay()
 
 		EnableCheats();
 		NPRoomLog::Info(this, TEXT("방 테스트 명령어 활성화: create, list, join {방번호}, ready, start, out game"));
+		
+		ShowMainMenuUI();
 	}
 }
 
@@ -52,7 +56,13 @@ bool ANPPlayerController::HostRoom()
 		return false;
 	}
 
-	return RoomSubsystem->HostRoom();
+	bool bSuccess = RoomSubsystem->HostRoom();
+	if (bSuccess)
+	{
+		ShowLobbyUI();
+	}
+
+	return bSuccess;
 }
 
 bool ANPPlayerController::FindRooms()
@@ -218,3 +228,44 @@ void ANPPlayerController::ClientLeaveRoom_Implementation()
 	RoomSubsystem->LeaveRoom();
 }
 
+#pragma region UI
+void ANPPlayerController::ShowMainMenuUI()
+{
+	if (!IsLocalController()) return;
+
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UNPUIManagerSubsystem* UIManager = GI->GetSubsystem<UNPUIManagerSubsystem>())
+		{
+			UIManager->PopAllWidgets();
+			if (IsValid(MainMenuWidgetClass))
+			{
+				UIManager->PushWidget(MainMenuWidgetClass);
+			}
+		}
+	}
+	
+}
+
+void ANPPlayerController::ShowLobbyUI()
+{
+	if (!IsLocalController()) return;
+
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UNPUIManagerSubsystem* UIManager = GI->GetSubsystem<UNPUIManagerSubsystem>())
+		{
+			UIManager->PopAllWidgets();
+			if (IsValid(LobbyWidgetClass))
+			{
+				UIManager->PushWidget(LobbyWidgetClass);
+			}
+		}
+	}
+}
+
+void ANPPlayerController::ClientShowLobbyUI_Implementation()
+{
+	ShowLobbyUI();
+}
+#pragma endregion
