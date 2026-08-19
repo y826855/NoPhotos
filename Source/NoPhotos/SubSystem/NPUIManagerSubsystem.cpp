@@ -158,6 +158,14 @@ void UNPUIManagerSubsystem::ApplyInputModeForTopWidget()
 		return;
 	}
 
+	if (TopWidget->UsesGameOnlyInputMode())
+	{
+		FInputModeGameOnly InputMode;
+		PlayerController->SetInputMode(InputMode);
+		PlayerController->bShowMouseCursor = false;
+		return;
+	}
+
 	PlayerController->bShowMouseCursor = TopWidget->ShouldShowMouseCursor();
 	if (TopWidget->UsesGameAndUIInputMode())
 	{
