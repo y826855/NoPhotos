@@ -93,6 +93,30 @@ public:
 	UPROPERTY(EditAnywhere, Category="잡기", meta=(DisplayName="Grab 선형 힘 파괴 임계값", ClampMin="0.0"))
 	float GrabLinearBreakThreshold = 200000.0f;
 
+	UPROPERTY(EditAnywhere, Category="조작|팔", meta=(DisplayName="손 뻗기 거리", ClampMin="0.0", Units="cm"))
+	float RightHandReachDistance = 120.0f;
+
+	UPROPERTY(EditAnywhere, Category="조작|팔", meta=(DisplayName="팔꿈치 바깥 거리", ClampMin="0.0", Units="cm"))
+	float RightElbowOutwardDistance = 40.0f;
+
+	UPROPERTY(EditAnywhere, Category="조작|팔", meta=(DisplayName="오른손 IK 전환 속도", ClampMin="0.0"))
+	float RightHandIKBlendSpeed = 10.0f;
+
+	UPROPERTY(EditAnywhere, Category="조작|허리", meta=(DisplayName="최대 숙임 각도", ClampMin="0.0", ClampMax="150.0"))
+	float MaxSpineBendAngle = 120.0f;
+
+	UPROPERTY(EditAnywhere, Category="조작|허리", meta=(DisplayName="최대 젖힘 각도", ClampMin="0.0", ClampMax="90.0"))
+	float MaxSpineLeanBackAngle = 20.0f;
+
+	UPROPERTY(EditAnywhere, Category="조작|허리", meta=(DisplayName="숙이기 시작 Pitch", ClampMin="-89.9", ClampMax="89.9"))
+	float SpineBendStartViewPitch = -40.0f;
+
+	UPROPERTY(EditAnywhere, Category="조작|허리", meta=(DisplayName="젖히기 시작 Pitch", ClampMin="-89.9", ClampMax="89.9"))
+	float SpineLeanBackStartViewPitch = 10.0f;
+
+	UPROPERTY(EditAnywhere, Category="조작|허리", meta=(DisplayName="Pitch 반응 속도", ClampMin="0.0"))
+	float SpinePitchInterpSpeed = 8.0f;
+
 	UPROPERTY(EditAnywhere, Category="물리 느낌", meta=(DisplayName="프리셋"))
 	EStablePhysicsFeelPreset Preset = EStablePhysicsFeelPreset::HumanFallFlat;
 

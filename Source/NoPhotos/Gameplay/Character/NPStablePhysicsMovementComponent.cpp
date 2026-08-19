@@ -47,11 +47,15 @@ void UNPStablePhysicsMovementComponent::SetJumpVelocityChange(
 void UNPStablePhysicsMovementComponent::SetMoveInput(const FVector& InMoveInput)
 {
 	MoveInput = InMoveInput.GetClampedToMaxSize(1.0f);
+}
 
-	// 입력이 끝난 뒤에도 마지막 이동 방향을 바라보도록 0이 아닌 입력만 저장합니다.
-	if (bOrientRotationToMovement && !MoveInput.IsNearlyZero())
+void UNPStablePhysicsMovementComponent::SetFacingDirection(
+	const FVector& InFacingDirection)
+{
+	FVector HorizontalDirection(InFacingDirection.X, InFacingDirection.Y, 0.0f);
+	if (!HorizontalDirection.IsNearlyZero())
 	{
-		FacingDirection = FVector(MoveInput.X, MoveInput.Y, 0.0f).GetSafeNormal();
+		FacingDirection = HorizontalDirection.GetSafeNormal();
 		bHasFacingDirection = true;
 	}
 }

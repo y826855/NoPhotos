@@ -53,7 +53,7 @@ ANPStablePhysicsPawn::ANPStablePhysicsPawn()
 	FollowCamera->bUsePawnControlRotation = false;
 
 	PhysicalAnimation = CreateDefaultSubobject<UPhysicalAnimationComponent>(TEXT("PhysicalAnimation"));
-	PhysicsMovement = CreateDefaultSubobject<UNPStablePhysicsMovementComponent>(TEXT("PhysicsMovement"));
+	PhysicsMovement = CreateDefaultSubobject<UNPStablePhysicsMovementComponent>(TEXT("NPPhysicsMovement"));
 
 	RightHandGrab = CreateDefaultSubobject<UNPStablePhysicsGrabComponent>(TEXT("RightHandGrab"));
 	RightHandGrab->SetupAttachment(PhysicsMesh);
@@ -83,6 +83,7 @@ void ANPStablePhysicsPawn::BeginPlay()
 		&UNPStablePhysicsGrabComponent::NotifyJumpIntent);
 	InitializePhysicalAnimation();
 	UpdateCameraTarget();
+	UpdateFacingTarget();
 	CameraBoom->AddTickPrerequisiteActor(this);
 }
 
@@ -92,10 +93,14 @@ void ANPStablePhysicsPawn::Tick(float DeltaSeconds)
 
 	RefreshCharacterProfileIfChanged();
 	UpdateCameraTarget();
+	UpdateFacingTarget();
+
 	// 디버그 전용: 카메라, 캐릭터와 이동 입력의 정면 방향을 표시합니다.
 	DrawFacingDebug();
 	// 디버그 전용: 피지컬 애니메이션 프로필의 본별 강성을 표시합니다.
 	DrawPhysicalProfileDebug();
+
+	UpdateSpinePitch(DeltaSeconds);
 	UpdateRightHandIK(DeltaSeconds);
 }
 
@@ -206,6 +211,13 @@ FVector ANPStablePhysicsPawn::GetVisualForwardDirection() const
 		: FVector::ForwardVector;
 }
 
+FRotator ANPStablePhysicsPawn::GetTargetViewRotation() const
+{
+	return Controller
+		? Controller->GetControlRotation()
+		: GetVisualFacingRotation();
+}
+
 void ANPStablePhysicsPawn::ApplyCharacterProfile()
 {
 	if (!CharacterProfile)
@@ -217,6 +229,14 @@ void ANPStablePhysicsPawn::ApplyCharacterProfile()
 	RightShoulderBoneName = CharacterProfile->RightShoulderBoneName;
 	RightHandBoneName = CharacterProfile->RightHandBoneName;
 	CharacterForwardYawOffset = CharacterProfile->CharacterForwardYawOffset;
+	RightHandReachDistance = CharacterProfile->RightHandReachDistance;
+	RightElbowOutwardDistance = CharacterProfile->RightElbowOutwardDistance;
+	RightHandIKBlendSpeed = CharacterProfile->RightHandIKBlendSpeed;
+	MaxSpineBendAngle = CharacterProfile->MaxSpineBendAngle;
+	MaxSpineLeanBackAngle = CharacterProfile->MaxSpineLeanBackAngle;
+	SpineBendStartViewPitch = CharacterProfile->SpineBendStartViewPitch;
+	SpineLeanBackStartViewPitch = CharacterProfile->SpineLeanBackStartViewPitch;
+	SpinePitchInterpSpeed = CharacterProfile->SpinePitchInterpSpeed;
 	PhysicalBodyGroups = CharacterProfile->GetPhysicalBodyGroups();
 	AppliedCharacterProfileRevision = CharacterProfile->GetSettingsRevision();
 	AppliedCharacterProfile = CharacterProfile;
@@ -316,6 +336,12 @@ void ANPStablePhysicsPawn::UpdateCameraTarget()
 	CameraRoot->SetWorldLocation(TargetLocation);
 }
 
+void ANPStablePhysicsPawn::UpdateFacingTarget()
+{
+	const FRotator CameraYawRotation(0.0f, GetTargetViewRotation().Yaw, 0.0f);
+	PhysicsMovement->SetFacingDirection(CameraYawRotation.Vector());
+}
+
 void ANPStablePhysicsPawn::UpdateRightHandIK(float DeltaSeconds)
 {
 	const float TargetAlpha = bRightHandActive ? 1.0f : 0.0f;
@@ -331,17 +357,53 @@ void ANPStablePhysicsPawn::UpdateRightHandIK(float DeltaSeconds)
 	}
 
 	const FVector ShoulderLocation = PhysicsMesh->GetSocketLocation(RightShoulderBoneName);
-	const FRotator FacingRotation = GetVisualFacingRotation();
-	const FVector CharacterForward = FacingRotation.Vector();
-	const FVector CharacterRight = FRotationMatrix(FacingRotation).GetUnitAxis(EAxis::Y);
-	const FVector HandTargetLocation = ShoulderLocation + CharacterForward * RightHandReachDistance;
+	FRotator HandTargetRotation = GetTargetViewRotation();
+	HandTargetRotation.Roll = 0.0f;
+	const FVector HandForward = HandTargetRotation.Vector();
+	const FVector HandRight = FRotationMatrix(HandTargetRotation).GetUnitAxis(EAxis::Y);
+	const FVector HandTargetLocation = ShoulderLocation + HandForward * RightHandReachDistance;
 	const FVector ElbowTargetLocation = ShoulderLocation
-		+ CharacterForward * (RightHandReachDistance * 0.5f)
-		+ CharacterRight * RightElbowOutwardDistance;
+		+ HandForward * (RightHandReachDistance * 0.5f)
+		+ HandRight * RightElbowOutwardDistance;
 
 	const FTransform& MeshTransform = PhysicsMesh->GetComponentTransform();
 	RightHandIKLocation = MeshTransform.InverseTransformPosition(HandTargetLocation);
 	RightElbowIKLocation = MeshTransform.InverseTransformPosition(ElbowTargetLocation);
+}
+
+void ANPStablePhysicsPawn::UpdateSpinePitch(float DeltaSeconds)
+{
+	CurrentViewPitch = FRotator::NormalizeAxis(GetTargetViewRotation().Pitch);
+
+	float TargetPitch = 0.0f;
+	if (CurrentViewPitch <= SpineBendStartViewPitch)
+	{
+		const float BendRange = FMath::Max(
+			SpineBendStartViewPitch + 90.0f,
+			KINDA_SMALL_NUMBER);
+		const float BendRatio = FMath::Clamp(
+			(SpineBendStartViewPitch - CurrentViewPitch) / BendRange,
+			0.0f,
+			1.0f);
+		TargetPitch = -BendRatio * MaxSpineBendAngle;
+	}
+	else if (CurrentViewPitch >= SpineLeanBackStartViewPitch)
+	{
+		const float LeanBackRange = FMath::Max(
+			90.0f - SpineLeanBackStartViewPitch,
+			KINDA_SMALL_NUMBER);
+		const float LeanBackRatio = FMath::Clamp(
+			(CurrentViewPitch - SpineLeanBackStartViewPitch) / LeanBackRange,
+			0.0f,
+			1.0f);
+		TargetPitch = LeanBackRatio * MaxSpineLeanBackAngle;
+	}
+
+	SpinePitch = FMath::FInterpTo(
+		SpinePitch,
+		TargetPitch,
+		DeltaSeconds,
+		SpinePitchInterpSpeed);
 }
 
 void ANPStablePhysicsPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -459,9 +521,7 @@ void ANPStablePhysicsPawn::DrawFacingDebug() const
 	const FVector ArrowStart = PhysicsMesh->GetSocketLocation(FullBodyRootName)
 		+ FVector::UpVector * FacingDebugHeight;
 
-	const float CameraYaw = Controller
-		? Controller->GetControlRotation().Yaw
-		: FollowCamera->GetComponentRotation().Yaw;
+	const float CameraYaw = GetTargetViewRotation().Yaw;
 	const FVector CameraForward = FRotationMatrix(FRotator(0.0f, CameraYaw, 0.0f))
 		.GetUnitAxis(EAxis::X);
 
