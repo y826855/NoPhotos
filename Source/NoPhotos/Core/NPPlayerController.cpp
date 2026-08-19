@@ -36,10 +36,10 @@ void ANPPlayerController::BeginPlay()
 		EnableCheats();
 		NPRoomLog::Info(this, TEXT("방 테스트 명령어 활성화: create, list, join {방번호}, ready, start, out game"));
 		
-		if (IsLocalController() && GetNetMode() == NM_Standalone)
-        {
-            ShowMainMenuUI();
-        }
+		if (GetNetMode() == NM_Standalone)
+		{
+			ShowMainMenuUI();
+		}
 	}
 }
 
@@ -58,14 +58,8 @@ bool ANPPlayerController::HostRoom()
 		NPRoomLog::Warning(this, TEXT("호스트 생성 실패: RoomSubsystem을 찾지 못했습니다."));
 		return false;
 	}
-
-	bool bSuccess = RoomSubsystem->HostRoom();
-	if (bSuccess)
-	{
-		ShowLobbyUI();
-	}
-
-	return bSuccess;
+	
+	return RoomSubsystem->HostRoom();
 }
 
 bool ANPPlayerController::FindRooms()
@@ -234,57 +228,50 @@ void ANPPlayerController::ClientLeaveRoom_Implementation()
 #pragma region UI
 void ANPPlayerController::ShowMainMenuUI()
 {
-	if (!IsLocalController()) return;
-
-	if (UGameInstance* GI = GetGameInstance())
-	{
-		if (UNPUIManagerSubsystem* UIManager = GI->GetSubsystem<UNPUIManagerSubsystem>())
-		{
-			UIManager->PopAllWidgets();
-			if (IsValid(MainMenuWidgetClass))
-			{
-				UIManager->PushWidget(MainMenuWidgetClass);
-			}
-		}
-	}
-	
+	ShowSingleScreen(MainMenuWidgetClass);
 }
 
 void ANPPlayerController::ShowLobbyUI()
 {
-	if (!IsLocalController()) return;
-
-	if (UGameInstance* GI = GetGameInstance())
-	{
-		if (UNPUIManagerSubsystem* UIManager = GI->GetSubsystem<UNPUIManagerSubsystem>())
-		{
-			UIManager->PopAllWidgets();
-			if (IsValid(LobbyWidgetClass))
-			{
-				UIManager->PushWidget(LobbyWidgetClass);
-			}
-		}
-	}
+	ShowSingleScreen(LobbyWidgetClass);
 }
 
 void ANPPlayerController::ClientShowLobbyUI_Implementation()
 {
+	ShowLobbyUI();
+}
+
+void ANPPlayerController::ShowGameScreenUI()
+{
+	ShowSingleScreen(GameScreenWidgetClass);
+}
+
+void ANPPlayerController::ClientShowGameScreenUI_Implementation()
+{
+	ShowGameScreenUI();
+}
+
+void ANPPlayerController::ShowSingleScreen(TSubclassOf<UNPUserWidget> WidgetClass)
+{
+	if (!IsLocalController() || !IsValid(WidgetClass))
+	{
+		return;
+	}
+
 	UGameInstance* GameInstance = GetGameInstance();
 	if (!IsValid(GameInstance))
 	{
 		return;
 	}
 
-	UNPUIManagerSubsystem* UIManager = GameInstance->GetSubsystem<UNPUIManagerSubsystem>();
+	UNPUIManagerSubsystem* UIManager =
+		GameInstance->GetSubsystem<UNPUIManagerSubsystem>();
 	if (!IsValid(UIManager))
 	{
 		return;
 	}
 
-	UIManager->PopAllWidgets(); 
-	if (LobbyWidgetClass)
-	{
-		UIManager->PushWidget(LobbyWidgetClass);
-	}
+	UIManager->PopAllWidgets();
+	UIManager->PushWidget(WidgetClass);
 }
 #pragma endregion

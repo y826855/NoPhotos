@@ -70,14 +70,22 @@ public:
 	void ShowMainMenuUI();
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void ShowLobbyUI();
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ShowGameScreenUI();
 	UFUNCTION(Client, Reliable)
 	void ClientShowLobbyUI();
+	UFUNCTION(Client, Reliable)
+	void ClientShowGameScreenUI();
 	
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UNPUserWidget> MainMenuWidgetClass;
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UNPUserWidget> LobbyWidgetClass;
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+    TSubclassOf<UNPUserWidget> GameScreenWidgetClass;
 	
+private:
+	void ShowSingleScreen(TSubclassOf<UNPUserWidget> WidgetClass);
 #pragma endregion
 };

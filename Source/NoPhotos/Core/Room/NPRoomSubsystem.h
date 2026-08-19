@@ -90,7 +90,6 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Room")
 	FOnFindRoomsCompleteDelegate OnFindRoomsComplete;
 
-	// ListedRoomResultIndices를 외부(UI)에서 참조할 수 있도록 Getter 추가
 	const TArray<int32>& GetListedRoomResultIndices() const { return ListedRoomResultIndices; }
 #pragma endregion
 };

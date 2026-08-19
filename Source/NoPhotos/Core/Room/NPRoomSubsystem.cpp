@@ -16,6 +16,7 @@
 #include "OnlineSubsystem.h"
 #include "OnlineSubsystemUtils.h"
 #include "TimerManager.h"
+#include "Core/NPPlayerController.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 
@@ -590,6 +591,11 @@ void UNPRoomSubsystem::HandleCreateSessionComplete(const FName SessionName, cons
 	{
 		NPRoomLog::Warning(this, TEXT("방 생성 실패: 방 상태 또는 호스트를 활성화하지 못했습니다."));
 		return;
+	}
+	
+	if (ANPPlayerController* HostPC = Cast<ANPPlayerController>(HostPlayer))
+	{
+		HostPC->ShowLobbyUI();
 	}
 
 	const FNamedOnlineSession* NamedSession = SessionInterface.IsValid()
