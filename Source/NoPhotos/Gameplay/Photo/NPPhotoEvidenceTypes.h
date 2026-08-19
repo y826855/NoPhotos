@@ -44,6 +44,9 @@ struct NOPHOTOS_API FNPPhotoEvidenceResult
 	GENERATED_BODY()
 
 	UPROPERTY(BlueprintReadOnly, Category="Photo")
+	uint16 CaptureSequence = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category="Photo")
 	bool bSuccess = false;
 
 	UPROPERTY(BlueprintReadOnly, Category="Photo")
@@ -73,6 +76,12 @@ USTRUCT(BlueprintType)
 struct NOPHOTOS_API FNPReplicatedPhotoEvidence
 {
 	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category="Photo")
+	FGuid PhotoId;
+
+	UPROPERTY(BlueprintReadOnly, Category="Photo")
+	uint16 CaptureSequence = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category="Photo")
 	TObjectPtr<APlayerState> Photographer = nullptr;

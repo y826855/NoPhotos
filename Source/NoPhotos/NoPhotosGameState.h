@@ -19,15 +19,26 @@ public:
 	UFUNCTION(BlueprintPure, Category="Photo")
 	TArray<FNPReplicatedPhotoEvidence> GetPhotoEvidence() const { return PhotoEvidence; }
 
+	UFUNCTION(BlueprintPure, Category="Photo")
+	TArray<FGuid> GetTransferredPhotoIds() const { return TransferredPhotoIds; }
+
 	UPROPERTY(BlueprintAssignable, Category="Photo")
 	FOnNoPhotosPhotoEvidenceChanged OnPhotoEvidenceChanged;
 
 	void AddPhotoEvidence(const FNPPhotoEvidenceResult& Result, int32 AwardedScore);
+	void RegisterTransferredPhoto(const FGuid& PhotoId);
+	void AttachPhotoId(APlayerState* Photographer, uint16 CaptureSequence, const FGuid& PhotoId);
 
 private:
 	UFUNCTION()
 	void OnRep_PhotoEvidence();
 
+	UFUNCTION()
+	void OnRep_TransferredPhotoIds();
+
 	UPROPERTY(ReplicatedUsing=OnRep_PhotoEvidence)
 	TArray<FNPReplicatedPhotoEvidence> PhotoEvidence;
+
+	UPROPERTY(ReplicatedUsing=OnRep_TransferredPhotoIds)
+	TArray<FGuid> TransferredPhotoIds;
 };

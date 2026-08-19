@@ -27,6 +27,7 @@ FNPPhotoEvidenceResult UNPPhotoEvidenceService::EvaluatePhoto(
 	const FNPPhotoCaptureRequest& Request)
 {
 	FNPPhotoEvidenceResult Result;
+	Result.CaptureSequence = Request.CaptureSequence;
 	UE_LOG(
 		LogNPPhoto,
 		Log,

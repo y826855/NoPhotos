@@ -9,6 +9,8 @@
 
 class UNPMatchScorePolicy;
 class UNPPhotoEvidenceService;
+class UNPPhotoRepository;
+class APlayerController;
 
 /**
  *  Simple GameMode for a third person game
@@ -28,6 +30,8 @@ public:
 		FString& ErrorMessage) override;
 
 	FNPPhotoEvidenceResult HandlePhotoCaptureRequest(const FNPPhotoCaptureRequest& Request);
+	UNPPhotoRepository* GetPhotoRepository() const { return PhotoRepository; }
+	void HandlePhotoStored(APlayerController* Photographer, uint16 CaptureSequence, const FGuid& PhotoId);
 
 protected:
 	UPROPERTY(EditDefaultsOnly, Category="Photo")
@@ -42,6 +46,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNPMatchScorePolicy> MatchScorePolicy;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNPPhotoRepository> PhotoRepository;
 };
 
 
