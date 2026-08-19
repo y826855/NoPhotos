@@ -28,6 +28,8 @@ enum class ENPRoomExitAction : uint8
 	RejoinMigratedRoom
 };
 
+DECLARE_DELEGATE_OneParam(FNPOnWaitingRoomRestored, bool);
+
 UCLASS()
 class NOPHOTOS_API UNPRoomSubsystem : public UGameInstanceSubsystem
 {
@@ -46,11 +48,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Room")
 	bool JoinRoom(int32 RoomNumber);
 
-	void LeaveRoom();
-	void BeginHostMigration(const FString& MigrationId, bool bBecomeHost);
+	void LeaveRoom(const FString& MenuLevelPath);
+	void BeginHostMigration(const FString& MigrationId, bool bBecomeHost, const FString& MenuLevelPath);
 
 	void UpdateRoomPlayerCount(int32 PlayerCount);
 	void MarkRoomInGame();
+	void RestoreWaitingRoom(FNPOnWaitingRoomRestored CompletionDelegate);
+	bool IsWaitingRoomActive() const;
 
 	void LogOnlineServiceStatus();
 	void DisplayDebugMessage(const FString& Message, const FLinearColor& Color);
@@ -60,8 +64,13 @@ private:
 	void HandleFindSessionsComplete(bool bWasSuccessful);
 	void HandleJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result);
 	void HandleDestroySessionComplete(FName SessionName, bool bWasSuccessful);
+	void HandleNetworkFailureSessionCleanupComplete(FName SessionName, bool bWasSuccessful);
+	void HandleEndSessionForRoomReturnComplete(FName SessionName, bool bWasSuccessful);
+	void HandleUpdateWaitingRoomComplete(FName SessionName, bool bWasSuccessful);
 	void HandlePostLoadMap(UWorld* LoadedWorld);
-	void BeginExit(ENPRoomExitAction ExitAction, const FString& MigrationId);
+	void UpdateSessionToWaiting();
+	void CompleteWaitingRoomRestore(bool bWasSuccessful);
+	void BeginExit(ENPRoomExitAction ExitAction, const FString& MigrationId, const FString& MenuLevelPath);
 	void TravelToStandaloneMenu();
 	void RetryMigrationSearch();
 	void ScheduleMigrationSearchRetry();
@@ -73,6 +82,8 @@ private:
 	FDelegateHandle CreateSessionCompleteHandle;
 	FDelegateHandle FindSessionsCompleteHandle;
 	FDelegateHandle JoinSessionCompleteHandle;
+	FDelegateHandle EndSessionForRoomReturnCompleteHandle;
+	FDelegateHandle UpdateWaitingRoomCompleteHandle;
 	FDelegateHandle DebugDrawHandle;
 	FDelegateHandle NetworkFailureHandle;
 	FDelegateHandle PostLoadMapHandle;
@@ -80,8 +91,10 @@ private:
 	ENPRoomExitAction PendingExitAction = ENPRoomExitAction::None;
 	FString PendingMigrationId;
 	FString ReturnMapPath;
+	FNPOnWaitingRoomRestored WaitingRoomRestoredDelegate;
 	int32 MigrationSearchAttempts = 0;
 	bool bSearchingForMigration = false;
+	bool bCleaningSessionAfterNetworkFailure = false;
 	bool bHasLoggedOnlineServiceStatus = false;
 	TArray<FNPRoomDebugMessage> DebugMessages;
 	

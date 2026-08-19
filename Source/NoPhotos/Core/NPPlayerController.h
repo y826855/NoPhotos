@@ -6,10 +6,10 @@
 #include "GameFramework/PlayerController.h"
 #include "NPPlayerController.generated.h"
 
-class UNPUserWidget;
-/**
- * 
- */
+class UInputMappingContext;
+class UNPRoomPlayerComponent;
+class UUserWidget;
+
 UCLASS()
 class NOPHOTOS_API ANPPlayerController : public APlayerController
 {
@@ -17,6 +17,9 @@ class NOPHOTOS_API ANPPlayerController : public APlayerController
 
 public:
 	ANPPlayerController();
+
+	UFUNCTION(BlueprintPure, Category = "Room")
+	UNPRoomPlayerComponent* GetRoomComponent() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Room")
 	bool HostRoom();
@@ -28,39 +31,46 @@ public:
 	bool JoinRoom(int32 RoomNumber);
 
 	UFUNCTION(BlueprintCallable, Category = "Room")
-	void SetReady(bool bIsReady);
+	void RequestStartGame();
 
 	UFUNCTION(BlueprintCallable, Category = "Room")
-	void RequestStartGame();
+	void RequestRestartRoom();
 
 	UFUNCTION(BlueprintCallable, Category = "Room")
 	void ExitRoom();
 
-	UFUNCTION(BlueprintPure, Category = "Room")
-	bool IsRoomHost() const;
+	UFUNCTION(BlueprintCallable, Category = "Room")
+	void ShowRoomUsers() const;
 
 	UFUNCTION(BlueprintPure, Category = "Room")
-	bool IsRoomReady() const;
+	bool IsRoomHost() const;
 
 	UFUNCTION(BlueprintPure, Category = "Room")
 	bool CanStartGame() const;
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void SetupInputComponent() override;
 
-	UFUNCTION(Server, Reliable)
-	void ServerSetReady(bool bIsReady);
+	bool ShouldUseTouchControls() const;
 
-	UFUNCTION(Server, Reliable)
-	void ServerRequestStartGame();
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<UNPRoomPlayerComponent> RoomComponent;
 
-	UFUNCTION(Server, Reliable)
-	void ServerRequestExitRoom();
+	UPROPERTY(EditAnywhere, Category = "Input|Input Mappings")
+	TArray<TObjectPtr<UInputMappingContext>> DefaultMappingContexts;
 
-public:
-	UFUNCTION(Client, Reliable)
-	void ClientBeginHostMigration(const FString& MigrationId, bool bBecomeHost);
+	UPROPERTY(EditAnywhere, Category = "Input|Input Mappings")
+	TArray<TObjectPtr<UInputMappingContext>> MobileExcludedMappingContexts;
 
+	UPROPERTY(EditAnywhere, Category = "Input|Touch Controls")
+	TSubclassOf<UUserWidget> MobileControlsWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> MobileControlsWidget;
+
+	UPROPERTY(EditAnywhere, Config, Category = "Input|Touch Controls")
+	bool bForceTouchControls = false;
 	UFUNCTION(Client, Reliable)
 	void ClientLeaveRoom();
 	

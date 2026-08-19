@@ -1,9 +1,7 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/GameMode.h"
+#include "Room/NPRoomGameMode.h"
 #include "NPGameMode.generated.h"
 
 class APlayerState;
@@ -11,7 +9,7 @@ class ANPPlayerController;
 class UWorld;
 
 UCLASS()
-class NOPHOTOS_API ANPGameMode : public AGameMode
+class NOPHOTOS_API ANPGameMode : public ANPRoomGameMode
 {
 	GENERATED_BODY()
 
@@ -42,4 +40,5 @@ private:
 	TObjectPtr<ANPPlayerController> PendingExitingHost;
 
 	FTimerHandle HostMigrationExitTimer;
+
 };

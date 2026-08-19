@@ -1,9 +1,7 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/GameState.h"
+#include "Room/NPRoomGameState.h"
 #include "NPGameState.generated.h"
 
 class APlayerState;
@@ -26,7 +24,7 @@ struct NOPHOTOS_API FNPPlayerRoomInfo
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FNPOnRoomStateChanged);
 
 UCLASS()
-class NOPHOTOS_API ANPGameState : public AGameState
+class NOPHOTOS_API ANPGameState : public ANPRoomGameState
 {
 	GENERATED_BODY()
 
@@ -67,4 +65,5 @@ private:
 
 	UPROPERTY(ReplicatedUsing = OnRep_CanHostStartGame)
 	bool bCanHostStartGame = false;
+
 };

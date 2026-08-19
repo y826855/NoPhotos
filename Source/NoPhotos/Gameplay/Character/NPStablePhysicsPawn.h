@@ -6,6 +6,7 @@
 #include "NPStablePhysicsPawn.generated.h"
 
 class UCameraComponent;
+class UAnimMontage;
 class UInputAction;
 class UPhysicalAnimationComponent;
 class USceneComponent;
@@ -25,6 +26,17 @@ public:
 	ANPStablePhysicsPawn();
 
 	virtual FVector GetVelocity() const override;
+	/** 외부 게임 규칙이 현재 이동 의도를 즉시 제거할 때 사용합니다. */
+	void StopMovementInput();
+
+	/** 사진 촬영으로 인한 이동 잠금만 변경합니다. Controller의 전역 입력 잠금과는 독립적입니다. */
+	void SetPhotoMovementLocked(bool bLocked);
+
+	UFUNCTION(BlueprintPure, Category="Photo")
+	bool IsPhotoMovementLocked() const { return bPhotoMovementLocked; }
+
+	/** 설정된 사진 촬영 Montage를 한 번 재생합니다. */
+	bool PlayPhotoShotMontage();
 
 	UPROPERTY(BlueprintReadOnly, Transient, Category="Right Hand IK")
 	FVector RightHandIKLocation = FVector::ZeroVector;
@@ -106,6 +118,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category="Input")
 	UInputAction* RightHandAction;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Animation|Photo")
+	TObjectPtr<UAnimMontage> PhotoShotMontage;
 
 	/** 지정하면 본 이름과 피지컬 애니메이션 설정을 프로필 값으로 덮어씁니다. */
 	UPROPERTY(EditAnywhere, Category="Character Profile")
@@ -189,6 +204,7 @@ private:
 
 
 	bool bRightHandActive = false;
+	bool bPhotoMovementLocked = false;
 	uint32 AppliedCharacterProfileRevision = 0;
 	TWeakObjectPtr<UNPStablePhysicsCharacterProfile> AppliedCharacterProfile;
 };
