@@ -11,6 +11,7 @@
 #include "Gameplay/Photo/NPRelicHolderInterface.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
 #include "Gameplay/Relic/NPBaseRelic.h"
+#include "Gameplay/Relic/NPBreakableRelic.h"
 #include "NoPhotosGameMode.h"
 
 void UNPPhotoEvidenceService::Initialize(ANoPhotosGameMode* InOwningGameMode)
@@ -62,6 +63,18 @@ FNPPhotoEvidenceResult UNPPhotoEvidenceService::EvaluatePhoto(
 			*GetNameSafe(HeldRelic));
 		if (!IsValid(HeldRelic) || !HeldRelic->IsA<ANPBaseRelic>())
 		{
+			continue;
+		}
+
+		if (const ANPBreakableRelic* BreakableRelic = Cast<ANPBreakableRelic>(HeldRelic);
+			BreakableRelic && BreakableRelic->IsBroken())
+		{
+			UE_LOG(
+				LogNPPhoto,
+				Verbose,
+				TEXT("[Evidence] Broken relic rejected. Thief=%s Relic=%s"),
+				*GetNameSafe(CandidateThief),
+				*GetNameSafe(HeldRelic));
 			continue;
 		}
 
