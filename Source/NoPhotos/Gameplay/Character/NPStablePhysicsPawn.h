@@ -28,6 +28,8 @@ public:
 	virtual FVector GetVelocity() const override;
 	/** 외부 게임 규칙이 현재 이동 의도를 즉시 제거할 때 사용합니다. */
 	void StopMovementInput();
+	/** 점프대처럼 외부 게임 규칙이 물리 캐릭터 전체에 즉시 속도 변화를 적용할 때 사용합니다. */
+	void AddExternalVelocityChange(const FVector& VelocityChange);
 
 	/** 사진 촬영으로 인한 이동 잠금만 변경합니다. Controller의 전역 입력 잠금과는 독립적입니다. */
 	void SetPhotoMovementLocked(bool bLocked);
@@ -46,6 +48,14 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, Transient, Category="Right Hand IK")
 	float RightHandIKAlpha = 0.0f;
+
+	/** 카메라 Pitch를 허리 가동 범위로 제한하고 보간한 값입니다. */
+	UPROPERTY(BlueprintReadOnly, Transient, Category="Spine Control")
+	float SpinePitch = 0.0f;
+
+	/** 허리 매핑 전의 현재 시점 Pitch입니다. */
+	UPROPERTY(BlueprintReadOnly, Transient, Category="Spine Control")
+	float CurrentViewPitch = 0.0f;
 
 	UFUNCTION(BlueprintPure, Category="Components")
 	UNPStablePhysicsMovementComponent* GetStablePhysicsMovementComponent() const { return PhysicsMovement; }
@@ -82,6 +92,9 @@ protected:
 
 	/** 그랩 판정과 관계없이 오른손 IK에 사용할 시각 상태만 변경합니다. */
 	void SetRightHandVisualState(bool bActive);
+
+	/** 캐릭터 방향, 손 IK와 허리에 사용할 시점 회전을 반환합니다. */
+	virtual FRotator GetTargetViewRotation() const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	USkeletalMeshComponent* PhysicsMesh;
@@ -163,15 +176,6 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Right Hand IK")
 	FName RightHandBoneName = TEXT("hand_r");
 
-	UPROPERTY(EditAnywhere, Category="Right Hand IK", meta=(ClampMin="0.0"))
-	float RightHandReachDistance = 120.0f;
-
-	UPROPERTY(EditAnywhere, Category="Right Hand IK", meta=(ClampMin="0.0"))
-	float RightElbowOutwardDistance = 40.0f;
-
-	UPROPERTY(EditAnywhere, Category="Right Hand IK", meta=(ClampMin="0.0"))
-	float RightHandIKBlendSpeed = 10.0f;
-
 private:
 	void ApplyCharacterProfile();
 	void RefreshCharacterProfileIfChanged();
@@ -179,8 +183,10 @@ private:
 	void ApplyPhysicalAnimationGroups();
 	void ConfigurePelvisStability();
 	void UpdateCameraTarget();
+	void UpdateFacingTarget();
 
 	void UpdateRightHandIK(float DeltaSeconds);
+	void UpdateSpinePitch(float DeltaSeconds);
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
 	void Jump();
@@ -204,6 +210,14 @@ private:
 
 
 	bool bRightHandActive = false;
+	float RightHandReachDistance = 120.0f;
+	float RightElbowOutwardDistance = 40.0f;
+	float RightHandIKBlendSpeed = 10.0f;
+	float MaxSpineBendAngle = 120.0f;
+	float MaxSpineLeanBackAngle = 20.0f;
+	float SpineBendStartViewPitch = -40.0f;
+	float SpineLeanBackStartViewPitch = 10.0f;
+	float SpinePitchInterpSpeed = 8.0f;
 	bool bPhotoMovementLocked = false;
 	uint32 AppliedCharacterProfileRevision = 0;
 	TWeakObjectPtr<UNPStablePhysicsCharacterProfile> AppliedCharacterProfile;

@@ -52,11 +52,16 @@ protected:
 	virtual void ApplyMoveInput(const FVector& WorldMoveInput) override;
 	virtual void ApplyJumpRequest() override;
 	virtual void ApplyRightHandState(bool bActive) override;
+	virtual FRotator GetTargetViewRotation() const override;
 
 private:
 	/** 자주 변경되는 이동 입력은 유실을 허용하는 RPC로 전달합니다. */
 	UFUNCTION(Server, Unreliable)
 	void ServerSetMoveInput(FVector_NetQuantizeNormal WorldMoveInput);
+
+	/** 현재 카메라 회전을 서버 권한 캐릭터 제어에 전달합니다. */
+	UFUNCTION(Server, Unreliable)
+	void ServerSetViewRotation(uint16 CompressedYaw, uint16 CompressedPitch);
 
 	/** 정지 입력이 유실되어 서버에서 계속 움직이지 않도록 Reliable로 전달합니다. */
 	UFUNCTION(Server, Reliable)
@@ -76,6 +81,8 @@ private:
 
 	void HandleGrabbedComponentChanged(UPrimitiveComponent* NewGrabbedComponent);
 	UPrimitiveComponent* ResolveReplicatedGrabbedComponent() const;
+	void UpdateViewRotationReplication(float DeltaSeconds);
+	void SetReplicatedViewRotation(const FRotator& NewViewRotation);
 	void SetServerRightHandState(bool bActive);
 	void DrawGrabNetworkDebug() const;
 
@@ -109,5 +116,10 @@ private:
 	UPROPERTY(Replicated)
 	FVector_NetQuantizeNormal ReplicatedAnimationForwardDirection = FVector::ForwardVector;
 
+	/** 서버 물리와 비소유 클라이언트의 손/허리 표현에 사용할 시점 회전입니다. */
+	UPROPERTY(Replicated)
+	FRotator ReplicatedViewRotation = FRotator::ZeroRotator;
+
 	bool bClientWasMoving = false;
+	float ViewRotationSendAccumulator = 0.05f;
 };
