@@ -86,6 +86,9 @@ void ANPPulleyBarrierGimmick::BeginPlay()
 	GimmickComponent->OnCompleted.AddUObject(
 		this,
 		&ANPPulleyBarrierGimmick::HandleGimmickCompleted);
+	GrabbableComponent->OnGrabStarted.AddUObject(
+		this,
+		&ANPPulleyBarrierGimmick::HandleGrabStarted);
 
 	if (HasAuthority())
 	{
@@ -111,21 +114,21 @@ void ANPPulleyBarrierGimmick::Tick(float DeltaSeconds)
 		return;
 	}
 
-	if (CounterweightMass > 0.0f && GetWorld())
+	if (!GrabbableComponent->IsGrabbed()
+		&& !HandleMesh->RigidBodyIsAwake())
 	{
-		const float SignedTravelDistance = GetSignedHandleTravelDistance();
-		if (!FMath::IsNearlyZero(SignedTravelDistance, 0.1f))
-		{
-			const float GravityAcceleration = FMath::Abs(GetWorld()->GetGravityZ());
-			const float ReturnDirection = FMath::Sign(SignedTravelDistance);
-			HandleMesh->AddForce(
-				GetActorUpVector()
-				* ReturnDirection
-				* CounterweightMass
-				* GravityAcceleration);
-		}
+		UpdateTravelFromHandle();
+		return;
 	}
 
+	const float SignedTravelDistance = GetSignedHandleTravelDistance();
+	if (TrySettleHandle(SignedTravelDistance))
+	{
+		UpdateTravelFromHandle();
+		return;
+	}
+
+	ApplyHandleReturnForce(SignedTravelDistance);
 	UpdateTravelFromHandle();
 }
 
@@ -153,6 +156,73 @@ float ANPPulleyBarrierGimmick::GetSignedHandleTravelDistance() const
 	return FVector::DotProduct(
 		InitialHandleWorldLocation - HandleMesh->GetComponentLocation(),
 		GetActorUpVector());
+}
+
+void ANPPulleyBarrierGimmick::ApplyHandleReturnForce(
+	float SignedTravelDistance)
+{
+	if (CounterweightMass <= 0.0f
+		|| ReturnForceRampDistance <= UE_SMALL_NUMBER
+		|| !GetWorld())
+	{
+		return;
+	}
+
+	const float GravityAcceleration = FMath::Abs(GetWorld()->GetGravityZ());
+	const float MaximumReturnForce = CounterweightMass * GravityAcceleration;
+	const float SpringStrength = MaximumReturnForce / ReturnForceRampDistance;
+	const float HandleMass = FMath::Max(HandleMesh->GetMass(), UE_SMALL_NUMBER);
+	const float CriticalDamping = 2.0f * FMath::Sqrt(SpringStrength * HandleMass);
+	const float TravelSpeed = -FVector::DotProduct(
+		HandleMesh->GetPhysicsLinearVelocity(),
+		GetActorUpVector());
+	const float RestoringForce = MaximumReturnForce * FMath::Clamp(
+		SignedTravelDistance / ReturnForceRampDistance,
+		-1.0f,
+		1.0f);
+	const float DampingForce = CriticalDamping
+		* ReturnDampingRatio
+		* TravelSpeed;
+
+	HandleMesh->AddForce(
+		GetActorUpVector() * (RestoringForce + DampingForce));
+}
+
+bool ANPPulleyBarrierGimmick::TrySettleHandle(
+	float SignedTravelDistance)
+{
+	if (GrabbableComponent->IsGrabbed())
+	{
+		return false;
+	}
+
+	const float TravelSpeed = -FVector::DotProduct(
+		HandleMesh->GetPhysicsLinearVelocity(),
+		GetActorUpVector());
+	if (FMath::Abs(SignedTravelDistance) > SettlingDistance
+		|| FMath::Abs(TravelSpeed) > SettlingSpeed)
+	{
+		return false;
+	}
+
+	HandleMesh->SetWorldLocation(
+		InitialHandleWorldLocation,
+		false,
+		nullptr,
+		ETeleportType::TeleportPhysics);
+	HandleMesh->SetPhysicsLinearVelocity(FVector::ZeroVector);
+	HandleMesh->SetPhysicsAngularVelocityInDegrees(FVector::ZeroVector);
+	HandleMesh->PutRigidBodyToSleep();
+	return true;
+}
+
+void ANPPulleyBarrierGimmick::HandleGrabStarted(UPrimitiveComponent*)
+{
+	if (HasAuthority())
+	{
+		HandleMesh->WakeAllRigidBodies();
+		OnHandleGrabbed.Broadcast();
+	}
 }
 
 void ANPPulleyBarrierGimmick::UpdateTravelFromHandle()

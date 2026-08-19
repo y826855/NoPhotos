@@ -7,6 +7,7 @@
 class UGrabbableComponent;
 class UNPPulleyBarrierGimmickComponent;
 class UPhysicsConstraintComponent;
+class UPrimitiveComponent;
 class USceneComponent;
 class UStaticMeshComponent;
 class FLifetimeProperty;
@@ -16,6 +17,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
 	float,
 	NormalizedTravel);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPulleyBarrierOpened);
+DECLARE_MULTICAST_DELEGATE(FOnPulleyHandleGrabbed);
 
 UCLASS(Blueprintable)
 class NOPHOTOS_API ANPPulleyBarrierGimmick : public AActor
@@ -38,6 +40,8 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category="Pulley Barrier")
 	FOnPulleyBarrierOpened OnBarrierOpened;
+
+	FOnPulleyHandleGrabbed OnHandleGrabbed;
 
 protected:
 	virtual void BeginPlay() override;
@@ -79,6 +83,18 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pulley Barrier", meta=(ClampMin="0.0"))
 	float HandleLinearDamping = 5.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pulley Barrier|Return", meta=(ClampMin="1.0"))
+	float ReturnForceRampDistance = 25.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pulley Barrier|Return", meta=(ClampMin="0.0"))
+	float ReturnDampingRatio = 0.7f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pulley Barrier|Return", meta=(ClampMin="0.0"))
+	float SettlingDistance = 0.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pulley Barrier|Return", meta=(ClampMin="0.0"))
+	float SettlingSpeed = 5.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pulley Barrier", meta=(ClampMin="1.0"))
 	float PulleyRadius = 25.0f;
 
@@ -97,6 +113,9 @@ protected:
 private:
 	void ConfigureHandleConstraint();
 	float GetSignedHandleTravelDistance() const;
+	void ApplyHandleReturnForce(float SignedTravelDistance);
+	bool TrySettleHandle(float SignedTravelDistance);
+	void HandleGrabStarted(UPrimitiveComponent* GrabbedComponent);
 	void UpdateTravelFromHandle();
 	void ApplyTravel(float TravelDistance);
 	void ApplyPulleyRotation(
