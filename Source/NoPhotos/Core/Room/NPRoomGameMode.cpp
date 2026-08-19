@@ -39,11 +39,20 @@ void ANPRoomGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
 
-	if (!bRoomActive)
+	ANPPlayerController* NPPC = Cast<ANPPlayerController>(NewPlayer);
+	if (!IsValid(NPPC))
 	{
 		return;
 	}
-
+	
+	if (!bRoomActive)
+	{
+		NPPC->ClientShowMainMenuUI();
+		return;
+	}
+	
+	NPPC->ClientShowLobbyUI();
+	
 	if (!IsValid(NewPlayer) || !IsValid(NewPlayer->PlayerState))
 	{
 		NPRoomLog::Warning(this, TEXT("플레이어 입장 처리 실패: PlayerController 또는 PlayerState가 유효하지 않습니다."));

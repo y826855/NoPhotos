@@ -146,10 +146,21 @@ bool ANPPlayerController::ShouldUseTouchControls() const
 	return SVirtualJoystick::ShouldDisplayTouchInterface() || bForceTouchControls;
 }
 
+void ANPPlayerController::ClientLeaveRoom_Implementation()
+{
+	
+}
+
 #pragma region UI
+
 void ANPPlayerController::ShowMainMenuUI()
 {
 	ShowSingleScreen(MainMenuWidgetClass);
+}
+
+void ANPPlayerController::ClientShowMainMenuUI_Implementation()
+{
+	ShowMainMenuUI();
 }
 
 void ANPPlayerController::ShowLobbyUI()

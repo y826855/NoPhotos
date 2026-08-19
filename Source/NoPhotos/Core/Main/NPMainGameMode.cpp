@@ -26,6 +26,12 @@ void ANPMainGameMode::BeginPlay()
 void ANPMainGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
+
+	if (ANPPlayerController* NPPlayerController = Cast<ANPPlayerController>(NewPlayer))
+	{
+		NPPlayerController->ClientShowGameScreenUI();
+	}
+
 	RefreshPlayerRankings();
 	TryAwardInitialScore();
 }
@@ -66,6 +72,12 @@ void ANPMainGameMode::Logout(AController* Exiting)
 void ANPMainGameMode::HandleSeamlessTravelPlayer(AController*& Controller)
 {
 	Super::HandleSeamlessTravelPlayer(Controller);
+
+	if (ANPPlayerController* NPPlayerController = Cast<ANPPlayerController>(Controller))
+	{
+		NPPlayerController->ClientShowGameScreenUI();
+	}
+
 	RefreshPlayerRankings();
 	TryAwardInitialScore();
 }

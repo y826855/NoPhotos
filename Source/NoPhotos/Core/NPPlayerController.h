@@ -9,6 +9,7 @@
 class UInputMappingContext;
 class UNPRoomPlayerComponent;
 class UUserWidget;
+class UNPUserWidget;
 
 UCLASS()
 class NOPHOTOS_API ANPPlayerController : public APlayerController
@@ -78,6 +79,8 @@ protected:
 public: 
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void ShowMainMenuUI();
+	UFUNCTION(Client, Reliable)
+	void ClientShowMainMenuUI();
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void ShowLobbyUI();
 	UFUNCTION(BlueprintCallable, Category = "UI")
