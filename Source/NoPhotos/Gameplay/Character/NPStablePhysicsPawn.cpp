@@ -111,6 +111,18 @@ void ANPStablePhysicsPawn::StopMovementInput()
 
 void ANPStablePhysicsPawn::AddExternalVelocityChange(const FVector& VelocityChange)
 {
+	if (!HasAuthority() || !PhysicsMesh || VelocityChange.IsNearlyZero())
+	{
+		return;
+	}
+
+	StopMovementInput();
+	PhysicsMesh->WakeAllRigidBodies();
+	PhysicsMesh->AddImpulseToAllBodiesBelow(
+		VelocityChange,
+		FullBodyRootName,
+		true,
+		true);
 }
 
 void ANPStablePhysicsPawn::SetPhotoMovementLocked(bool bLocked)
