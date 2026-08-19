@@ -28,6 +28,8 @@ public:
 	virtual FVector GetVelocity() const override;
 	/** 외부 게임 규칙이 현재 이동 의도를 즉시 제거할 때 사용합니다. */
 	void StopMovementInput();
+	/** 점프대처럼 외부 게임 규칙이 물리 캐릭터 전체에 즉시 속도 변화를 적용할 때 사용합니다. */
+	void AddExternalVelocityChange(const FVector& VelocityChange);
 
 	/** 사진 촬영으로 인한 이동 잠금만 변경합니다. Controller의 전역 입력 잠금과는 독립적입니다. */
 	void SetPhotoMovementLocked(bool bLocked);

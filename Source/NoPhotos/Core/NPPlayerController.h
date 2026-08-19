@@ -71,7 +71,4 @@ protected:
 
 	UPROPERTY(EditAnywhere, Config, Category = "Input|Touch Controls")
 	bool bForceTouchControls = false;
-	UFUNCTION(Client, Reliable)
-	void ClientLeaveRoom();
-
 };

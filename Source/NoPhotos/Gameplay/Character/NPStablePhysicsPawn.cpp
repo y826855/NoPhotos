@@ -109,6 +109,10 @@ void ANPStablePhysicsPawn::StopMovementInput()
 	ApplyMoveInput(FVector::ZeroVector);
 }
 
+void ANPStablePhysicsPawn::AddExternalVelocityChange(const FVector& VelocityChange)
+{
+}
+
 void ANPStablePhysicsPawn::SetPhotoMovementLocked(bool bLocked)
 {
 	bPhotoMovementLocked = bLocked;
