@@ -8,6 +8,17 @@
 #include "InputMappingContext.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
+#include "NPGameMode.h"
+#include "NPGameState.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerState.h"
+#include "Room/NPRoomCheatManager.h"
+#include "Room/NPRoomLog.h"
+#include "Room/NPRoomSubsystem.h"
+#include "SubSystem/NPUIManagerSubsystem.h"
+#include "UI/NPUserWidget.h"
+
 ANPPlayerController::ANPPlayerController()
 {
 	RoomComponent = CreateDefaultSubobject<UNPRoomPlayerComponent>(TEXT("RoomComponent"));
@@ -134,3 +145,54 @@ bool ANPPlayerController::ShouldUseTouchControls() const
 {
 	return SVirtualJoystick::ShouldDisplayTouchInterface() || bForceTouchControls;
 }
+
+#pragma region UI
+void ANPPlayerController::ShowMainMenuUI()
+{
+	ShowSingleScreen(MainMenuWidgetClass);
+}
+
+void ANPPlayerController::ShowLobbyUI()
+{
+	ShowSingleScreen(LobbyWidgetClass);
+}
+
+void ANPPlayerController::ClientShowLobbyUI_Implementation()
+{
+	ShowLobbyUI();
+}
+
+void ANPPlayerController::ShowGameScreenUI()
+{
+	ShowSingleScreen(GameScreenWidgetClass);
+}
+
+void ANPPlayerController::ClientShowGameScreenUI_Implementation()
+{
+	ShowGameScreenUI();
+}
+
+void ANPPlayerController::ShowSingleScreen(TSubclassOf<UNPUserWidget> WidgetClass)
+{
+	if (!IsLocalController() || !IsValid(WidgetClass))
+	{
+		return;
+	}
+
+	UGameInstance* GameInstance = GetGameInstance();
+	if (!IsValid(GameInstance))
+	{
+		return;
+	}
+
+	UNPUIManagerSubsystem* UIManager =
+		GameInstance->GetSubsystem<UNPUIManagerSubsystem>();
+	if (!IsValid(UIManager))
+	{
+		return;
+	}
+
+	UIManager->PopAllWidgets();
+	UIManager->PushWidget(WidgetClass);
+}
+#pragma endregion
