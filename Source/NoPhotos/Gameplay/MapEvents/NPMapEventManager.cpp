@@ -1,0 +1,144 @@
+#include "NPMapEventManager.h"
+
+#include "NPArtifactSpawnMapEvent.h"
+#include "NPBlackoutMapEvent.h"
+#include "NPMapEvent.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
+
+ANPMapEventManager::ANPMapEventManager()
+{
+	PrimaryActorTick.bCanEverTick = false;
+	bReplicates = true;
+	bAlwaysRelevant = true;
+	SetReplicateMovement(false);
+
+	EventClasses.Add(ANPBlackoutMapEvent::StaticClass());
+	EventClasses.Add(ANPArtifactSpawnMapEvent::StaticClass());
+}
+
+void ANPMapEventManager::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	CreateEventInstances();
+	if (bStartAutomatically)
+	{
+		StartEventScheduling();
+	}
+}
+
+void ANPMapEventManager::StartEventScheduling()
+{
+	if (!HasAuthority() || EventInstances.IsEmpty())
+	{
+		return;
+	}
+
+	ScheduleNextEvent(InitialDelay);
+}
+
+void ANPMapEventManager::StopEventScheduling()
+{
+	if (HasAuthority())
+	{
+		GetWorldTimerManager().ClearTimer(EventTimer);
+	}
+}
+
+bool ANPMapEventManager::TriggerRandomEvent()
+{
+	UWorld* World = GetWorld();
+	if (!HasAuthority() || !World || (!bAllowConcurrentEvents && HasActiveEvent()))
+	{
+		return false;
+	}
+
+	TArray<ANPMapEvent*> Candidates;
+	float TotalWeight = 0.0f;
+	const double ServerTimeSeconds = World->GetTimeSeconds();
+
+	for (ANPMapEvent* EventInstance : EventInstances)
+	{
+		if (IsValid(EventInstance) && EventInstance->CanStartEvent(ServerTimeSeconds))
+		{
+			Candidates.Add(EventInstance);
+			TotalWeight += EventInstance->GetSelectionWeight();
+		}
+	}
+
+	if (Candidates.IsEmpty() || TotalWeight <= 0.0f)
+	{
+		return false;
+	}
+
+	float Selection = FMath::FRandRange(0.0f, TotalWeight);
+	for (ANPMapEvent* Candidate : Candidates)
+	{
+		Selection -= Candidate->GetSelectionWeight();
+		if (Selection <= 0.0f)
+		{
+			return Candidate->StartEvent();
+		}
+	}
+
+	return Candidates.Last()->StartEvent();
+}
+
+void ANPMapEventManager::CreateEventInstances()
+{
+	UWorld* World = GetWorld();
+	if (!HasAuthority() || !World)
+	{
+		return;
+	}
+
+	for (const TSubclassOf<ANPMapEvent>& EventClass : EventClasses)
+	{
+		if (!EventClass)
+		{
+			continue;
+		}
+
+		FActorSpawnParameters SpawnParameters;
+		SpawnParameters.Owner = this;
+		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		if (ANPMapEvent* EventInstance = World->SpawnActor<ANPMapEvent>(EventClass, GetActorTransform(), SpawnParameters))
+		{
+			EventInstances.Add(EventInstance);
+		}
+	}
+}
+
+void ANPMapEventManager::ScheduleNextEvent(const float Delay)
+{
+	GetWorldTimerManager().SetTimer(
+		EventTimer,
+		this,
+		&ANPMapEventManager::HandleEventTimer,
+		FMath::Max(Delay, 0.01f),
+		false);
+}
+
+void ANPMapEventManager::HandleEventTimer()
+{
+	TriggerRandomEvent();
+
+	const float LowerBound = FMath::Min(MinimumInterval, MaximumInterval);
+	const float UpperBound = FMath::Max(MinimumInterval, MaximumInterval);
+	ScheduleNextEvent(FMath::FRandRange(LowerBound, UpperBound));
+}
+
+bool ANPMapEventManager::HasActiveEvent() const
+{
+	return EventInstances.ContainsByPredicate(
+		[](const ANPMapEvent* EventInstance)
+		{
+			return IsValid(EventInstance) && EventInstance->IsEventActive();
+		});
+}

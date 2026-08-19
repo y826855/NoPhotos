@@ -1,8 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Room/NPRoomGameState.h"
-#include "NPGameState.generated.h"
+#include "GameFramework/GameState.h"
+#include "NPRoomGameState.generated.h"
 
 class APlayerState;
 
@@ -17,18 +17,18 @@ struct NOPHOTOS_API FNPPlayerRoomInfo
 	UPROPERTY(BlueprintReadOnly, Category = "Room")
 	bool bIsHost = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Room")
-	bool bIsReady = false;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FNPOnRoomStateChanged);
 
 UCLASS()
-class NOPHOTOS_API ANPGameState : public ANPRoomGameState
+class NOPHOTOS_API ANPRoomGameState : public AGameState
 {
 	GENERATED_BODY()
 
 public:
+	virtual void AddPlayerState(APlayerState* PlayerState) override;
+	virtual void RemovePlayerState(APlayerState* PlayerState) override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UFUNCTION(BlueprintPure, Category = "Room")
@@ -38,32 +38,29 @@ public:
 	bool IsRoomHost(const APlayerState* PlayerState) const;
 
 	UFUNCTION(BlueprintPure, Category = "Room")
-	bool IsRoomMemberReady(const APlayerState* PlayerState) const;
+	bool CanHostStartGame() const;
 
 	UFUNCTION(BlueprintPure, Category = "Room")
-	bool CanHostStartGame() const;
+	APlayerState* GetHostPlayerState() const;
 
 	UPROPERTY(BlueprintAssignable, Category = "Room")
 	FNPOnRoomStateChanged OnRoomStateChanged;
 
-	void AddRoomMember(APlayerState* PlayerState, bool bIsHost);
-	void RemoveRoomMember(const APlayerState* PlayerState);
-	void SetRoomMemberReady(const APlayerState* PlayerState, bool bIsReady);
+	void SetHostPlayerState(APlayerState* PlayerState);
+	void RefreshCanHostStartGame();
 
 private:
 	UFUNCTION()
-	void OnRep_RoomMembers();
+	void OnRep_HostPlayerState();
 
 	UFUNCTION()
 	void OnRep_CanHostStartGame();
 
-	void RefreshCanHostStartGame();
 	void NotifyRoomStateChanged();
 
-	UPROPERTY(ReplicatedUsing = OnRep_RoomMembers)
-	TArray<FNPPlayerRoomInfo> RoomMembers;
+	UPROPERTY(ReplicatedUsing = OnRep_HostPlayerState)
+	TObjectPtr<APlayerState> HostPlayerState;
 
 	UPROPERTY(ReplicatedUsing = OnRep_CanHostStartGame)
 	bool bCanHostStartGame = false;
-
 };

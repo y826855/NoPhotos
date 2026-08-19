@@ -1,0 +1,206 @@
+#include "NPMainGameMode.h"
+
+#include "Core/NPPlayerController.h"
+#include "Core/NPPlayerState.h"
+#include "Core/Room/NPRoomSubsystem.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
+#include "NPMainGameLog.h"
+#include "NPMainGameState.h"
+#include "TimerManager.h"
+
+ANPMainGameMode::ANPMainGameMode()
+{
+	GameStateClass = ANPMainGameState::StaticClass();
+	PlayerControllerClass = ANPPlayerController::StaticClass();
+	PlayerStateClass = ANPPlayerState::StaticClass();
+	bUseSeamlessTravel = true;
+}
+
+void ANPMainGameMode::BeginPlay()
+{
+	Super::BeginPlay();
+	StartMainGame();
+}
+
+void ANPMainGameMode::PostLogin(APlayerController* NewPlayer)
+{
+	Super::PostLogin(NewPlayer);
+	RefreshPlayerRankings();
+	TryAwardInitialScore();
+}
+
+void ANPMainGameMode::Logout(AController* Exiting)
+{
+	Super::Logout(Exiting);
+	RefreshPlayerRankings();
+
+	ANPMainGameState* MainGameState = GetGameState<ANPMainGameState>();
+	if (GetNetMode() != NM_ListenServer || !MainGameState || !MainGameState->IsMainGameActive())
+	{
+		return;
+	}
+
+	int32 RemainingPlayerCount = 0;
+	bool bHostRemains = false;
+	for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator; ++Iterator)
+	{
+		const APlayerController* PlayerController = Iterator->Get();
+		if (!IsValid(PlayerController) || PlayerController == Exiting)
+		{
+			continue;
+		}
+
+		++RemainingPlayerCount;
+		bHostRemains |= PlayerController->IsLocalController();
+	}
+
+	if (RemainingPlayerCount == 1 && bHostRemains)
+	{
+		GetWorldTimerManager().ClearTimer(MainGameTimer);
+		MainGameState->FinishMainGame();
+		EndMatch();
+	}
+}
+
+void ANPMainGameMode::HandleSeamlessTravelPlayer(AController*& Controller)
+{
+	Super::HandleSeamlessTravelPlayer(Controller);
+	RefreshPlayerRankings();
+	TryAwardInitialScore();
+}
+
+void ANPMainGameMode::RequestRestartRoom(APlayerController* RequestingPlayer)
+{
+	if (bReturningToRoom)
+	{
+		NPMainGameLog::Info(this, TEXT("대기방 복귀 요청 무시: 이미 복귀 처리 중입니다."));
+		return;
+	}
+
+	if (GetNetMode() != NM_ListenServer || !IsValid(RequestingPlayer) || !RequestingPlayer->IsLocalController())
+	{
+		NPMainGameLog::Info(this, TEXT("대기방 복귀 거절: 리슨 서버 호스트만 요청할 수 있습니다."));
+		return;
+	}
+
+	const ANPMainGameState* MainGameState = GetGameState<ANPMainGameState>();
+	if (!MainGameState || !MainGameState->IsMainGameEnded())
+	{
+		NPMainGameLog::Info(this, TEXT("대기방 복귀 거절: 게임이 아직 종료되지 않았습니다."));
+		return;
+	}
+
+	if (RoomLevel.IsNull())
+	{
+		NPMainGameLog::Info(this, TEXT("대기방 복귀 실패: RoomLevel이 지정되지 않았습니다."));
+		return;
+	}
+
+	UGameInstance* GameInstance = GetGameInstance();
+	UNPRoomSubsystem* RoomSubsystem = GameInstance ? GameInstance->GetSubsystem<UNPRoomSubsystem>() : nullptr;
+	if (!RoomSubsystem)
+	{
+		NPMainGameLog::Info(this, TEXT("대기방 복귀 실패: RoomSubsystem을 찾지 못했습니다."));
+		return;
+	}
+
+	bReturningToRoom = true;
+	NPMainGameLog::Info(this, TEXT("호스트 대기방 복귀 요청 승인: 온라인 방 상태를 복구합니다."));
+	RoomSubsystem->RestoreWaitingRoom(
+		FNPOnWaitingRoomRestored::CreateUObject(this, &ANPMainGameMode::HandleWaitingRoomRestored));
+}
+
+void ANPMainGameMode::StartMainGame()
+{
+	ANPMainGameState* MainGameState = GetGameState<ANPMainGameState>();
+	if (!MainGameState)
+	{
+		return;
+	}
+
+	MainGameState->StartMainGame(GameDurationSeconds);
+	NPMainGameLog::Info(
+		this,
+		FString::Printf(TEXT("게임 시작: 제한시간=%d초"), GameDurationSeconds));
+	TryAwardInitialScore();
+	GetWorldTimerManager().SetTimer(
+		MainGameTimer,
+		this,
+		&ANPMainGameMode::UpdateMainGameTimer,
+		1.0f,
+		true);
+}
+
+void ANPMainGameMode::UpdateMainGameTimer()
+{
+	ANPMainGameState* MainGameState = GetGameState<ANPMainGameState>();
+	if (!MainGameState)
+	{
+		GetWorldTimerManager().ClearTimer(MainGameTimer);
+		return;
+	}
+
+	const int32 NextRemainingTime = MainGameState->GetRemainingGameTime() - 1;
+	MainGameState->SetRemainingGameTime(NextRemainingTime);
+	if (NextRemainingTime > 0)
+	{
+		return;
+	}
+
+	GetWorldTimerManager().ClearTimer(MainGameTimer);
+	MainGameState->FinishMainGame();
+	EndMatch();
+}
+
+void ANPMainGameMode::RefreshPlayerRankings()
+{
+	if (ANPMainGameState* MainGameState = GetGameState<ANPMainGameState>())
+	{
+		MainGameState->RefreshPlayerRankings();
+	}
+}
+
+void ANPMainGameMode::TryAwardInitialScore()
+{
+	if (bInitialScoreAwarded)
+	{
+		return;
+	}
+
+	ANPMainGameState* MainGameState = GetGameState<ANPMainGameState>();
+	if (!MainGameState || !MainGameState->IsMainGameActive())
+	{
+		return;
+	}
+
+	for (APlayerState* PlayerState : MainGameState->PlayerArray)
+	{
+		ANPPlayerState* NPPlayerState = Cast<ANPPlayerState>(PlayerState);
+		if (!NPPlayerState)
+		{
+			continue;
+		}
+
+		bInitialScoreAwarded = true;
+		NPPlayerState->AddScore(10);
+		NPMainGameLog::Info(
+			this,
+			FString::Printf(TEXT("시작 점수 지급: Player=%s, Score=10"), *NPPlayerState->GetPlayerName()));
+		return;
+	}
+}
+
+void ANPMainGameMode::HandleWaitingRoomRestored(const bool bWasSuccessful)
+{
+	if (!bWasSuccessful)
+	{
+		bReturningToRoom = false;
+		NPMainGameLog::Info(this, TEXT("대기방 복귀 중단: 온라인 방 상태 복구에 실패했습니다."));
+		return;
+	}
+
+	const FString RoomLevelPath = RoomLevel.ToSoftObjectPath().GetLongPackageName();
+	NPMainGameLog::Info(this, FString::Printf(TEXT("대기방 복귀: ServerTravel -> %s"), *RoomLevelPath));
+	GetWorld()->ServerTravel(RoomLevelPath);
+}

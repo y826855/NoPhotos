@@ -1,26 +1,26 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Room/NPRoomGameMode.h"
-#include "NPGameMode.generated.h"
+#include "GameFramework/GameMode.h"
+#include "NPRoomGameMode.generated.h"
 
-class APlayerState;
 class ANPPlayerController;
 class UWorld;
 
 UCLASS()
-class NOPHOTOS_API ANPGameMode : public ANPRoomGameMode
+class NOPHOTOS_API ANPRoomGameMode : public AGameMode
 {
 	GENERATED_BODY()
 
 public:
-	ANPGameMode();
+	ANPRoomGameMode();
 
+	virtual void BeginPlay() override;
 	virtual void PostLogin(APlayerController* NewPlayer) override;
 	virtual void Logout(AController* Exiting) override;
+	virtual void HandleSeamlessTravelPlayer(AController*& Controller) override;
 
 	bool ActivateRoom(APlayerController* HostPlayer);
-	void SetPlayerReady(APlayerController* PlayerController, bool bIsReady);
 	void TryStartGame(APlayerController* RequestingPlayer);
 	void RequestExitRoom(ANPPlayerController* RequestingPlayer);
 
@@ -30,15 +30,13 @@ protected:
 
 private:
 	void FinishHostMigrationExit();
+	bool TryActivateExistingWaitingRoom();
+	void RestoreReturningPlayer(AController* Controller);
 
 	bool bRoomActive = false;
-
-	UPROPERTY()
-	TObjectPtr<APlayerState> HostPlayerState;
 
 	UPROPERTY()
 	TObjectPtr<ANPPlayerController> PendingExitingHost;
 
 	FTimerHandle HostMigrationExitTimer;
-
 };
