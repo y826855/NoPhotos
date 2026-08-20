@@ -157,7 +157,6 @@ void ANPPlayerController::ShowMainMenuUI()
 {
 	ShowSingleScreen(MainMenuWidgetClass);
 }
-
 void ANPPlayerController::ClientShowMainMenuUI_Implementation()
 {
 	ShowMainMenuUI();
@@ -167,7 +166,6 @@ void ANPPlayerController::ShowLobbyUI()
 {
 	ShowSingleScreen(LobbyWidgetClass);
 }
-
 void ANPPlayerController::ClientShowLobbyUI_Implementation()
 {
 	ShowLobbyUI();
@@ -177,11 +175,18 @@ void ANPPlayerController::ShowGameScreenUI()
 {
 	ShowSingleScreen(GameScreenWidgetClass);
 }
-
-
 void ANPPlayerController::ClientShowGameScreenUI_Implementation()
 {
 	ShowGameScreenUI();
+}
+
+void ANPPlayerController::ShowSelectPictureUI()
+{
+	ShowSingleScreen(SelectPictureWidgetClass);
+}
+void ANPPlayerController::ClientShowSelectPictureUI_Implementation()
+{
+	ShowSelectPictureUI();
 }
 
 void ANPPlayerController::ShowResultUI()

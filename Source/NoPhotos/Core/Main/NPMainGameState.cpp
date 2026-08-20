@@ -126,7 +126,7 @@ void ANPMainGameState::FinishMainGame()
 
 		if (IsValid(NPPlayerController))
 		{
-			NPPlayerController->ClientShowResultUI();
+			NPPlayerController->ClientShowSelectPictureUI();
 		}
 	}
 }

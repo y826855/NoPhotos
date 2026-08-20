@@ -90,6 +90,10 @@ public:
 	UFUNCTION(Client, Reliable)
 	void ClientShowGameScreenUI();
 	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ShowSelectPictureUI();
+	UFUNCTION(Client, Reliable)
+	void ClientShowSelectPictureUI();
+	UFUNCTION(BlueprintCallable, Category = "UI")
 	void ShowResultUI();
 	UFUNCTION(Client, Reliable)
 	void ClientShowResultUI();
@@ -101,6 +105,8 @@ protected:
 	TSubclassOf<UNPUserWidget> LobbyWidgetClass;
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
     TSubclassOf<UNPUserWidget> GameScreenWidgetClass;
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UNPUserWidget> SelectPictureWidgetClass;
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
     TSubclassOf<UNPUserWidget> ResultWidgetClass;
 	
