@@ -4,10 +4,15 @@
 #include "Blueprint/UserWidget.h"
 #include "NPPhotoPreviewWidget.generated.h"
 
+class UButton;
 class UImage;
-class UTextureRenderTarget2D;
+class UTextBlock;
+class UTexture;
+class UTexture2D;
+class ANoPhotosGameState;
+class UNPPhotoTransferComponent;
 
-/** 촬영된 Render Target을 표시하는 WBP의 C++ 기반 클래스입니다. */
+/** 새 사진 알림을 표시하고 요청한 네트워크 사진을 2초 동안 보여주는 WBP 기반 클래스입니다. */
 UCLASS(Abstract, Blueprintable)
 class NOPHOTOS_API UNPPhotoPreviewWidget : public UUserWidget
 {
@@ -15,32 +20,62 @@ class NOPHOTOS_API UNPPhotoPreviewWidget : public UUserWidget
 
 public:
 	UFUNCTION(BlueprintCallable, Category="Photo")
-	void ShowPhoto(UTextureRenderTarget2D* InPhoto);
+	void ShowPhoto(UTexture* InPhoto);
 
 	UFUNCTION(BlueprintCallable, Category="Photo")
 	void HidePhoto();
 
 	UFUNCTION(BlueprintPure, Category="Photo")
-	UTextureRenderTarget2D* GetDisplayedPhoto() const { return DisplayedPhoto; }
+	UTexture* GetDisplayedPhoto() const { return DisplayedPhoto; }
 
 protected:
+	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 
-	/** WBP에 같은 이름의 Image가 있으면 C++에서 Render Target을 바로 연결합니다. */
 	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
 	TObjectPtr<UImage> PhotoImage;
 
-	/** 촬영 이미지를 화면에 표시하는 시간입니다. */
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UButton> PhotoReceiveButton;
+
+	UPROPERTY(BlueprintReadOnly, meta=(BindWidgetOptional))
+	TObjectPtr<UTextBlock> PhotoTransferText;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Photo", meta=(ClampMin="0.0"))
 	float PreviewDuration = 2.0f;
 
-	/** WBP에서 플래시, 페이드 등의 연출을 시작할 수 있습니다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Photo", meta=(ClampMin="1.0"))
+	float TransferRequestTimeout = 10.0f;
+
 	UFUNCTION(BlueprintImplementableEvent, Category="Photo", meta=(DisplayName="On Photo Displayed"))
-	void BP_OnPhotoDisplayed(UTextureRenderTarget2D* Photo);
+	void BP_OnPhotoDisplayed(UTexture* Photo);
 
 private:
-	UPROPERTY(Transient)
-	TObjectPtr<UTextureRenderTarget2D> DisplayedPhoto;
+	UFUNCTION()
+	void HandlePhotoEvidenceChanged();
 
+	UFUNCTION()
+	void HandleReceiveButtonClicked();
+
+	UFUNCTION()
+	void HandlePhotoTextureReceived(FGuid PhotoId, UTexture2D* Texture);
+
+	void RefreshAvailablePhotos();
+	void SetTransferNotificationVisible(bool bVisible);
+	void HandleTransferRequestTimeout();
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture> DisplayedPhoto;
+
+	UPROPERTY(Transient)
+	TObjectPtr<ANoPhotosGameState> ObservedGameState;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNPPhotoTransferComponent> TransferComponent;
+
+	TSet<FGuid> KnownPhotoIds;
+	TArray<FGuid> AvailablePhotoIds;
+	FGuid PendingPhotoId;
 	FTimerHandle PreviewHideTimer;
+	FTimerHandle TransferRequestTimer;
 };

@@ -29,6 +29,9 @@ public:
 	/** 카메라 기준으로 계산된 월드 공간 이동 방향을 전달받습니다. */
 	void SetMoveInput(const FVector& InMoveInput);
 
+	/** 캐릭터가 따라볼 월드 공간의 수평 방향을 설정합니다. */
+	void SetFacingDirection(const FVector& InFacingDirection);
+
 	/** false이면 상태 조회만 수행하고 실제 물리 Force와 회전은 적용하지 않습니다. */
 	void SetPhysicsUpdatesEnabled(bool bEnabled) { bPhysicsUpdatesEnabled = bEnabled; }
 	void SetAnimationStateOverride(

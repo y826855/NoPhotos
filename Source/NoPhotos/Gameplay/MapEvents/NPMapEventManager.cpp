@@ -3,6 +3,7 @@
 #include "NPArtifactSpawnMapEvent.h"
 #include "NPBlackoutMapEvent.h"
 #include "NPMapEvent.h"
+#include "NPSpeedBoostMapEvent.h"
 #include "Engine/World.h"
 #include "TimerManager.h"
 
@@ -15,6 +16,7 @@ ANPMapEventManager::ANPMapEventManager()
 
 	EventClasses.Add(ANPBlackoutMapEvent::StaticClass());
 	EventClasses.Add(ANPArtifactSpawnMapEvent::StaticClass());
+	EventClasses.Add(ANPSpeedBoostMapEvent::StaticClass());
 }
 
 void ANPMapEventManager::BeginPlay()

@@ -23,7 +23,8 @@ public class NoPhotos : ModuleRules
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {
-			"OnlineSubsystemUtils"
+			"OnlineSubsystemUtils",
+			"ImageCore"
 		});
 
 		PublicIncludePaths.Add(ModuleDirectory);

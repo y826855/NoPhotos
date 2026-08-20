@@ -9,6 +9,8 @@
 #include "Gameplay/Character/NPStablePhysicsPawn.h"
 #include "Gameplay/Character/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
+#include "Gameplay/Photo/NPPhotoImageCodec.h"
+#include "Gameplay/Photo/NPPhotoTransferComponent.h"
 #include "NoPhotosGameMode.h"
 #include "TimerManager.h"
 
@@ -21,6 +23,7 @@ UNPPhotoCaptureComponent::UNPPhotoCaptureComponent()
 void UNPPhotoCaptureComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	ImageCodec = NewObject<UNPPhotoImageCodec>(this, TEXT("PhotoCaptureImageCodec"));
 
 	const APlayerController* PlayerController = Cast<APlayerController>(GetOwner());
 	if (PlayerController && PlayerController->IsLocalController())
@@ -117,6 +120,14 @@ bool UNPPhotoCaptureComponent::TakePhoto()
 	bPhotoAttemptInProgress = false;
 	ApplyMovementLock();
 	const uint16 CaptureSequence = ++NextCaptureSequence;
+	if (ImageCodec)
+	{
+		TArray<uint8> JpegData;
+		if (ImageCodec->EncodeRenderTargetToJpeg(PhotoRenderTarget, JpegQuality, JpegData))
+		{
+			PendingJpegPhotos.Add(CaptureSequence, MoveTemp(JpegData));
+		}
+	}
 	ServerRequestTakePhoto(CameraLocation, CameraRotation.Vector(), CaptureSequence);
 	return true;
 }
@@ -267,12 +278,14 @@ void UNPPhotoCaptureComponent::ServerRequestTakePhoto_Implementation(
 			*GetNameSafe(Photographer),
 			*GetNameSafe(GameMode));
 		FNPPhotoEvidenceResult FailureResult;
+		FailureResult.CaptureSequence = CaptureSequence;
 		FailureResult.FailureReason = ENPPhotoEvidenceFailureReason::InvalidPhotographer;
 		ClientReceivePhotoResult(FailureResult);
 		return;
 	}
 
 	FNPPhotoEvidenceResult RejectedResult;
+	RejectedResult.CaptureSequence = CaptureSequence;
 	RejectedResult.Photographer = Photographer->PlayerState;
 	if (IsPhotographerGrabbing())
 	{
@@ -316,5 +329,27 @@ void UNPPhotoCaptureComponent::ClientReceivePhotoResult_Implementation(
 		static_cast<int32>(Result.FailureReason),
 		*GetNameSafe(Result.Thief),
 		*GetNameSafe(Result.Relic));
+
+	if (TArray<uint8>* JpegData = PendingJpegPhotos.Find(Result.CaptureSequence))
+	{
+		if (Result.bSuccess
+			|| Result.FailureReason == ENPPhotoEvidenceFailureReason::NoValidEvidence)
+		{
+			if (UNPPhotoTransferComponent* TransferComponent =
+				GetOwner()->FindComponentByClass<UNPPhotoTransferComponent>())
+			{
+				TransferComponent->BeginUploadPhoto(
+					Result.CaptureSequence,
+					*JpegData,
+					CaptureWidth,
+					CaptureHeight);
+			}
+			else
+			{
+				UE_LOG(LogNPPhoto, Error, TEXT("[PhotoTransfer] Transfer Component is missing."));
+			}
+		}
+		PendingJpegPhotos.Remove(Result.CaptureSequence);
+	}
 	OnPhotoResultReceived.Broadcast(Result);
 }
