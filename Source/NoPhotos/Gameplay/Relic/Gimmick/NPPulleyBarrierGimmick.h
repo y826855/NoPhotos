@@ -83,6 +83,13 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pulley Barrier", meta=(ClampMin="0.0"))
 	float HandleLinearDamping = 5.0f;
 
+	UPROPERTY(
+		EditAnywhere,
+		BlueprintReadOnly,
+		Category="Pulley Barrier",
+		meta=(ClampMin="0.0", Units="cm/s"))
+	float MaxHandleDownwardSpeed = 30.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pulley Barrier|Return", meta=(ClampMin="1.0"))
 	float ReturnForceRampDistance = 25.0f;
 
@@ -114,6 +121,7 @@ private:
 	void ConfigureHandleConstraint();
 	float GetSignedHandleTravelDistance() const;
 	void ApplyHandleReturnForce(float SignedTravelDistance);
+	void LimitHandleDownwardSpeed();
 	bool TrySettleHandle(float SignedTravelDistance);
 	void HandleGrabStarted(UPrimitiveComponent* GrabbedComponent);
 	void UpdateTravelFromHandle();

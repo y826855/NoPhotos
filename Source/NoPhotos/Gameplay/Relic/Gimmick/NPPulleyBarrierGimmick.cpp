@@ -24,7 +24,6 @@ ANPPulleyBarrierGimmick::ANPPulleyBarrierGimmick()
 	HandleMesh->SetMobility(EComponentMobility::Movable);
 	HandleMesh->SetCollisionProfileName(UCollisionProfile::PhysicsActor_ProfileName);
 	HandleMesh->SetEnableGravity(false);
-	HandleMesh->SetIsReplicated(true);
 
 	HandleConstraint = CreateDefaultSubobject<UPhysicsConstraintComponent>(
 		TEXT("HandleConstraint"));
@@ -75,6 +74,7 @@ bool ANPPulleyBarrierGimmick::IsOpened() const
 void ANPPulleyBarrierGimmick::BeginPlay()
 {
 	Super::BeginPlay();
+	HandleMesh->SetIsReplicated(false);
 
 	InitialHandleRelativeLocation = HandleMesh->GetRelativeLocation();
 	InitialHandleWorldLocation = HandleMesh->GetComponentLocation();
@@ -129,6 +129,7 @@ void ANPPulleyBarrierGimmick::Tick(float DeltaSeconds)
 	}
 
 	ApplyHandleReturnForce(SignedTravelDistance);
+	LimitHandleDownwardSpeed();
 	UpdateTravelFromHandle();
 }
 
@@ -176,16 +177,43 @@ void ANPPulleyBarrierGimmick::ApplyHandleReturnForce(
 	const float TravelSpeed = -FVector::DotProduct(
 		HandleMesh->GetPhysicsLinearVelocity(),
 		GetActorUpVector());
-	const float RestoringForce = MaximumReturnForce * FMath::Clamp(
-		SignedTravelDistance / ReturnForceRampDistance,
-		-1.0f,
-		1.0f);
+	const bool bResistingDownwardPull = GrabbableComponent->IsGrabbed()
+		&& (SignedTravelDistance > 0.0f || TravelSpeed > 0.0f);
+	const float RestoringForce = bResistingDownwardPull
+		? MaximumReturnForce
+		: MaximumReturnForce * FMath::Clamp(
+			SignedTravelDistance / ReturnForceRampDistance,
+			-1.0f,
+			1.0f);
 	const float DampingForce = CriticalDamping
 		* ReturnDampingRatio
 		* TravelSpeed;
 
 	HandleMesh->AddForce(
 		GetActorUpVector() * (RestoringForce + DampingForce));
+}
+
+void ANPPulleyBarrierGimmick::LimitHandleDownwardSpeed()
+{
+	if (!GrabbableComponent->IsGrabbed()
+		|| MaxHandleDownwardSpeed <= 0.0f)
+	{
+		return;
+	}
+
+	const FVector DownwardDirection = -GetActorUpVector();
+	const FVector CurrentVelocity = HandleMesh->GetPhysicsLinearVelocity();
+	const float DownwardSpeed = FVector::DotProduct(
+		CurrentVelocity,
+		DownwardDirection);
+	if (DownwardSpeed <= MaxHandleDownwardSpeed)
+	{
+		return;
+	}
+
+	HandleMesh->SetPhysicsLinearVelocity(
+		CurrentVelocity
+		- DownwardDirection * (DownwardSpeed - MaxHandleDownwardSpeed));
 }
 
 bool ANPPulleyBarrierGimmick::TrySettleHandle(
