@@ -2,7 +2,6 @@
 
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
-#include "DrawDebugHelpers.h"
 #include "Net/UnrealNetwork.h"
 #include "PhysicsEngine/BodyInstance.h"
 #include "Gameplay/Character/NPStablePhysicsGrabComponent.h"
@@ -68,78 +67,85 @@ void ANPRStablePhysicsPawn::GetLifetimeReplicatedProps(
 void ANPRStablePhysicsPawn::Tick(float DeltaSeconds)
 {
 	UpdateViewRotationReplication(DeltaSeconds);
-
-	if (!HasAuthority())
-	{
-		const bool bRunsMovementPhysics = IsLocallyControlled();
-		PhysicsMovement->SetPhysicsUpdatesEnabled(bRunsMovementPhysics);
-		if (bRunsMovementPhysics)
-		{
-			PhysicsMovement->SetAnimationStateOverride(
-				false,
-				FVector::ZeroVector,
-				FVector::ZeroVector,
-				true);
-		}
-		else
-		{
-			FVector ServerForward = FVector(ReplicatedAnimationForwardDirection);
-			ServerForward.Z = 0.0f;
-			ServerForward.Normalize();
-
-			FVector ClientForward = GetActorForwardVector();
-			ClientForward.Z = 0.0f;
-			ClientForward.Normalize();
-
-			const FVector ServerRight = FVector::CrossProduct(
-				FVector::UpVector,
-				ServerForward);
-			const FVector ClientRight = FVector::CrossProduct(
-				FVector::UpVector,
-				ClientForward);
-			const FVector ServerVelocity = FVector(ReplicatedAnimationVelocity);
-			const FVector ServerAcceleration = FVector(ReplicatedAnimationAcceleration);
-			const FVector ClientAnimationVelocity =
-				ClientForward * FVector::DotProduct(ServerVelocity, ServerForward)
-				+ ClientRight * FVector::DotProduct(ServerVelocity, ServerRight)
-				+ FVector::UpVector * ServerVelocity.Z;
-			const FVector ClientAnimationAcceleration =
-				ClientForward * FVector::DotProduct(ServerAcceleration, ServerForward)
-				+ ClientRight * FVector::DotProduct(ServerAcceleration, ServerRight)
-				+ FVector::UpVector * ServerAcceleration.Z;
-
-			PhysicsMovement->SetAnimationStateOverride(
-				true,
-				ClientAnimationVelocity,
-				ClientAnimationAcceleration,
-				bReplicatedAnimationIsFalling);
-		}
-	}
+	UpdateClientSimulationState();
 
 	Super::Tick(DeltaSeconds);
 	UpdateClientPhysicsStateReplication(DeltaSeconds);
 
 	if (HasAuthority())
 	{
-		ReplicatedAnimationVelocity = PhysicsMovement->GetVelocity();
-		ReplicatedAnimationAcceleration = PhysicsMovement->GetCurrentAcceleration();
-		bReplicatedAnimationIsFalling = PhysicsMovement->GetIsFalling();
-		FVector AnimationForward = GetActorForwardVector();
-		AnimationForward.Z = 0.0f;
-		ReplicatedAnimationForwardDirection = AnimationForward.GetSafeNormal();
-
-		if (IsReplicatedGrabActive()
-			&& PhysicsMesh->GetBoneIndex(RightHandBoneName) != INDEX_NONE)
-		{
-			ReplicatedServerHandWorldLocation =
-				PhysicsMesh->GetSocketLocation(RightHandBoneName);
-		}
+		UpdateServerReplicatedState();
 		return;
 	}
 
-	if (IsReplicatedGrabActive())
+}
+
+void ANPRStablePhysicsPawn::UpdateClientSimulationState()
+{
+	if (HasAuthority())
 	{
-		DrawGrabNetworkDebug();
+		return;
+	}
+
+	const bool bRunsMovementPhysics = IsLocallyControlled();
+	PhysicsMovement->SetPhysicsUpdatesEnabled(bRunsMovementPhysics);
+	if (bRunsMovementPhysics)
+	{
+		PhysicsMovement->SetAnimationStateOverride(
+			false,
+			FVector::ZeroVector,
+			FVector::ZeroVector,
+			true);
+		return;
+	}
+
+	FVector ServerForward = FVector(ReplicatedAnimationForwardDirection);
+	ServerForward.Z = 0.0f;
+	ServerForward.Normalize();
+
+	FVector ClientForward = GetActorForwardVector();
+	ClientForward.Z = 0.0f;
+	ClientForward.Normalize();
+
+	const FVector ServerRight = FVector::CrossProduct(
+		FVector::UpVector,
+		ServerForward);
+	const FVector ClientRight = FVector::CrossProduct(
+		FVector::UpVector,
+		ClientForward);
+	const FVector ServerVelocity = FVector(ReplicatedAnimationVelocity);
+	const FVector ServerAcceleration = FVector(ReplicatedAnimationAcceleration);
+	const FVector ClientAnimationVelocity =
+		ClientForward * FVector::DotProduct(ServerVelocity, ServerForward)
+		+ ClientRight * FVector::DotProduct(ServerVelocity, ServerRight)
+		+ FVector::UpVector * ServerVelocity.Z;
+	const FVector ClientAnimationAcceleration =
+		ClientForward * FVector::DotProduct(ServerAcceleration, ServerForward)
+		+ ClientRight * FVector::DotProduct(ServerAcceleration, ServerRight)
+		+ FVector::UpVector * ServerAcceleration.Z;
+
+	PhysicsMovement->SetAnimationStateOverride(
+		true,
+		ClientAnimationVelocity,
+		ClientAnimationAcceleration,
+		bReplicatedAnimationIsFalling);
+}
+
+void ANPRStablePhysicsPawn::UpdateServerReplicatedState()
+{
+	ReplicatedAnimationVelocity = PhysicsMovement->GetVelocity();
+	ReplicatedAnimationAcceleration = PhysicsMovement->GetCurrentAcceleration();
+	bReplicatedAnimationIsFalling = PhysicsMovement->GetIsFalling();
+
+	FVector AnimationForward = GetActorForwardVector();
+	AnimationForward.Z = 0.0f;
+	ReplicatedAnimationForwardDirection = AnimationForward.GetSafeNormal();
+
+	if (IsReplicatedGrabActive()
+		&& PhysicsMesh->GetBoneIndex(RightHandBoneName) != INDEX_NONE)
+	{
+		ReplicatedServerHandWorldLocation =
+			PhysicsMesh->GetSocketLocation(RightHandBoneName);
 	}
 }
 
@@ -429,61 +435,6 @@ void ANPRStablePhysicsPawn::SetReplicatedViewRotation(
 			89.9f),
 		FRotator::NormalizeAxis(NewViewRotation.Yaw),
 		0.0f);
-}
-
-void ANPRStablePhysicsPawn::DrawGrabNetworkDebug() const
-{
-	if (!bDrawGrabNetworkDebug
-		|| !GetWorld()
-		|| PhysicsMesh->GetBoneIndex(RightHandBoneName) == INDEX_NONE)
-	{
-		return;
-	}
-
-	const FVector ServerHandLocation = FVector(ReplicatedServerHandWorldLocation);
-	const FVector ClientHandLocation = PhysicsMesh->GetSocketLocation(RightHandBoneName);
-	const float ErrorDistance = FVector::Distance(
-		ServerHandLocation,
-		ClientHandLocation);
-
-	DrawDebugSphere(
-		GetWorld(),
-		ServerHandLocation,
-		8.0f,
-		12,
-		FColor::Red,
-		false,
-		0.0f,
-		0,
-		2.0f);
-	DrawDebugSphere(
-		GetWorld(),
-		ClientHandLocation,
-		8.0f,
-		12,
-		FColor::Blue,
-		false,
-		0.0f,
-		0,
-		2.0f);
-	DrawDebugLine(
-		GetWorld(),
-		ServerHandLocation,
-		ClientHandLocation,
-		FColor::Yellow,
-		false,
-		0.0f,
-		0,
-		2.0f);
-	DrawDebugString(
-		GetWorld(),
-		(ServerHandLocation + ClientHandLocation) * 0.5f,
-		FString::Printf(TEXT("Grab IK Error: %.1f cm"), ErrorDistance),
-		nullptr,
-		FColor::Yellow,
-		0.0f,
-		false,
-		1.0f);
 }
 
 void ANPRStablePhysicsPawn::SetServerRightHandState(bool bActive)

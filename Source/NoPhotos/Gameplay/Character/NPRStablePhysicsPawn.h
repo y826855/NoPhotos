@@ -29,11 +29,12 @@ struct FReplicatedStableGrabState
 	FTransform ConstraintFrame2 = FTransform::Identity;
 };
 
-/** 이동은 소유 클라이언트가 예측하고, 최종 이동과 그랩 물리는 서버 권한으로 처리합니다. */
+/** 소유 클라이언트가 이동 물리 상태를 전송하고, Grab 판정과 Constraint는 서버가 처리합니다. */
 UCLASS()
 class NOPHOTOS_API ANPRStablePhysicsPawn : public ANPStablePhysicsPawn
 {
 	GENERATED_BODY()
+	friend class UNPStablePhysicsDebugComponent;
 
 public:
 	ANPRStablePhysicsPawn();
@@ -86,11 +87,12 @@ private:
 
 	void HandleGrabbedComponentChanged(UPrimitiveComponent* NewGrabbedComponent);
 	UPrimitiveComponent* ResolveReplicatedGrabbedComponent() const;
+	void UpdateClientSimulationState();
+	void UpdateServerReplicatedState();
 	void UpdateClientPhysicsStateReplication(float DeltaSeconds);
 	void UpdateViewRotationReplication(float DeltaSeconds);
 	void SetReplicatedViewRotation(const FRotator& NewViewRotation);
 	void SetServerRightHandState(bool bActive);
-	void DrawGrabNetworkDebug() const;
 
 	/** 다른 클라이언트에서도 오른손 IK 상태를 동일하게 표시하기 위한 값입니다. */
 	UPROPERTY(ReplicatedUsing=OnRep_RightHandActive)

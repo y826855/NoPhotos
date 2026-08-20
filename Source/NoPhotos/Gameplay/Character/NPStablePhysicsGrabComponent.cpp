@@ -2,10 +2,10 @@
 
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
-#include "DrawDebugHelpers.h"
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "Gameplay/Character/NPStablePhysicsDebugComponent.h"
 #include "Gameplay/Interaction/Components/GrabbableComponent.h"
 #include "PhysicsEngine/BodyInstance.h"
 
@@ -26,6 +26,9 @@ UNPStablePhysicsGrabComponent::UNPStablePhysicsGrabComponent()
 void UNPStablePhysicsGrabComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	PhysicsDebug = GetOwner()
+		? GetOwner()->FindComponentByClass<UNPStablePhysicsDebugComponent>()
+		: nullptr;
 
 	if (GetOwner() && GetOwner()->HasAuthority())
 	{
@@ -56,7 +59,7 @@ void UNPStablePhysicsGrabComponent::SetGrabRequested(bool bRequested)
 	bGrabRequested = bRequested;
 	if (!bGrabRequested)
 	{
-		bWaitForGrabRelease = false;
+		bGrabRetryCoolingDown = false;
 		GrabRetryCooldownRemaining = 0.0f;
 		ReleaseGrab();
 	}
@@ -67,7 +70,7 @@ void UNPStablePhysicsGrabComponent::SetGrabSimulationEnabled(bool bEnabled)
 	bGrabSimulationEnabled = bEnabled;
 	if (!bGrabSimulationEnabled)
 	{
-		bWaitForGrabRelease = false;
+		bGrabRetryCoolingDown = false;
 		GrabRetryCooldownRemaining = 0.0f;
 		ReleaseGrab();
 	}
@@ -130,22 +133,14 @@ void UNPStablePhysicsGrabComponent::ApplyReplicatedGrab(
 		ReleaseGrab();
 	}
 
-	GrabbedComponent = PrimitiveComponent;
-	GrabbedGrabbableComponent = PrimitiveComponent->GetOwner()
+	UGrabbableComponent* GrabbableComponent = PrimitiveComponent->GetOwner()
 		? PrimitiveComponent->GetOwner()->FindComponentByClass<UGrabbableComponent>()
 		: nullptr;
-	GrabbedBoneName = BoneName;
-	// 디버그 전용: 복제된 Grab 대상의 디버그 누적 상태를 초기화합니다.
-	ResetGrabDebug();
-
-	if (GrabbedGrabbableComponent)
-	{
-		GrabbedGrabbableComponent->NotifyGrabStarted(GrabbedComponent);
-	}
 
 	FTransform InitialFrame1 = Frame1;
 	FBodyInstance* HandBody = PhysicsMesh->GetBodyInstance(HandBoneName);
-	FBodyInstance* TargetBody = GrabbedComponent->GetBodyInstance(GrabbedBoneName);
+	FBodyInstance* TargetBody = PrimitiveComponent->GetBodyInstance(BoneName);
+	bool bShouldBlendFrame = false;
 	if (HandBody && TargetBody)
 	{
 		const FTransform TargetWorldFrame =
@@ -153,10 +148,7 @@ void UNPStablePhysicsGrabComponent::ApplyReplicatedGrab(
 		InitialFrame1 = TargetWorldFrame.GetRelativeTransform(
 			HandBody->GetUnrealWorldTransform());
 
-		ReplicatedGrabFrameBlendStart = InitialFrame1;
-		ReplicatedGrabFrameBlendTarget = Frame1;
-		ReplicatedGrabFrameBlendElapsed = 0.0f;
-		bReplicatedGrabFrameBlendActive =
+		bShouldBlendFrame =
 			ReplicatedGrabFrameBlendDuration > UE_SMALL_NUMBER
 			&& !InitialFrame1.Equals(Frame1);
 	}
@@ -164,11 +156,19 @@ void UNPStablePhysicsGrabComponent::ApplyReplicatedGrab(
 	SetConstrainedComponents(
 		PhysicsMesh,
 		HandBoneName,
-		GrabbedComponent,
-		GrabbedBoneName);
+		PrimitiveComponent,
+		BoneName);
 	SetConstraintReferenceFrame(EConstraintFrame::Frame1, InitialFrame1);
 	SetConstraintReferenceFrame(EConstraintFrame::Frame2, Frame2);
-	OnGrabbedComponentChanged.Broadcast(GrabbedComponent);
+	if (!CommitGrab(PrimitiveComponent, GrabbableComponent, BoneName))
+	{
+		return;
+	}
+
+	ReplicatedGrabFrameBlendStart = InitialFrame1;
+	ReplicatedGrabFrameBlendTarget = Frame1;
+	ReplicatedGrabFrameBlendElapsed = 0.0f;
+	bReplicatedGrabFrameBlendActive = bShouldBlendFrame;
 }
 
 void UNPStablePhysicsGrabComponent::ClearReplicatedGrab()
@@ -199,20 +199,20 @@ void UNPStablePhysicsGrabComponent::TickComponent(
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	if (bWaitForGrabRelease && bGrabRequested)
+	if (bGrabRetryCoolingDown && bGrabRequested)
 	{
 		GrabRetryCooldownRemaining = FMath::Max(
 			GrabRetryCooldownRemaining - DeltaTime,
 			0.0f);
 		if (GrabRetryCooldownRemaining <= 0.0f)
 		{
-			bWaitForGrabRelease = false;
+			bGrabRetryCoolingDown = false;
 		}
 	}
 
 	if (bGrabSimulationEnabled
 		&& bGrabRequested
-		&& !bWaitForGrabRelease
+		&& !bGrabRetryCoolingDown
 		&& !IsHoldingObject())
 	{
 		TryGrab();
@@ -230,8 +230,6 @@ void UNPStablePhysicsGrabComponent::TickComponent(
 		JumpIntentRemainingTime - DeltaTime,
 		0.0f);
 
-	// 디버그 전용: 현재 Grab 범위와 힘 정보를 월드에 표시합니다.
-	DrawGrabDebug();
 }
 
 void UNPStablePhysicsGrabComponent::HandleConstraintBroken(int32)
@@ -241,7 +239,7 @@ void UNPStablePhysicsGrabComponent::HandleConstraintBroken(int32)
 		return;
 	}
 
-	bWaitForGrabRelease = true;
+	bGrabRetryCoolingDown = true;
 	GrabRetryCooldownRemaining = GrabRetryCooldown;
 	ReleaseGrab();
 }
@@ -298,29 +296,39 @@ bool UNPStablePhysicsGrabComponent::Grab(
 	UPrimitiveComponent* PrimitiveComponent,
 	UGrabbableComponent* GrabbableComponent)
 {
-	GrabbedComponent = PrimitiveComponent;
-	GrabbedGrabbableComponent = GrabbableComponent;
-	GrabbedBoneName = NAME_None;
-	// 디버그 전용: 새로운 Grab 대상의 디버그 누적 상태를 초기화합니다.
-	ResetGrabDebug();
-
 	SetWorldLocation(PhysicsMesh->GetSocketLocation(HandBoneName));
 
 	// Constraint를 통해 손 Body와 물체가 서로 물리적인 힘을 주고받습니다.
 	SetConstrainedComponents(
 		PhysicsMesh,
 		HandBoneName,
-		GrabbedComponent,
+		PrimitiveComponent,
 		NAME_None);
+	return CommitGrab(PrimitiveComponent, GrabbableComponent, NAME_None);
+}
+
+bool UNPStablePhysicsGrabComponent::CommitGrab(
+	UPrimitiveComponent* PrimitiveComponent,
+	UGrabbableComponent* GrabbableComponent,
+	FName BoneName)
+{
 	if (!ConstraintInstance.IsValidConstraintInstance())
 	{
-		GrabbedComponent = nullptr;
-		GrabbedGrabbableComponent = nullptr;
-		GrabbedBoneName = NAME_None;
+		BreakConstraint();
 		return false;
 	}
 
-	GrabbedGrabbableComponent->NotifyGrabStarted(GrabbedComponent);
+	GrabbedComponent = PrimitiveComponent;
+	GrabbedGrabbableComponent = GrabbableComponent;
+	GrabbedBoneName = BoneName;
+	if (PhysicsDebug)
+	{
+		PhysicsDebug->ResetGrabDebug();
+	}
+	if (GrabbedGrabbableComponent)
+	{
+		GrabbedGrabbableComponent->NotifyGrabStarted(GrabbedComponent);
+	}
 	OnGrabbedComponentChanged.Broadcast(GrabbedComponent);
 	return true;
 }
@@ -362,8 +370,14 @@ void UNPStablePhysicsGrabComponent::UpdateGrabForce(float DeltaTime)
 			0.0f);
 		IntentAlignedForce = UserIntentDirection * IntentForceMagnitude;
 	}
-	// 디버그 전용: 힘과 유저 의도를 평활화하고 표시용 일치도를 갱신합니다.
-	UpdateGrabDebug(DeltaTime, RelicForce, UserIntent);
+	if (PhysicsDebug)
+	{
+		PhysicsDebug->UpdateGrabDebug(
+			*this,
+			DeltaTime,
+			RelicForce,
+			UserIntent);
+	}
 
 	// Chaos 출력은 Constraint impulse이므로 DeltaTime으로 나눠 force로 변환합니다.
 	GrabbedGrabbableComponent->NotifyGrabForce(
@@ -414,159 +428,3 @@ void UNPStablePhysicsGrabComponent::ReleaseGrab()
 	}
 	OnGrabbedComponentChanged.Broadcast(nullptr);
 }
-
-#pragma region Grab Debug Functions
-void UNPStablePhysicsGrabComponent::ResetGrabDebug()
-{
-	LastDebugRelicForce = FVector::ZeroVector;
-	SmoothedDebugUserIntent = FVector::ZeroVector;
-	LastDebugIntentForceAlignment = 0.0f;
-}
-void UNPStablePhysicsGrabComponent::UpdateGrabDebug(
-	float DeltaTime,
-	const FVector& RelicForce,
-	const FVector& UserIntent)
-{
-	if (RelicForce.Size() >= GrabDebugMinimumForce)
-	{
-		if (LastDebugRelicForce.IsNearlyZero())
-		{
-			LastDebugRelicForce = RelicForce;
-		}
-		else
-		{
-			const float ForceSmoothingAlpha = 1.0f - FMath::Exp(
-				-GrabDebugForceSmoothingSpeed * DeltaTime);
-			LastDebugRelicForce = FMath::Lerp(
-				LastDebugRelicForce,
-				RelicForce,
-				ForceSmoothingAlpha);
-		}
-	}
-
-	const float IntentSmoothingAlpha = 1.0f - FMath::Exp(
-		-GrabDebugIntentSmoothingSpeed * DeltaTime);
-	SmoothedDebugUserIntent = FMath::Lerp(
-		SmoothedDebugUserIntent,
-		UserIntent,
-		IntentSmoothingAlpha);
-	if (!SmoothedDebugUserIntent.IsNearlyZero()
-		&& !LastDebugRelicForce.IsNearlyZero())
-	{
-		LastDebugIntentForceAlignment = FVector::DotProduct(
-			SmoothedDebugUserIntent.GetSafeNormal(),
-			LastDebugRelicForce.GetSafeNormal());
-		return;
-	}
-
-	LastDebugIntentForceAlignment = 0.0f;
-}
-void UNPStablePhysicsGrabComponent::DrawGrabDebug() const
-{
-	if (!bDrawGrabDebug
-		|| !PhysicsMesh
-		|| !GetWorld()
-		|| PhysicsMesh->GetBoneIndex(HandBoneName) == INDEX_NONE)
-	{
-		return;
-	}
-
-	const FVector HandLocation = PhysicsMesh->GetSocketLocation(HandBoneName);
-	DrawDebugSphere(
-		GetWorld(),
-		HandLocation,
-		GrabRadius,
-		16,
-		IsHoldingObject() ? FColor::Green : FColor::Yellow,
-		false,
-		0.0f,
-		0,
-		2.0f);
-
-	if (IsHoldingObject())
-	{
-		DrawDebugLine(
-			GetWorld(),
-			HandLocation,
-			GrabbedComponent->GetComponentLocation(),
-			FColor::Green,
-			false,
-			0.0f,
-			0,
-			3.0f);
-
-		if (GrabbedGrabbableComponent)
-		{
-			// 디버그 전용: 잡은 지점에 힘과 의도 방향을 표시합니다.
-			DrawGrabForceDebug(HandLocation);
-		}
-	}
-}
-void UNPStablePhysicsGrabComponent::DrawGrabForceDebug(
-	const FVector& ForceStart) const
-{
-	const FVector ForceDirection = LastDebugRelicForce.GetSafeNormal();
-	const FVector IntentDirection =
-		SmoothedDebugUserIntent.GetSafeNormal();
-	if (!ForceDirection.IsNearlyZero())
-	{
-		DrawDebugDirectionalArrow(
-			GetWorld(),
-			ForceStart,
-			ForceStart + ForceDirection * 100.0f,
-			20.0f,
-			FColor::Cyan,
-			false,
-			0.0f,
-			0,
-			4.0f);
-	}
-	if (!IntentDirection.IsNearlyZero())
-	{
-		DrawDebugDirectionalArrow(
-			GetWorld(),
-			ForceStart,
-			ForceStart + SmoothedDebugUserIntent * 80.0f,
-			16.0f,
-			FColor::Yellow,
-			false,
-			0.0f,
-			0,
-			4.0f);
-	}
-
-	const float AlignedForce = FMath::Max(
-		FVector::DotProduct(LastDebugRelicForce, IntentDirection),
-		0.0f);
-	FColor AlignmentColor = FColor::Red;
-	if (LastDebugIntentForceAlignment >= 0.7f)
-	{
-		AlignmentColor = FColor::Green;
-	}
-	else if (LastDebugIntentForceAlignment > 0.0f)
-	{
-		AlignmentColor = FColor::Yellow;
-	}
-
-	const FString ForceText = FString::Printf(
-		TEXT("Relic Force (Cyan): %.0f / %.0f\n")
-		TEXT("User Intent (Yellow): %s\n")
-		TEXT("Alignment: %.2f\n")
-		TEXT("Aligned Force: %.0f\n%s"),
-		LastDebugRelicForce.Size(),
-		GrabLinearBreakThreshold,
-		*SmoothedDebugUserIntent.ToCompactString(),
-		LastDebugIntentForceAlignment,
-		AlignedForce,
-		*LastDebugRelicForce.ToCompactString());
-	DrawDebugString(
-		GetWorld(),
-		ForceStart + FVector(0.0f, 0.0f, 30.0f),
-		ForceText,
-		nullptr,
-		AlignmentColor,
-		0.0f,
-		false,
-		1.0f);
-}
-#pragma endregion

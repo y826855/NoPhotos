@@ -12,6 +12,7 @@ class UPhysicalAnimationComponent;
 class USceneComponent;
 class USkeletalMeshComponent;
 class USpringArmComponent;
+class UNPStablePhysicsDebugComponent;
 class UNPStablePhysicsGrabComponent;
 class UNPStablePhysicsMovementComponent;
 struct FInputActionValue;
@@ -21,6 +22,7 @@ UCLASS()
 class NOPHOTOS_API ANPStablePhysicsPawn : public APawn
 {
 	GENERATED_BODY()
+	friend class UNPStablePhysicsDebugComponent;
 
 public:
 	ANPStablePhysicsPawn();
@@ -117,6 +119,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	UNPStablePhysicsMovementComponent* PhysicsMovement;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
+	UNPStablePhysicsDebugComponent* PhysicsDebug;
+
 	UPROPERTY(EditAnywhere, Category="Input")
 	UInputAction* MoveAction;
 
@@ -192,22 +197,6 @@ private:
 	void Jump();
 	void StartRightHand();
 	void StopRightHand();
-
-#pragma region Pawn Debug Functions
-	void DrawFacingDebug() const;
-	void DrawPhysicalProfileDebug() const;
-	void DrawPhysicalProfileBone(
-		FName BoneName,
-		const FColor& Color,
-		float Rigidity,
-		const FString& Label) const;
-	void DrawPhysicalProfileLink(
-		FName StartBoneName,
-		FName EndBoneName,
-		const FColor& Color,
-		float Rigidity) const;
-#pragma endregion
-
 
 	bool bRightHandActive = false;
 	float RightHandReachDistance = 120.0f;

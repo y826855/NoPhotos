@@ -7,6 +7,7 @@
 class UPrimitiveComponent;
 class USkeletalMeshComponent;
 class UGrabbableComponent;
+class UNPStablePhysicsDebugComponent;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnStableGrabChanged, UPrimitiveComponent*);
 
@@ -15,6 +16,7 @@ UCLASS(ClassGroup=(Physics), meta=(BlueprintSpawnableComponent))
 class NOPHOTOS_API UNPStablePhysicsGrabComponent : public UPhysicsConstraintComponent
 {
 	GENERATED_BODY()
+	friend class UNPStablePhysicsDebugComponent;
 
 public:
 	UNPStablePhysicsGrabComponent();
@@ -92,6 +94,10 @@ private:
 	bool Grab(
 		UPrimitiveComponent* PrimitiveComponent,
 		UGrabbableComponent* GrabbableComponent);
+	bool CommitGrab(
+		UPrimitiveComponent* PrimitiveComponent,
+		UGrabbableComponent* GrabbableComponent,
+		FName BoneName);
 	void UpdateGrabForce(float DeltaTime);
 	void UpdateReplicatedGrabFrameBlend(float DeltaTime);
 	void ReleaseGrab();
@@ -105,11 +111,14 @@ private:
 	UPROPERTY(Transient)
 	UGrabbableComponent* GrabbedGrabbableComponent = nullptr;
 
+	UPROPERTY(Transient)
+	UNPStablePhysicsDebugComponent* PhysicsDebug = nullptr;
+
 	FName HandBoneName = NAME_None;
 	FName GrabbedBoneName = NAME_None;
 	bool bGrabSimulationEnabled = true;
 	bool bGrabRequested = false;
-	bool bWaitForGrabRelease = false;
+	bool bGrabRetryCoolingDown = false;
 	bool bReplicatedGrabFrameBlendActive = false;
 	FVector MovementIntent = FVector::ZeroVector;
 	float JumpIntentRemainingTime = 0.0f;
@@ -118,19 +127,4 @@ private:
 	FTransform ReplicatedGrabFrameBlendStart = FTransform::Identity;
 	FTransform ReplicatedGrabFrameBlendTarget = FTransform::Identity;
 
-#pragma region Grab Debug Functions
-	void ResetGrabDebug();
-	void UpdateGrabDebug(
-		float DeltaTime,
-		const FVector& RelicForce,
-		const FVector& UserIntent);
-	void DrawGrabDebug() const;
-	void DrawGrabForceDebug(const FVector& ForceStart) const;
-#pragma endregion
-
-#pragma region Grab Debug State
-	FVector LastDebugRelicForce = FVector::ZeroVector;
-	FVector SmoothedDebugUserIntent = FVector::ZeroVector;
-	float LastDebugIntentForceAlignment = 0.0f;
-#pragma endregion
 };

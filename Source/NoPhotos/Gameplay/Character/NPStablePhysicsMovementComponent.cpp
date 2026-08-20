@@ -33,7 +33,6 @@ void UNPStablePhysicsMovementComponent::SetTargetPelvisHeight(
 	TargetPelvisHeight = FMath::Max(InTargetPelvisHeight, 0.0f);
 }
 
-//TODO : 
 void UNPStablePhysicsMovementComponent::SetMaxMoveSpeed(float InMaxMoveSpeed)
 {
 	MaxMoveSpeed = FMath::Max(InMaxMoveSpeed, 0.0f);
