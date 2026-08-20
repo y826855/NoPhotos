@@ -9,6 +9,7 @@
 class UInputMappingContext;
 class UInputAction;
 class UNPPhotoCaptureComponent;
+class UNPPhotoFlashWidget;
 class UNPPhotoTransferComponent;
 class UNPPhotoPreviewWidget;
 class UUserWidget;
@@ -30,6 +31,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="Photo")
 	UNPPhotoTransferComponent* GetPhotoTransferComponent() const { return PhotoTransferComponent; }
+
+	/** 로컬 사진 플래시 UI 애니메이션을 실행합니다. */
+	void PlayPhotoFlash();
 
 protected:
 	/** 마우스 우클릭에 매핑할 사진 모드 진입/해제 액션입니다. */
@@ -67,6 +71,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Photo|UI")
 	TSubclassOf<UNPPhotoPreviewWidget> PhotoPreviewWidgetClass;
 
+	/** UNPPhotoFlashWidget을 부모로 만든 전체 화면 플래시 WBP 클래스입니다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Photo|UI")
+	TSubclassOf<UNPPhotoFlashWidget> PhotoFlashWidgetClass;
+
 	/** Input mapping context setup */
 	virtual void SetupInputComponent() override;
 
@@ -85,5 +93,8 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNPPhotoPreviewWidget> PhotoPreviewWidget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNPPhotoFlashWidget> PhotoFlashWidget;
 
 };

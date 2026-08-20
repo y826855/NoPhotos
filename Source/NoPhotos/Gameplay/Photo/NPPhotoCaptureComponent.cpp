@@ -12,6 +12,7 @@
 #include "Gameplay/Photo/NPPhotoImageCodec.h"
 #include "Gameplay/Photo/NPPhotoTransferComponent.h"
 #include "NoPhotosGameMode.h"
+#include "NoPhotosPlayerController.h"
 #include "TimerManager.h"
 
 UNPPhotoCaptureComponent::UNPPhotoCaptureComponent()
@@ -179,6 +180,18 @@ bool UNPPhotoCaptureComponent::TakePhoto()
 	SceneCapture->CaptureScene();
 	UE_LOG(LogNPPhoto, Log, TEXT("[Capture] CaptureScene requested successfully."));
 	OnPhotoCaptured.Broadcast(PhotoRenderTarget);
+	if (ANoPhotosPlayerController* NoPhotosPlayerController = Cast<ANoPhotosPlayerController>(PlayerController))
+	{
+		NoPhotosPlayerController->PlayPhotoFlash();
+	}
+	else
+	{
+		UE_LOG(
+			LogNPPhoto,
+			Warning,
+			TEXT("[PhotoUI] Flash skipped: Controller is not ANoPhotosPlayerController. Controller=%s"),
+			*GetNameSafe(PlayerController));
+	}
 
 	LastLocalCaptureTime = CurrentTime;
 	bPhotoAttemptInProgress = false;

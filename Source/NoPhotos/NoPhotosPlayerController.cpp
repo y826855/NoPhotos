@@ -9,6 +9,7 @@
 #include "Blueprint/UserWidget.h"
 #include "NoPhotos.h"
 #include "Gameplay/Photo/NPPhotoCaptureComponent.h"
+#include "Gameplay/Photo/NPPhotoFlashWidget.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
 #include "Gameplay/Photo/NPPhotoPreviewWidget.h"
 #include "Gameplay/Photo/NPPhotoTransferComponent.h"
@@ -40,6 +41,21 @@ void ANoPhotosPlayerController::BeginPlay()
 		{
 			UE_LOG(LogNPPhoto, Warning, TEXT("[PhotoUI] PhotoPreviewWidgetClass is not assigned."));
 		}
+
+		if (PhotoFlashWidgetClass)
+		{
+			PhotoFlashWidget = CreateWidget<UNPPhotoFlashWidget>(this, PhotoFlashWidgetClass);
+			if (PhotoFlashWidget)
+			{
+				PhotoFlashWidget->AddToPlayerScreen(100);
+				PhotoFlashWidget->SetVisibility(ESlateVisibility::Collapsed);
+				UE_LOG(LogNPPhoto, Log, TEXT("[PhotoUI] Flash widget created. Widget=%s"), *GetNameSafe(PhotoFlashWidget));
+			}
+		}
+		else
+		{
+			UE_LOG(LogNPPhoto, Warning, TEXT("[PhotoUI] PhotoFlashWidgetClass is not assigned."));
+		}
 	}
 
 	// only spawn touch controls on local player controllers
@@ -60,6 +76,23 @@ void ANoPhotosPlayerController::BeginPlay()
 		}
 
 	}
+}
+
+void ANoPhotosPlayerController::PlayPhotoFlash()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	if (!PhotoFlashWidget)
+	{
+		UE_LOG(LogNPPhoto, Warning, TEXT("[PhotoUI] Flash skipped: PhotoFlashWidget is null."));
+		return;
+	}
+
+	PhotoFlashWidget->PlayFlash();
+	UE_LOG(LogNPPhoto, Log, TEXT("[PhotoUI] Flash animation requested."));
 }
 
 void ANoPhotosPlayerController::SetupInputComponent()
