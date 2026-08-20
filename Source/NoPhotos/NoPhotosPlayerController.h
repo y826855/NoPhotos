@@ -8,8 +8,8 @@
 
 class UInputMappingContext;
 class UInputAction;
-class UTextureRenderTarget2D;
 class UNPPhotoCaptureComponent;
+class UNPPhotoTransferComponent;
 class UNPPhotoPreviewWidget;
 class UUserWidget;
 
@@ -27,6 +27,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="Photo")
 	UNPPhotoCaptureComponent* GetPhotoCaptureComponent() const { return PhotoCaptureComponent; }
+
+	UFUNCTION(BlueprintPure, Category="Photo")
+	UNPPhotoTransferComponent* GetPhotoTransferComponent() const { return PhotoTransferComponent; }
 
 protected:
 	/** IMC에서 마우스 우클릭 등에 매핑할 사진 촬영 액션입니다. */
@@ -69,11 +72,11 @@ protected:
 private:
 	void HandleTakePhotoInput();
 
-	UFUNCTION()
-	void HandlePhotoCaptured(UTextureRenderTarget2D* Photo);
-
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Photo", meta=(AllowPrivateAccess="true"))
 	TObjectPtr<UNPPhotoCaptureComponent> PhotoCaptureComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Photo", meta=(AllowPrivateAccess="true"))
+	TObjectPtr<UNPPhotoTransferComponent> PhotoTransferComponent;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNPPhotoPreviewWidget> PhotoPreviewWidget;

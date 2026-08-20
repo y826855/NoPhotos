@@ -2,10 +2,12 @@
 
 #include "NoPhotosGameMode.h"
 
+#include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "Gameplay/Photo/NPMatchScorePolicy.h"
 #include "Gameplay/Photo/NPPhotoEvidenceService.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
+#include "Gameplay/Photo/NPPhotoRepository.h"
 #include "NoPhotosGameState.h"
 
 ANoPhotosGameMode::ANoPhotosGameMode()
@@ -34,12 +36,16 @@ void ANoPhotosGameMode::InitGame(
 		: UNPMatchScorePolicy::StaticClass();
 	MatchScorePolicy = NewObject<UNPMatchScorePolicy>(
 		this, ScoreClass, TEXT("MatchScorePolicy"));
+
+	PhotoRepository = NewObject<UNPPhotoRepository>(this, TEXT("PhotoRepository"));
+	PhotoRepository->Initialize(this);
 }
 
 FNPPhotoEvidenceResult ANoPhotosGameMode::HandlePhotoCaptureRequest(
 	const FNPPhotoCaptureRequest& Request)
 {
 	FNPPhotoEvidenceResult Result;
+	Result.CaptureSequence = Request.CaptureSequence;
 	if (!HasAuthority() || !PhotoEvidenceService || !MatchScorePolicy)
 	{
 		Result.FailureReason = ENPPhotoEvidenceFailureReason::InvalidPhotographer;
@@ -47,6 +53,12 @@ FNPPhotoEvidenceResult ANoPhotosGameMode::HandlePhotoCaptureRequest(
 	}
 
 	Result = PhotoEvidenceService->EvaluatePhoto(Request);
+	if (PhotoRepository
+		&& (Result.bSuccess
+			|| Result.FailureReason == ENPPhotoEvidenceFailureReason::NoValidEvidence))
+	{
+		PhotoRepository->AuthorizeCapture(Request.Photographer, Request.CaptureSequence);
+	}
 	if (!Result.bSuccess)
 	{
 		UE_LOG(
@@ -66,7 +78,6 @@ FNPPhotoEvidenceResult ANoPhotosGameMode::HandlePhotoCaptureRequest(
 	{
 		PhotoGameState->AddPhotoEvidence(Result, AwardedScore);
 	}
-
 	UE_LOG(
 		LogNPPhoto,
 		Log,
@@ -76,4 +87,19 @@ FNPPhotoEvidenceResult ANoPhotosGameMode::HandlePhotoCaptureRequest(
 		*GetNameSafe(Result.Relic),
 		AwardedScore);
 	return Result;
+}
+
+void ANoPhotosGameMode::HandlePhotoStored(
+	APlayerController* Photographer,
+	const uint16 CaptureSequence,
+	const FGuid& PhotoId)
+{
+	if (ANoPhotosGameState* PhotoGameState = GetGameState<ANoPhotosGameState>())
+	{
+		PhotoGameState->RegisterTransferredPhoto(PhotoId);
+		PhotoGameState->AttachPhotoId(
+			Photographer ? Photographer->PlayerState : nullptr,
+			CaptureSequence,
+			PhotoId);
+	}
 }

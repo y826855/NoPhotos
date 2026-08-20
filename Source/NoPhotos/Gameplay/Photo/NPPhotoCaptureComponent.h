@@ -8,6 +8,7 @@
 class USceneCaptureComponent2D;
 class UTextureRenderTarget2D;
 class ANPStablePhysicsPawn;
+class UNPPhotoImageCodec;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
 	FNPOnPhotoResultReceived,
@@ -83,6 +84,14 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTextureRenderTarget2D> PhotoRenderTarget = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNPPhotoImageCodec> ImageCodec = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, Category="Photo|Transfer", meta=(ClampMin="1", ClampMax="100"))
+	int32 JpegQuality = 60;
+
+	TMap<uint16, TArray<uint8>> PendingJpegPhotos;
 
 	double LastLocalCaptureTime = -TNumericLimits<double>::Max();
 	double LastServerCaptureTime = -TNumericLimits<double>::Max();

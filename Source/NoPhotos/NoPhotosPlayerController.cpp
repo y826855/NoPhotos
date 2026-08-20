@@ -11,12 +11,13 @@
 #include "Gameplay/Photo/NPPhotoCaptureComponent.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
 #include "Gameplay/Photo/NPPhotoPreviewWidget.h"
-#include "Engine/TextureRenderTarget2D.h"
+#include "Gameplay/Photo/NPPhotoTransferComponent.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
 ANoPhotosPlayerController::ANoPhotosPlayerController()
 {
 	PhotoCaptureComponent = CreateDefaultSubobject<UNPPhotoCaptureComponent>(TEXT("PhotoCaptureComponent"));
+	PhotoTransferComponent = CreateDefaultSubobject<UNPPhotoTransferComponent>(TEXT("PhotoTransferComponent"));
 }
 
 void ANoPhotosPlayerController::BeginPlay()
@@ -25,17 +26,6 @@ void ANoPhotosPlayerController::BeginPlay()
 
 	if (IsLocalController())
 	{
-		if (PhotoCaptureComponent)
-		{
-			PhotoCaptureComponent->OnPhotoCaptured.AddDynamic(
-				this,
-				&ANoPhotosPlayerController::HandlePhotoCaptured);
-		}
-		else
-		{
-			UE_LOG(LogNPPhoto, Error, TEXT("[PhotoUI] PhotoCaptureComponent is null during BeginPlay."));
-		}
-
 		if (PhotoPreviewWidgetClass)
 		{
 			PhotoPreviewWidget = CreateWidget<UNPPhotoPreviewWidget>(this, PhotoPreviewWidgetClass);
@@ -140,21 +130,6 @@ void ANoPhotosPlayerController::HandleTakePhotoInput()
 		Log,
 		TEXT("[Input] TakePhoto result=%s"),
 		bStarted ? TEXT("success") : TEXT("failed"));
-}
-
-void ANoPhotosPlayerController::HandlePhotoCaptured(UTextureRenderTarget2D* Photo)
-{
-	if (!PhotoPreviewWidget)
-	{
-		UE_LOG(
-			LogNPPhoto,
-			Warning,
-			TEXT("[PhotoUI] Captured photo cannot be shown because the preview widget is null. Photo=%s"),
-			*GetNameSafe(Photo));
-		return;
-	}
-
-	PhotoPreviewWidget->ShowPhoto(Photo);
 }
 
 bool ANoPhotosPlayerController::ShouldUseTouchControls() const

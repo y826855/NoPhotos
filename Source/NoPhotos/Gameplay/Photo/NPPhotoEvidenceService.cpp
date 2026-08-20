@@ -7,10 +7,12 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
+#include "Gameplay/Character/NPRStablePhysicsPawn.h"
 #include "Gameplay/Character/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Photo/NPRelicHolderInterface.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
 #include "Gameplay/Relic/NPBaseRelic.h"
+#include "Gameplay/Relic/NPBreakableRelic.h"
 #include "NoPhotosGameMode.h"
 
 void UNPPhotoEvidenceService::Initialize(ANoPhotosGameMode* InOwningGameMode)
@@ -27,6 +29,7 @@ FNPPhotoEvidenceResult UNPPhotoEvidenceService::EvaluatePhoto(
 	const FNPPhotoCaptureRequest& Request)
 {
 	FNPPhotoEvidenceResult Result;
+	Result.CaptureSequence = Request.CaptureSequence;
 	UE_LOG(
 		LogNPPhoto,
 		Log,
@@ -62,6 +65,18 @@ FNPPhotoEvidenceResult UNPPhotoEvidenceService::EvaluatePhoto(
 			*GetNameSafe(HeldRelic));
 		if (!IsValid(HeldRelic) || !HeldRelic->IsA<ANPBaseRelic>())
 		{
+			continue;
+		}
+
+		if (const ANPBreakableRelic* BreakableRelic = Cast<ANPBreakableRelic>(HeldRelic);
+			BreakableRelic && BreakableRelic->IsBroken())
+		{
+			UE_LOG(
+				LogNPPhoto,
+				Verbose,
+				TEXT("[Evidence] Broken relic rejected. Thief=%s Relic=%s"),
+				*GetNameSafe(CandidateThief),
+				*GetNameSafe(HeldRelic));
 			continue;
 		}
 
@@ -167,22 +182,31 @@ bool UNPPhotoEvidenceService::ValidateRequest(
 		}
 	}
 
-	FVector ServerViewLocation;
-	FRotator ServerViewRotation;
-	Photographer->GetPlayerViewPoint(ServerViewLocation, ServerViewRotation);
+	APawn* PhotographerPawn = Photographer->GetPawn();
+	const ANPRStablePhysicsPawn* StablePhysicsPawn =
+		Cast<ANPRStablePhysicsPawn>(PhotographerPawn);
+	const FRotator ServerViewRotation = StablePhysicsPawn
+		? StablePhysicsPawn->GetServerViewRotation()
+		: PhotographerPawn->GetViewRotation();
 	const FVector RequestForward = Request.CameraForward.GetSafeNormal();
 	const float MinimumDirectionDot = FMath::Cos(FMath::DegreesToRadians(MaximumCameraDirectionError));
+	const float CameraDistanceFromPawn = FVector::Distance(
+		Request.CameraLocation,
+		PhotographerPawn->GetActorLocation());
+	const float DirectionDot = FVector::DotProduct(
+		RequestForward,
+		ServerViewRotation.Vector());
 	if (RequestForward.IsNearlyZero()
-		|| FVector::DistSquared(Request.CameraLocation, ServerViewLocation)
-			> FMath::Square(MaximumCameraOriginError)
-		|| FVector::DotProduct(RequestForward, ServerViewRotation.Vector()) < MinimumDirectionDot)
+		|| CameraDistanceFromPawn > MaximumCameraDistanceFromPawn
+		|| DirectionDot < MinimumDirectionDot)
 	{
 		UE_LOG(
 			LogNPPhoto,
 			Warning,
-			TEXT("[Evidence] Request rejected: invalid camera. OriginError=%.1f DirectionDot=%.3f RequiredDot=%.3f"),
-			FVector::Distance(Request.CameraLocation, ServerViewLocation),
-			FVector::DotProduct(RequestForward, ServerViewRotation.Vector()),
+			TEXT("[Evidence] Request rejected: invalid camera. DistanceFromPawn=%.1f MaximumDistance=%.1f DirectionDot=%.3f RequiredDot=%.3f"),
+			CameraDistanceFromPawn,
+			MaximumCameraDistanceFromPawn,
+			DirectionDot,
 			MinimumDirectionDot);
 		OutResult.FailureReason = ENPPhotoEvidenceFailureReason::InvalidCamera;
 		return false;
