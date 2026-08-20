@@ -56,8 +56,6 @@ void ANPRoomGameMode::PostLogin(APlayerController* NewPlayer)
 		return;
 	}
 
-	NPPC->ClientShowLobbyUI();
-	
 	if (!IsValid(NewPlayer) || !IsValid(NewPlayer->PlayerState))
 	{
 		NPRoomLog::Warning(this, TEXT("플레이어 입장 처리 실패: PlayerController 또는 PlayerState가 유효하지 않습니다."));
@@ -80,6 +78,8 @@ void ANPRoomGameMode::PostLogin(APlayerController* NewPlayer)
 				TEXT("플레이어 입장 완료: Player=%s, Role=Guest, PlayerCount=%d"),
 				*NewPlayer->PlayerState->GetPlayerName(),
 				GetNumPlayers()));
+		
+		NPPC->ClientShowLobbyUI();
 		return;
 	}
 
