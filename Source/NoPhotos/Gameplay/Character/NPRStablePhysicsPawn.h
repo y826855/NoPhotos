@@ -46,6 +46,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="Network|Grab")
 	bool IsReplicatedGrabActive() const { return IsValid(ReplicatedGrabState.GrabbedActor); }
 
+	/** 서버 사진 검증 등에서 소유 클라이언트가 복제한 최신 시점 회전을 조회합니다. */
+	FRotator GetServerViewRotation() const { return GetTargetViewRotation(); }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;

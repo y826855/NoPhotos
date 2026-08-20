@@ -11,6 +11,7 @@
 #include "NoPhotosGameState.h"
 #include "NoPhotosPlayerController.h"
 #include "TimerManager.h"
+#include "GameFramework/PlayerController.h"
 
 void UNPPhotoPreviewWidget::NativeConstruct()
 {
@@ -169,14 +170,36 @@ void UNPPhotoPreviewWidget::HandlePhotoTextureReceived(const FGuid PhotoId, UTex
 
 void UNPPhotoPreviewWidget::SetTransferNotificationVisible(const bool bVisible)
 {
-	const ESlateVisibility Visibility = bVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed;
+	const ESlateVisibility NotificationVisibility = bVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed;
+
 	if (PhotoReceiveButton)
 	{
-		PhotoReceiveButton->SetVisibility(Visibility);
+		PhotoReceiveButton->SetVisibility(NotificationVisibility);
 	}
 	if (PhotoTransferText)
 	{
-		PhotoTransferText->SetVisibility(Visibility);
+		PhotoTransferText->SetVisibility(NotificationVisibility);
+	}
+
+	if (APlayerController* PlayerController = GetOwningPlayer())
+	{
+		if (bVisible)
+		{
+			PlayerController->bShowMouseCursor = true;
+
+			FInputModeGameAndUI InputMode;
+			InputMode.SetWidgetToFocus(TakeWidget());
+			InputMode.SetHideCursorDuringCapture(false);
+			InputMode.SetLockMouseToViewportBehavior(
+				EMouseLockMode::DoNotLock);
+
+			PlayerController->SetInputMode(InputMode);
+		}
+		else
+		{
+			PlayerController->bShowMouseCursor = false;
+			PlayerController->SetInputMode(FInputModeGameOnly());
+		}
 	}
 }
 
