@@ -4,6 +4,7 @@
 #include "UI/NPUserWidget.h"
 #include "NPTimerWidget.generated.h"
 
+class ANPMainGameState;
 class UTextBlock;
 
 UCLASS()
@@ -21,12 +22,16 @@ protected:
 private:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> MinuteText;
-
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> SecondText;
+	
+	FTimerHandle GameStateBindRetryTimerHandle;
+	TWeakObjectPtr<ANPMainGameState> BoundMainGameState;
 
-	FTimerHandle CountdownTimerHandle;
-	int32 RemainingTimeSeconds;
-
-	void UpdateTimerUI();
+	UFUNCTION()
+	void OnMainGameStateChanged();
+	bool TryBindToMainGameState();
+	void RetryBindToMainGameState();
+	void UnbindFromMainGameState();
+	void UpdateTimerUI(int32 RemainingTimeSeconds);
 };

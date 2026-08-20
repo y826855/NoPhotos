@@ -5,7 +5,7 @@
 #include "NPLobbyWidget.generated.h"
 
 class UButton;
-class UTextBlock;
+class ANPRoomGameState;
 
 UCLASS()
 class NOPHOTOS_API UNPLobbyWidget : public UNPUserWidget
@@ -25,6 +25,12 @@ private:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UButton> LeaveButton;
 
+	TWeakObjectPtr<ANPRoomGameState> BoundRoomGameState;
+	UFUNCTION()
+	void RefreshStartButtonVisibility();
+	UFUNCTION()
+	void OnRoomStateChanged();
+	
 	UFUNCTION()
 	void OnStartButtonClicked();
 	UFUNCTION()

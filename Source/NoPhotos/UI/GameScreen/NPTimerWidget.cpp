@@ -1,5 +1,7 @@
 #include "UI/GameScreen/NPTimerWidget.h"
 #include "Components/TextBlock.h"
+#include "Core/Main/NPMainGameState.h"
+#include "Engine/World.h"
 #include "TimerManager.h"
 
 UNPTimerWidget::UNPTimerWidget(const FObjectInitializer& ObjectInitializer)
@@ -11,55 +13,112 @@ void UNPTimerWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	//서버시간 추가되면 연동 예정...
-	RemainingTimeSeconds = 300;
-	UpdateTimerUI();
+	if (TryBindToMainGameState())
+	{
+		return;
+	}
 
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().SetTimer(
-			CountdownTimerHandle,
+			GameStateBindRetryTimerHandle,
 			this,
-			&UNPTimerWidget::UpdateTimerUI,
-			1.0f,
-			true
-		);
+			&UNPTimerWidget::RetryBindToMainGameState,
+			0.1f,
+			true);
 	}
+
+	UpdateTimerUI(0);
 }
 
 void UNPTimerWidget::NativeDestruct()
 {
 	if (UWorld* World = GetWorld())
 	{
-		World->GetTimerManager().ClearTimer(CountdownTimerHandle);
+		World->GetTimerManager().ClearTimer(GameStateBindRetryTimerHandle);
 	}
+
+	UnbindFromMainGameState();
 
 	Super::NativeDestruct();
 }
 
-void UNPTimerWidget::UpdateTimerUI()
+void UNPTimerWidget::OnMainGameStateChanged()
 {
-	if (RemainingTimeSeconds < 0)
+	if (UWorld* World = GetWorld())
 	{
-		RemainingTimeSeconds = 0;
+		if (ANPMainGameState* MainGameState =
+			World->GetGameState<ANPMainGameState>())
+		{
+			UpdateTimerUI(MainGameState->GetRemainingGameTime());
+		}
+	}
+}
+
+bool UNPTimerWidget::TryBindToMainGameState()
+{
+	UWorld* World = GetWorld();
+	ANPMainGameState* MainGameState = World
+		? World->GetGameState<ANPMainGameState>()
+		: nullptr;
+
+	if (!IsValid(MainGameState))
+	{
+		return false;
 	}
 
-	const int32 Minutes = RemainingTimeSeconds / 60;
-	const int32 Seconds = RemainingTimeSeconds % 60;
+	if (BoundMainGameState.Get() != MainGameState)
+	{
+		UnbindFromMainGameState();
+
+		BoundMainGameState = MainGameState;
+		MainGameState->OnMainGameStateChanged.AddUniqueDynamic(
+			this,
+			&UNPTimerWidget::OnMainGameStateChanged);
+	}
+
+	UpdateTimerUI(MainGameState->GetRemainingGameTime());
+	return true;
+}
+
+void UNPTimerWidget::RetryBindToMainGameState()
+{
+	if (!TryBindToMainGameState())
+	{
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(GameStateBindRetryTimerHandle);
+	}
+}
+
+void UNPTimerWidget::UnbindFromMainGameState()
+{
+	if (ANPMainGameState* MainGameState = BoundMainGameState.Get())
+	{
+		MainGameState->OnMainGameStateChanged.RemoveAll(this);
+	}
+
+	BoundMainGameState.Reset();
+}
+
+void UNPTimerWidget::UpdateTimerUI(int32 RemainingTimeSeconds)
+{
+	const int32 ClampedRemainingTime = FMath::Max(0, RemainingTimeSeconds);
+	const int32 Minutes = ClampedRemainingTime / 60;
+	const int32 Seconds = ClampedRemainingTime % 60;
 
 	if (IsValid(MinuteText))
 	{
-		MinuteText->SetText(FText::FromString(FString::Printf(TEXT("%2d"), Minutes)));
+		MinuteText->SetText(
+			FText::FromString(FString::Printf(TEXT("%02d"), Minutes)));
 	}
 
 	if (IsValid(SecondText))
 	{
-		SecondText->SetText(FText::FromString(FString::Printf(TEXT("%02d"), Seconds)));
-	}
-
-	if (RemainingTimeSeconds > 0)
-	{
-		--RemainingTimeSeconds;
+		SecondText->SetText(
+			FText::FromString(FString::Printf(TEXT("%02d"), Seconds)));
 	}
 }
-

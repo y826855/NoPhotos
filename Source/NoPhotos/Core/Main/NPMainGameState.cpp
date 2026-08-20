@@ -4,6 +4,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Net/UnrealNetwork.h"
 #include "NPMainGameLog.h"
+#include "Core/NPPlayerController.h"
 
 void ANPMainGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -118,6 +119,16 @@ void ANPMainGameState::FinishMainGame()
 	ForceNetUpdate();
 	OnMainGameStateChanged.Broadcast();
 	TryLogFinalRankings();
+	
+	for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator;	++Iterator)
+	{
+		ANPPlayerController* NPPlayerController = Cast<ANPPlayerController>(Iterator->Get());
+
+		if (IsValid(NPPlayerController))
+		{
+			NPPlayerController->ClientShowResultUI();
+		}
+	}
 }
 
 void ANPMainGameState::OnRep_PlayerRankings()

@@ -178,9 +178,20 @@ void ANPPlayerController::ShowGameScreenUI()
 	ShowSingleScreen(GameScreenWidgetClass);
 }
 
+
 void ANPPlayerController::ClientShowGameScreenUI_Implementation()
 {
 	ShowGameScreenUI();
+}
+
+void ANPPlayerController::ShowResultUI()
+{
+	ShowSingleScreen(ResultWidgetClass);
+}
+
+void ANPPlayerController::ClientShowResultUI_Implementation()
+{
+	ShowResultUI();
 }
 
 void ANPPlayerController::ShowSingleScreen(TSubclassOf<UNPUserWidget> WidgetClass)

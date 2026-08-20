@@ -83,12 +83,16 @@ public:
 	void ClientShowMainMenuUI();
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void ShowLobbyUI();
+	UFUNCTION(Client, Reliable)
+	void ClientShowLobbyUI();
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void ShowGameScreenUI();
 	UFUNCTION(Client, Reliable)
-	void ClientShowLobbyUI();
-	UFUNCTION(Client, Reliable)
 	void ClientShowGameScreenUI();
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void ShowResultUI();
+	UFUNCTION(Client, Reliable)
+	void ClientShowResultUI();
 	
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
@@ -97,6 +101,8 @@ protected:
 	TSubclassOf<UNPUserWidget> LobbyWidgetClass;
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
     TSubclassOf<UNPUserWidget> GameScreenWidgetClass;
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+    TSubclassOf<UNPUserWidget> ResultWidgetClass;
 	
 private:
 	void ShowSingleScreen(TSubclassOf<UNPUserWidget> WidgetClass);

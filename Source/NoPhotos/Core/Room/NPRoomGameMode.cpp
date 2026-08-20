@@ -47,10 +47,15 @@ void ANPRoomGameMode::PostLogin(APlayerController* NewPlayer)
 	
 	if (!bRoomActive)
 	{
+		TryActivateExistingWaitingRoom();
+	}
+
+	if (!bRoomActive)
+	{
 		NPPC->ClientShowMainMenuUI();
 		return;
 	}
-	
+
 	NPPC->ClientShowLobbyUI();
 	
 	if (!IsValid(NewPlayer) || !IsValid(NewPlayer->PlayerState))
@@ -120,9 +125,16 @@ void ANPRoomGameMode::HandleSeamlessTravelPlayer(AController*& Controller)
 {
 	Super::HandleSeamlessTravelPlayer(Controller);
 
-	if (TryActivateExistingWaitingRoom())
+	if (!TryActivateExistingWaitingRoom())
 	{
-		RestoreReturningPlayer(Controller);
+		return;
+	}
+
+	RestoreReturningPlayer(Controller);
+
+	if (ANPPlayerController* NPPlayerController = Cast<ANPPlayerController>(Controller))
+	{
+		NPPlayerController->ClientShowLobbyUI();
 	}
 }
 
