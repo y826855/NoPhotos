@@ -15,6 +15,7 @@ public class NoPhotos : ModuleRules
 			"InputCore",
 			"EnhancedInput",
 			"AIModule",
+			"ChaosSolverEngine",
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"UMG",
@@ -24,7 +25,8 @@ public class NoPhotos : ModuleRules
 
 		PrivateDependencyModuleNames.AddRange(new string[] {
 			"OnlineSubsystemUtils",
-			"ImageCore"
+			"ImageCore",
+			"GeometryCollectionEngine"
 		});
 
 		PublicIncludePaths.Add(ModuleDirectory);
