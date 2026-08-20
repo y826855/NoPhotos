@@ -1,6 +1,7 @@
 #include "Gameplay/Relic/Gimmick/NPPulleyBarrierGimmick.h"
 
 #include "Components/SceneComponent.h"
+#include "Components/SplineMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/CollisionProfile.h"
 #include "Engine/World.h"
@@ -49,6 +50,51 @@ ANPPulleyBarrierGimmick::ANPPulleyBarrierGimmick()
 		TEXT("GrabbableComponent"));
 	GimmickComponent = CreateDefaultSubobject<UNPPulleyBarrierGimmickComponent>(
 		TEXT("GimmickComponent"));
+
+	HandleWireMesh = CreateDefaultSubobject<USplineMeshComponent>(TEXT("HandleWireMesh"));
+	HandleWireMesh->SetupAttachment(SceneRoot);
+	HandleWireMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	HandleWireMesh->SetForwardAxis(ESplineMeshAxis::X);
+
+	HandleWirePulleyAnchor = CreateDefaultSubobject<USceneComponent>(
+		TEXT("HandleWirePulleyAnchor"));
+	HandleWirePulleyAnchor->SetupAttachment(SceneRoot);
+
+	HandleWireHandleAnchor = CreateDefaultSubobject<USceneComponent>(
+		TEXT("HandleWireHandleAnchor"));
+	HandleWireHandleAnchor->SetupAttachment(HandleMesh);
+
+	TopWireMesh = CreateDefaultSubobject<USplineMeshComponent>(TEXT("TopWireMesh"));
+	TopWireMesh->SetupAttachment(SceneRoot);
+	TopWireMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	TopWireMesh->SetForwardAxis(ESplineMeshAxis::X);
+
+	TopWireLeftAnchor = CreateDefaultSubobject<USceneComponent>(
+		TEXT("TopWireLeftAnchor"));
+	TopWireLeftAnchor->SetupAttachment(SceneRoot);
+
+	TopWireRightAnchor = CreateDefaultSubobject<USceneComponent>(
+		TEXT("TopWireRightAnchor"));
+	TopWireRightAnchor->SetupAttachment(SceneRoot);
+
+	BarrierWireMesh = CreateDefaultSubobject<USplineMeshComponent>(TEXT("BarrierWireMesh"));
+	BarrierWireMesh->SetupAttachment(SceneRoot);
+	BarrierWireMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	BarrierWireMesh->SetForwardAxis(ESplineMeshAxis::X);
+
+	BarrierWirePulleyAnchor = CreateDefaultSubobject<USceneComponent>(
+		TEXT("BarrierWirePulleyAnchor"));
+	BarrierWirePulleyAnchor->SetupAttachment(SceneRoot);
+
+	BarrierWireBarrierAnchor = CreateDefaultSubobject<USceneComponent>(
+		TEXT("BarrierWireBarrierAnchor"));
+	BarrierWireBarrierAnchor->SetupAttachment(BarrierMesh);
+}
+
+void ANPPulleyBarrierGimmick::OnConstruction(const FTransform& Transform)
+{
+	Super::OnConstruction(Transform);
+	UpdateWireMeshes();
 }
 
 void ANPPulleyBarrierGimmick::GetLifetimeReplicatedProps(
@@ -311,10 +357,53 @@ void ANPPulleyBarrierGimmick::ApplyTravel(float TravelDistance)
 			ETeleportType::TeleportPhysics);
 	}
 
+	UpdateWireMeshes();
+
 	OnTravelChanged.Broadcast(
 		HandleTravelDistance > UE_SMALL_NUMBER
 			? ClampedTravelDistance / HandleTravelDistance
 			: 0.0f);
+}
+
+void ANPPulleyBarrierGimmick::UpdateWireMeshes()
+{
+	UpdateWireMesh(
+		HandleWireMesh,
+		HandleWirePulleyAnchor,
+		HandleWireHandleAnchor);
+	UpdateWireMesh(
+		TopWireMesh,
+		TopWireLeftAnchor,
+		TopWireRightAnchor);
+	UpdateWireMesh(
+		BarrierWireMesh,
+		BarrierWirePulleyAnchor,
+		BarrierWireBarrierAnchor);
+}
+
+void ANPPulleyBarrierGimmick::UpdateWireMesh(
+	USplineMeshComponent* WireMesh,
+	const USceneComponent* StartAnchor,
+	const USceneComponent* EndAnchor)
+{
+	if (!WireMesh || !StartAnchor || !EndAnchor)
+	{
+		return;
+	}
+
+	const FTransform& WireTransform = WireMesh->GetComponentTransform();
+	const FVector StartPosition = WireTransform.InverseTransformPosition(
+		StartAnchor->GetComponentLocation());
+	const FVector EndPosition = WireTransform.InverseTransformPosition(
+		EndAnchor->GetComponentLocation());
+	const FVector Tangent = EndPosition - StartPosition;
+
+	WireMesh->SetStartAndEnd(
+		StartPosition,
+		Tangent,
+		EndPosition,
+		Tangent,
+		true);
 }
 
 void ANPPulleyBarrierGimmick::ApplyPulleyRotation(
