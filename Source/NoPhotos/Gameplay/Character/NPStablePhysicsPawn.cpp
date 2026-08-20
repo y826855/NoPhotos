@@ -250,6 +250,10 @@ void ANPStablePhysicsPawn::ApplyCharacterProfile()
 	PhysicsMovement->SetJumpVelocityChange(CharacterProfile->JumpVelocityChange);
 	RightHandGrab->SetLinearBreakThreshold(
 		CharacterProfile->GrabLinearBreakThreshold);
+	RightHandGrab->SetReplicatedGrabFrameBlendDuration(
+		CharacterProfile->ReplicatedGrabFrameBlendDuration);
+	RightHandGrab->SetGrabRetryCooldown(
+		CharacterProfile->GrabRetryCooldown);
 }
 
 void ANPStablePhysicsPawn::RefreshCharacterProfileIfChanged()

@@ -7,6 +7,7 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "Gameplay/Interaction/Components/GrabbableComponent.h"
+#include "PhysicsEngine/BodyInstance.h"
 
 UNPStablePhysicsGrabComponent::UNPStablePhysicsGrabComponent()
 {
@@ -35,6 +36,13 @@ void UNPStablePhysicsGrabComponent::BeginPlay()
 	}
 }
 
+void UNPStablePhysicsGrabComponent::EndPlay(
+	const EEndPlayReason::Type EndPlayReason)
+{
+	ReleaseGrab();
+	Super::EndPlay(EndPlayReason);
+}
+
 void UNPStablePhysicsGrabComponent::Initialize(
 	USkeletalMeshComponent* InPhysicsMesh,
 	FName InHandBoneName)
@@ -49,6 +57,7 @@ void UNPStablePhysicsGrabComponent::SetGrabRequested(bool bRequested)
 	if (!bGrabRequested)
 	{
 		bWaitForGrabRelease = false;
+		GrabRetryCooldownRemaining = 0.0f;
 		ReleaseGrab();
 	}
 }
@@ -58,6 +67,8 @@ void UNPStablePhysicsGrabComponent::SetGrabSimulationEnabled(bool bEnabled)
 	bGrabSimulationEnabled = bEnabled;
 	if (!bGrabSimulationEnabled)
 	{
+		bWaitForGrabRelease = false;
+		GrabRetryCooldownRemaining = 0.0f;
 		ReleaseGrab();
 	}
 }
@@ -70,6 +81,18 @@ void UNPStablePhysicsGrabComponent::SetLinearBreakThreshold(
 	{
 		SetLinearBreakable(true, GrabLinearBreakThreshold);
 	}
+}
+
+void UNPStablePhysicsGrabComponent::SetReplicatedGrabFrameBlendDuration(
+	float InBlendDuration)
+{
+	ReplicatedGrabFrameBlendDuration = FMath::Max(InBlendDuration, 0.0f);
+}
+
+void UNPStablePhysicsGrabComponent::SetGrabRetryCooldown(
+	float InRetryCooldown)
+{
+	GrabRetryCooldown = FMath::Max(InRetryCooldown, 0.0f);
 }
 
 void UNPStablePhysicsGrabComponent::SetMovementIntent(
@@ -95,6 +118,7 @@ void UNPStablePhysicsGrabComponent::ApplyReplicatedGrab(
 	const FTransform& Frame1,
 	const FTransform& Frame2)
 {
+	bReplicatedGrabFrameBlendActive = false;
 	if (!IsValid(PrimitiveComponent) || !PhysicsMesh)
 	{
 		ClearReplicatedGrab();
@@ -118,18 +142,38 @@ void UNPStablePhysicsGrabComponent::ApplyReplicatedGrab(
 	{
 		GrabbedGrabbableComponent->NotifyGrabStarted(GrabbedComponent);
 	}
+
+	FTransform InitialFrame1 = Frame1;
+	FBodyInstance* HandBody = PhysicsMesh->GetBodyInstance(HandBoneName);
+	FBodyInstance* TargetBody = GrabbedComponent->GetBodyInstance(GrabbedBoneName);
+	if (HandBody && TargetBody)
+	{
+		const FTransform TargetWorldFrame =
+			Frame2 * TargetBody->GetUnrealWorldTransform();
+		InitialFrame1 = TargetWorldFrame.GetRelativeTransform(
+			HandBody->GetUnrealWorldTransform());
+
+		ReplicatedGrabFrameBlendStart = InitialFrame1;
+		ReplicatedGrabFrameBlendTarget = Frame1;
+		ReplicatedGrabFrameBlendElapsed = 0.0f;
+		bReplicatedGrabFrameBlendActive =
+			ReplicatedGrabFrameBlendDuration > UE_SMALL_NUMBER
+			&& !InitialFrame1.Equals(Frame1);
+	}
+
 	SetConstrainedComponents(
 		PhysicsMesh,
 		HandBoneName,
 		GrabbedComponent,
 		GrabbedBoneName);
-	SetConstraintReferenceFrame(EConstraintFrame::Frame1, Frame1);
+	SetConstraintReferenceFrame(EConstraintFrame::Frame1, InitialFrame1);
 	SetConstraintReferenceFrame(EConstraintFrame::Frame2, Frame2);
 	OnGrabbedComponentChanged.Broadcast(GrabbedComponent);
 }
 
 void UNPStablePhysicsGrabComponent::ClearReplicatedGrab()
 {
+	bReplicatedGrabFrameBlendActive = false;
 	if (IsHoldingObject())
 	{
 		ReleaseGrab();
@@ -155,6 +199,17 @@ void UNPStablePhysicsGrabComponent::TickComponent(
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
+	if (bWaitForGrabRelease && bGrabRequested)
+	{
+		GrabRetryCooldownRemaining = FMath::Max(
+			GrabRetryCooldownRemaining - DeltaTime,
+			0.0f);
+		if (GrabRetryCooldownRemaining <= 0.0f)
+		{
+			bWaitForGrabRelease = false;
+		}
+	}
+
 	if (bGrabSimulationEnabled
 		&& bGrabRequested
 		&& !bWaitForGrabRelease
@@ -166,6 +221,10 @@ void UNPStablePhysicsGrabComponent::TickComponent(
 	if (bGrabSimulationEnabled && IsHoldingObject())
 	{
 		UpdateGrabForce(DeltaTime);
+	}
+	if (bReplicatedGrabFrameBlendActive && IsHoldingObject())
+	{
+		UpdateReplicatedGrabFrameBlend(DeltaTime);
 	}
 	JumpIntentRemainingTime = FMath::Max(
 		JumpIntentRemainingTime - DeltaTime,
@@ -183,6 +242,7 @@ void UNPStablePhysicsGrabComponent::HandleConstraintBroken(int32)
 	}
 
 	bWaitForGrabRelease = true;
+	GrabRetryCooldownRemaining = GrabRetryCooldown;
 	ReleaseGrab();
 }
 
@@ -312,8 +372,31 @@ void UNPStablePhysicsGrabComponent::UpdateGrabForce(float DeltaTime)
 		IntentForceAlignment);
 }
 
+void UNPStablePhysicsGrabComponent::UpdateReplicatedGrabFrameBlend(
+	float DeltaTime)
+{
+	ReplicatedGrabFrameBlendElapsed += DeltaTime;
+	const float BlendAlpha = FMath::Clamp(
+		ReplicatedGrabFrameBlendElapsed / ReplicatedGrabFrameBlendDuration,
+		0.0f,
+		1.0f);
+
+	FTransform BlendedFrame;
+	BlendedFrame.Blend(
+		ReplicatedGrabFrameBlendStart,
+		ReplicatedGrabFrameBlendTarget,
+		BlendAlpha);
+	SetConstraintReferenceFrame(EConstraintFrame::Frame1, BlendedFrame);
+
+	if (BlendAlpha >= 1.0f)
+	{
+		bReplicatedGrabFrameBlendActive = false;
+	}
+}
+
 void UNPStablePhysicsGrabComponent::ReleaseGrab()
 {
+	bReplicatedGrabFrameBlendActive = false;
 	if (!IsHoldingObject())
 	{
 		return;

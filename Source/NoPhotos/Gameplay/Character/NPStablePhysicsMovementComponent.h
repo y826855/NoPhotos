@@ -8,6 +8,14 @@ class USkeletalMeshComponent;
 
 DECLARE_MULTICAST_DELEGATE(FOnStablePhysicsJumpApplied);
 
+struct FNPStablePhysicsLocomotionInput
+{
+	FVector MoveInput = FVector::ZeroVector;
+	FVector FacingDirection = FVector::ForwardVector;
+	bool bHasFacingDirection = false;
+	bool bJumpRequested = false;
+};
+
 /** 물리 시뮬레이션 중인 스켈레탈 메시에 힘 기반 이동과 자세 제어를 적용합니다. */
 UCLASS(ClassGroup=(Physics), meta=(BlueprintSpawnableComponent))
 class NOPHOTOS_API UNPStablePhysicsMovementComponent : public UActorComponent
@@ -43,8 +51,8 @@ public:
 	void RequestJump();
 	FOnStablePhysicsJumpApplied OnJumpApplied;
 
-	bool HasFacingDirection() const { return bHasFacingDirection; }
-	FVector GetFacingDirection() const { return FacingDirection; }
+	bool HasFacingDirection() const { return PendingInput.bHasFacingDirection; }
+	FVector GetFacingDirection() const { return PendingInput.FacingDirection; }
 
 	/** 수평면을 기준으로 메시가 실제 바라보는 정면 방향을 반환합니다. */
 	FVector GetCurrentFacingDirection() const;
@@ -134,29 +142,28 @@ protected:
 	float JumpVelocityChange = 350.0f;
 
 private:
+	FNPStablePhysicsLocomotionInput ConsumePendingInput();
+	void SimulateLocomotion(const FNPStablePhysicsLocomotionInput& Input);
 	void UpdateMovementState();
 	void UpdateGroundedState();
 	bool IsFootGrounded(FName FootBoneName) const;
 	bool FindPelvisGroundDistance(float& OutGroundDistance) const;
 	void UpdateGroundSupportPhysics();
-	void UpdateMovementPhysics();
-	void UpdateFacingPhysics();
+	void UpdateMovementPhysics(const FVector& InMoveInput);
+	void UpdateFacingPhysics(const FVector& InFacingDirection, bool bInHasFacingDirection);
 	void UpdateBalancePhysics();
-	void UpdateJumpPhysics();
+	void UpdateJumpPhysics(bool bInJumpRequested);
 
 	UPROPERTY(Transient)
 	USkeletalMeshComponent* PhysicsMesh = nullptr;
 
-	FVector MoveInput = FVector::ZeroVector;
-	FVector FacingDirection = FVector::ForwardVector;
+	FNPStablePhysicsLocomotionInput PendingInput;
 	FVector Velocity = FVector::ZeroVector;
 	FVector CurrentAcceleration = FVector::ZeroVector;
 	float CharacterForwardYawOffset = 90.0f;
 	bool bPhysicsUpdatesEnabled = true;
-	bool bHasFacingDirection = false;
 	bool bGrounded = false;
 	bool bIsFalling = true;
-	bool bJumpRequested = false;
 	bool bUseAnimationStateOverride = false;
 	FVector AnimationVelocity = FVector::ZeroVector;
 	FVector AnimationAcceleration = FVector::ZeroVector;

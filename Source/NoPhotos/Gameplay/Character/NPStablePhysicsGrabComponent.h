@@ -28,6 +28,8 @@ public:
 	/** false이면 탐색과 Constraint 생성을 수행하지 않습니다. */
 	void SetGrabSimulationEnabled(bool bEnabled);
 	void SetLinearBreakThreshold(float InLinearBreakThreshold);
+	void SetReplicatedGrabFrameBlendDuration(float InBlendDuration);
+	void SetGrabRetryCooldown(float InRetryCooldown);
 	void SetMovementIntent(const FVector& WorldMovementIntent);
 	void NotifyJumpIntent();
 
@@ -50,6 +52,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	virtual void TickComponent(
 		float DeltaTime,
@@ -60,6 +63,9 @@ protected:
 	float GrabRadius = 18.0f;
 
 	float GrabLinearBreakThreshold = 200000.0f;
+
+	float ReplicatedGrabFrameBlendDuration = 0.15f;
+	float GrabRetryCooldown = 0.5f;
 
 	UPROPERTY(EditAnywhere, Category="Grab Intent", meta=(ClampMin="0.0"))
 	float JumpIntentDuration = 0.15f;
@@ -87,6 +93,7 @@ private:
 		UPrimitiveComponent* PrimitiveComponent,
 		UGrabbableComponent* GrabbableComponent);
 	void UpdateGrabForce(float DeltaTime);
+	void UpdateReplicatedGrabFrameBlend(float DeltaTime);
 	void ReleaseGrab();
 
 	UPROPERTY(Transient)
@@ -103,8 +110,13 @@ private:
 	bool bGrabSimulationEnabled = true;
 	bool bGrabRequested = false;
 	bool bWaitForGrabRelease = false;
+	bool bReplicatedGrabFrameBlendActive = false;
 	FVector MovementIntent = FVector::ZeroVector;
 	float JumpIntentRemainingTime = 0.0f;
+	float GrabRetryCooldownRemaining = 0.0f;
+	float ReplicatedGrabFrameBlendElapsed = 0.0f;
+	FTransform ReplicatedGrabFrameBlendStart = FTransform::Identity;
+	FTransform ReplicatedGrabFrameBlendTarget = FTransform::Identity;
 
 #pragma region Grab Debug Functions
 	void ResetGrabDebug();

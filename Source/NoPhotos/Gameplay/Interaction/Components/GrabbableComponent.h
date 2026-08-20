@@ -23,7 +23,7 @@ public:
 	UGrabbableComponent();
 
 	UFUNCTION(BlueprintPure, Category="Interaction")
-	bool CanBeGrabbed() const { return bGrabEnabled && !bIsGrabbed; }
+	bool CanBeGrabbed() const { return bGrabEnabled; }
 
 	UFUNCTION(BlueprintPure, Category="Interaction")
 	bool IsGrabbed() const { return bIsGrabbed; }
@@ -62,4 +62,6 @@ private:
 
 	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, Category="Interaction", meta=(AllowPrivateAccess="true"))
 	FVector CurrentAngularGrabForce = FVector::ZeroVector;
+
+	int32 ActiveGrabCount = 0;
 };

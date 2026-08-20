@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/EngineTypes.h"
 #include "Gameplay/Character/NPStablePhysicsPawn.h"
 #include "NPRStablePhysicsPawn.generated.h"
 
@@ -28,7 +29,7 @@ struct FReplicatedStableGrabState
 	FTransform ConstraintFrame2 = FTransform::Identity;
 };
 
-/** 서버 권한으로 이동과 그랩 물리를 처리하는 Stable Physics Pawn입니다. */
+/** 이동은 소유 클라이언트가 예측하고, 최종 이동과 그랩 물리는 서버 권한으로 처리합니다. */
 UCLASS()
 class NOPHOTOS_API ANPRStablePhysicsPawn : public ANPStablePhysicsPawn
 {
@@ -70,6 +71,10 @@ private:
 	UFUNCTION(Server, Reliable)
 	void ServerRequestJump();
 
+	/** 소유 클라이언트의 골반 Root Body 상태를 서버 물리에 적용합니다. */
+	UFUNCTION(Server, Unreliable)
+	void ServerSetClientPhysicsState(const FRigidBodyState& ClientState);
+
 	UFUNCTION(Server, Reliable)
 	void ServerSetRightHandActive(bool bActive);
 
@@ -81,6 +86,7 @@ private:
 
 	void HandleGrabbedComponentChanged(UPrimitiveComponent* NewGrabbedComponent);
 	UPrimitiveComponent* ResolveReplicatedGrabbedComponent() const;
+	void UpdateClientPhysicsStateReplication(float DeltaSeconds);
 	void UpdateViewRotationReplication(float DeltaSeconds);
 	void SetReplicatedViewRotation(const FRotator& NewViewRotation);
 	void SetServerRightHandState(bool bActive);
@@ -121,5 +127,7 @@ private:
 	FRotator ReplicatedViewRotation = FRotator::ZeroRotator;
 
 	bool bClientWasMoving = false;
+	bool bLocalRightHandActive = false;
+	float ClientPhysicsStateSendAccumulator = 0.0f;
 	float ViewRotationSendAccumulator = 0.05f;
 };
