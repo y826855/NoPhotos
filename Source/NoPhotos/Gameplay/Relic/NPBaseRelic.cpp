@@ -55,7 +55,12 @@ void ANPBaseRelic::SetUnlocked(bool bUnlocked)
 
 void ANPBaseRelic::OnRep_IsDisplayed()
 {
-	RelicMesh->SetSimulatePhysics(!bIsDisplayed);
+	const ECollisionEnabled::Type CollisionEnabled = RelicMesh->GetCollisionEnabled();
+	const bool bHasPhysicsCollision =
+		CollisionEnabled == ECollisionEnabled::QueryAndPhysics
+		|| CollisionEnabled == ECollisionEnabled::PhysicsOnly;
+	const bool bCanSimulate = RelicMesh->GetStaticMesh() && bHasPhysicsCollision;
+	RelicMesh->SetSimulatePhysics(!bIsDisplayed && bCanSimulate);
 }
 
 void ANPBaseRelic::ReleaseFromDisplay()
