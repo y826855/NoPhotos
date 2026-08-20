@@ -34,8 +34,61 @@ void UNPPhotoCaptureComponent::BeginPlay()
 
 void UNPPhotoCaptureComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	ExitPhotoMode();
 	ReleaseMovementLock();
 	Super::EndPlay(EndPlayReason);
+}
+
+void UNPPhotoCaptureComponent::TogglePhotoMode()
+{
+	if (bPhotoModeActive)
+	{
+		ExitPhotoMode();
+	}
+	else
+	{
+		EnterPhotoMode();
+	}
+}
+
+bool UNPPhotoCaptureComponent::EnterPhotoMode()
+{
+	APlayerController* PlayerController = Cast<APlayerController>(GetOwner());
+	ANPStablePhysicsPawn* StablePawn = PlayerController
+		? Cast<ANPStablePhysicsPawn>(PlayerController->GetPawn())
+		: nullptr;
+	if (!PlayerController || !PlayerController->IsLocalController() || !StablePawn)
+	{
+		UE_LOG(LogNPPhoto, Warning, TEXT("[PhotoMode] Enter rejected: invalid local Pawn."));
+		return false;
+	}
+	if (IsPhotographerGrabbing())
+	{
+		UE_LOG(LogNPPhoto, Warning, TEXT("[PhotoMode] Enter rejected: photographer is grabbing."));
+		return false;
+	}
+
+	PhotoModePawn = StablePawn;
+	bPhotoModeActive = true;
+	StablePawn->SetPhotoViewActive(true);
+	ServerSetPhotoModeActive(true);
+	UE_LOG(LogNPPhoto, Log, TEXT("[PhotoMode] Entered. Pawn=%s"), *GetNameSafe(StablePawn));
+	return true;
+}
+
+void UNPPhotoCaptureComponent::ExitPhotoMode()
+{
+	if (PhotoModePawn.IsValid())
+	{
+		PhotoModePawn->SetPhotoViewActive(false);
+	}
+	PhotoModePawn.Reset();
+	if (bPhotoModeActive)
+	{
+		bPhotoModeActive = false;
+		ServerSetPhotoModeActive(false);
+		UE_LOG(LogNPPhoto, Log, TEXT("[PhotoMode] Exited."));
+	}
 }
 
 bool UNPPhotoCaptureComponent::TakePhoto()
@@ -51,6 +104,18 @@ bool UNPPhotoCaptureComponent::TakePhoto()
 			*GetNameSafe(PlayerController),
 			PlayerController && PlayerController->IsLocalController() ? TEXT("true") : TEXT("false"),
 			*GetNameSafe(World));
+		return false;
+	}
+	ANPStablePhysicsPawn* Pawn = Cast<ANPStablePhysicsPawn>(PlayerController->GetPawn());
+	if (!bPhotoModeActive || !Pawn || !Pawn->IsPhotoViewReady())
+	{
+		UE_LOG(
+			LogNPPhoto,
+			Warning,
+			TEXT("[Capture] Rejected locally: photo mode is inactive or camera is blending. Active=%s Pawn=%s Ready=%s"),
+			bPhotoModeActive ? TEXT("true") : TEXT("false"),
+			*GetNameSafe(Pawn),
+			Pawn && Pawn->IsPhotoViewReady() ? TEXT("true") : TEXT("false"));
 		return false;
 	}
 
@@ -88,7 +153,6 @@ bool UNPPhotoCaptureComponent::TakePhoto()
 	}
 
 	bPhotoAttemptInProgress = true;
-	ANPStablePhysicsPawn* Pawn = Cast<ANPStablePhysicsPawn>(PlayerController->GetPawn());
 	if (!Pawn || !Pawn->PlayPhotoShotMontage())
 	{
 		UE_LOG(
@@ -269,14 +333,15 @@ void UNPPhotoCaptureComponent::ServerRequestTakePhoto_Implementation(
 	ANoPhotosGameMode* GameMode = GetWorld()
 		? GetWorld()->GetAuthGameMode<ANoPhotosGameMode>()
 		: nullptr;
-	if (!Photographer || !GameMode)
+	if (!Photographer || !GameMode || !bServerPhotoModeActive)
 	{
 		UE_LOG(
 			LogNPPhoto,
 			Error,
-			TEXT("[Server] Rejected: invalid photographer or GameMode. Photographer=%s GameMode=%s"),
+			TEXT("[Server] Rejected: invalid photographer, GameMode, or photo mode. Photographer=%s GameMode=%s PhotoMode=%s"),
 			*GetNameSafe(Photographer),
-			*GetNameSafe(GameMode));
+			*GetNameSafe(GameMode),
+			bServerPhotoModeActive ? TEXT("true") : TEXT("false"));
 		FNPPhotoEvidenceResult FailureResult;
 		FailureResult.CaptureSequence = CaptureSequence;
 		FailureResult.FailureReason = ENPPhotoEvidenceFailureReason::InvalidPhotographer;
@@ -310,12 +375,31 @@ void UNPPhotoCaptureComponent::ServerRequestTakePhoto_Implementation(
 	LastServerCaptureTime = CurrentTime;
 	ApplyMovementLock();
 
+	if (ANPStablePhysicsPawn* PhotographerPawn = Cast<ANPStablePhysicsPawn>(Photographer->GetPawn()))
+	{
+		// Pawn은 모든 관련 클라이언트에 복제되므로 위치 기반 셔터음 멀티캐스트의 주체로 사용합니다.
+		PhotographerPawn->BroadcastPhotoShutterSound(PhotographerPawn->GetActorLocation());
+	}
+	else
+	{
+		UE_LOG(
+			LogNPPhoto,
+			Warning,
+			TEXT("[Audio] Shutter multicast skipped: photographer Pawn is invalid. Pawn=%s"),
+			*GetNameSafe(Photographer->GetPawn()));
+	}
+
 	FNPPhotoCaptureRequest Request;
 	Request.Photographer = Photographer;
 	Request.CameraLocation = CameraLocation;
 	Request.CameraForward = CameraForward;
 	Request.CaptureSequence = CaptureSequence;
 	ClientReceivePhotoResult(GameMode->HandlePhotoCaptureRequest(Request));
+}
+
+void UNPPhotoCaptureComponent::ServerSetPhotoModeActive_Implementation(const bool bActive)
+{
+	bServerPhotoModeActive = bActive;
 }
 
 void UNPPhotoCaptureComponent::ClientReceivePhotoResult_Implementation(

@@ -16,6 +16,7 @@
 #include "Gameplay/Character/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Character/NPStablePhysicsMovementComponent.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
+#include "Core/Audio/NPSoundSubsystem.h"
 
 ANPStablePhysicsPawn::ANPStablePhysicsPawn()
 {
@@ -82,6 +83,9 @@ void ANPStablePhysicsPawn::BeginPlay()
 		RightHandGrab,
 		&UNPStablePhysicsGrabComponent::NotifyJumpIntent);
 	InitializePhysicalAnimation();
+	DefaultCameraArmLength = CameraBoom->TargetArmLength;
+	DefaultCameraFOV = FollowCamera->FieldOfView;
+	CurrentCameraTargetHeight = CameraTargetHeight;
 	UpdateCameraTarget();
 	UpdateFacingTarget();
 	CameraBoom->AddTickPrerequisiteActor(this);
@@ -92,6 +96,7 @@ void ANPStablePhysicsPawn::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 
 	RefreshCharacterProfileIfChanged();
+	UpdatePhotoCamera(DeltaSeconds);
 	UpdateCameraTarget();
 	UpdateFacingTarget();
 
@@ -172,6 +177,71 @@ bool ANPStablePhysicsPawn::PlayPhotoShotMontage()
 		*GetNameSafe(PhotoShotMontage),
 		Duration);
 	return Duration > 0.0f;
+}
+
+void ANPStablePhysicsPawn::BroadcastPhotoShutterSound(const FVector& SoundLocation)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	MulticastPlayPhotoShutterSound(SoundLocation);
+}
+
+void ANPStablePhysicsPawn::MulticastPlayPhotoShutterSound_Implementation(
+	const FVector_NetQuantize10 SoundLocation)
+{
+	if (!PhotoShutterSound)
+	{
+		UE_LOG(
+			LogNPPhoto,
+			Warning,
+			TEXT("[Audio] PhotoShutterSound is not assigned. Pawn=%s"),
+			*GetNameSafe(this));
+		return;
+	}
+
+	if (UNPSoundSubsystem* SoundSubsystem = UNPSoundSubsystem::Get(this))
+	{
+		SoundSubsystem->PlaySFXAtLocation(
+			PhotoShutterSound,
+			SoundLocation,
+			FRotator::ZeroRotator,
+			1.0f,
+			1.0f,
+			0.0f,
+			PhotoShutterAttenuation);
+	}
+}
+
+void ANPStablePhysicsPawn::SetPhotoViewActive(const bool bActive)
+{
+	if (!IsLocallyControlled() || bPhotoViewActive == bActive)
+	{
+		return;
+	}
+
+	bPhotoViewActive = bActive;
+	if (PhysicsMesh)
+	{
+		// 다른 플레이어에게는 계속 보이고, 이 Pawn을 소유한 로컬 화면에서만 숨깁니다.
+		PhysicsMesh->SetOwnerNoSee(bPhotoViewActive);
+	}
+	UE_LOG(
+		LogNPPhoto,
+		Log,
+		TEXT("[PhotoMode] Pawn view changed. Pawn=%s Active=%s"),
+		*GetNameSafe(this),
+		bPhotoViewActive ? TEXT("true") : TEXT("false"));
+}
+
+bool ANPStablePhysicsPawn::IsPhotoViewReady() const
+{
+	return bPhotoViewActive
+		&& FMath::IsNearlyEqual(CameraBoom->TargetArmLength, PhotoCameraArmLength, 5.0f)
+		&& FMath::IsNearlyEqual(CurrentCameraTargetHeight, PhotoCameraTargetHeight, 5.0f)
+		&& FMath::IsNearlyEqual(FollowCamera->FieldOfView, PhotoCameraFOV, 1.0f);
 }
 
 float ANPStablePhysicsPawn::GetAnimationGroundSpeed() const
@@ -332,8 +402,37 @@ void ANPStablePhysicsPawn::UpdateCameraTarget()
 	}
 
 	const FVector TargetLocation = PhysicsMesh->GetSocketLocation(FullBodyRootName)
-		+ FVector::UpVector * CameraTargetHeight;
+		+ FVector::UpVector * CurrentCameraTargetHeight;
 	CameraRoot->SetWorldLocation(TargetLocation);
+}
+
+void ANPStablePhysicsPawn::UpdatePhotoCamera(const float DeltaSeconds)
+{
+	const float TargetArmLength = bPhotoViewActive
+		? PhotoCameraArmLength
+		: DefaultCameraArmLength;
+	const float TargetHeight = bPhotoViewActive
+		? PhotoCameraTargetHeight
+		: CameraTargetHeight;
+	const float TargetFOV = bPhotoViewActive
+		? PhotoCameraFOV
+		: DefaultCameraFOV;
+
+	CameraBoom->TargetArmLength = FMath::FInterpTo(
+		CameraBoom->TargetArmLength,
+		TargetArmLength,
+		DeltaSeconds,
+		PhotoCameraBlendSpeed);
+	CurrentCameraTargetHeight = FMath::FInterpTo(
+		CurrentCameraTargetHeight,
+		TargetHeight,
+		DeltaSeconds,
+		PhotoCameraBlendSpeed);
+	FollowCamera->SetFieldOfView(FMath::FInterpTo(
+		FollowCamera->FieldOfView,
+		TargetFOV,
+		DeltaSeconds,
+		PhotoCameraBlendSpeed));
 }
 
 void ANPStablePhysicsPawn::UpdateFacingTarget()

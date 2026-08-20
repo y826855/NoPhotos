@@ -32,7 +32,11 @@ public:
 	UNPPhotoTransferComponent* GetPhotoTransferComponent() const { return PhotoTransferComponent; }
 
 protected:
-	/** IMC에서 마우스 우클릭 등에 매핑할 사진 촬영 액션입니다. */
+	/** 마우스 우클릭에 매핑할 사진 모드 진입/해제 액션입니다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Input|Photo")
+	TObjectPtr<UInputAction> TogglePhotoModeAction;
+
+	/** 사진 모드에서 마우스 좌클릭에 매핑할 실제 촬영 액션입니다. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Input|Photo")
 	TObjectPtr<UInputAction> TakePhotoAction;
 
@@ -70,6 +74,7 @@ protected:
 	bool ShouldUseTouchControls() const;
 
 private:
+	void HandleTogglePhotoModeInput();
 	void HandleTakePhotoInput();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Photo", meta=(AllowPrivateAccess="true"))

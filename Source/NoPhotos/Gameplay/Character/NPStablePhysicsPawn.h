@@ -11,6 +11,8 @@ class UInputAction;
 class UPhysicalAnimationComponent;
 class USceneComponent;
 class USkeletalMeshComponent;
+class USoundAttenuation;
+class USoundBase;
 class USpringArmComponent;
 class UNPStablePhysicsGrabComponent;
 class UNPStablePhysicsMovementComponent;
@@ -39,6 +41,18 @@ public:
 
 	/** 설정된 사진 촬영 Montage를 한 번 재생합니다. */
 	bool PlayPhotoShotMontage();
+
+	/** 서버에서 승인한 사진 촬영의 3D 셔터음을 모든 클라이언트에 전달합니다. */
+	void BroadcastPhotoShutterSound(const FVector& SoundLocation);
+
+	/** 로컬 플레이어의 3인칭/사진 1인칭 카메라 전환을 시작합니다. */
+	void SetPhotoViewActive(bool bActive);
+
+	UFUNCTION(BlueprintPure, Category="Photo")
+	bool IsPhotoViewActive() const { return bPhotoViewActive; }
+
+	UFUNCTION(BlueprintPure, Category="Photo")
+	bool IsPhotoViewReady() const;
 
 	UPROPERTY(BlueprintReadOnly, Transient, Category="Right Hand IK")
 	FVector RightHandIKLocation = FVector::ZeroVector;
@@ -135,6 +149,14 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Animation|Photo")
 	TObjectPtr<UAnimMontage> PhotoShotMontage;
 
+	/** 모든 플레이어가 촬영 위치를 기준으로 듣는 셔터음입니다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Audio|Photo")
+	TObjectPtr<USoundBase> PhotoShutterSound;
+
+	/** 셔터음의 거리 감쇠 설정입니다. 지정하지 않으면 사운드 에셋의 설정을 사용합니다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Audio|Photo")
+	TObjectPtr<USoundAttenuation> PhotoShutterAttenuation;
+
 	/** 지정하면 본 이름과 피지컬 애니메이션 설정을 프로필 값으로 덮어씁니다. */
 	UPROPERTY(EditAnywhere, Category="Character Profile")
 	TObjectPtr<UNPStablePhysicsCharacterProfile> CharacterProfile;
@@ -151,6 +173,18 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category="Camera", meta=(ClampMin="0.0"))
 	float CameraTargetHeight = 60.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Camera|Photo", meta=(ClampMin="0.0"))
+	float PhotoCameraArmLength = 0.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Camera|Photo", meta=(ClampMin="0.0"))
+	float PhotoCameraTargetHeight = 120.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Camera|Photo", meta=(ClampMin="1.0", ClampMax="179.0"))
+	float PhotoCameraFOV = 60.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Camera|Photo", meta=(ClampMin="0.1"))
+	float PhotoCameraBlendSpeed = 10.0f;
 
 #pragma region Pawn Debug Settings
 	UPROPERTY(EditAnywhere, Category="Facing Debug")
@@ -177,12 +211,16 @@ protected:
 	FName RightHandBoneName = TEXT("hand_r");
 
 private:
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastPlayPhotoShutterSound(FVector_NetQuantize10 SoundLocation);
+
 	void ApplyCharacterProfile();
 	void RefreshCharacterProfileIfChanged();
 	void InitializePhysicalAnimation();
 	void ApplyPhysicalAnimationGroups();
 	void ConfigurePelvisStability();
 	void UpdateCameraTarget();
+	void UpdatePhotoCamera(float DeltaSeconds);
 	void UpdateFacingTarget();
 
 	void UpdateRightHandIK(float DeltaSeconds);
@@ -219,6 +257,10 @@ private:
 	float SpineLeanBackStartViewPitch = 10.0f;
 	float SpinePitchInterpSpeed = 8.0f;
 	bool bPhotoMovementLocked = false;
+	bool bPhotoViewActive = false;
+	float DefaultCameraArmLength = 400.0f;
+	float DefaultCameraFOV = 90.0f;
+	float CurrentCameraTargetHeight = 60.0f;
 	uint32 AppliedCharacterProfileRevision = 0;
 	TWeakObjectPtr<UNPStablePhysicsCharacterProfile> AppliedCharacterProfile;
 };

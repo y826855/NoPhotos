@@ -90,23 +90,58 @@ void ANoPhotosPlayerController::SetupInputComponent()
 
 	UEnhancedInputComponent* EnhancedInputComponent =
 		Cast<UEnhancedInputComponent>(InputComponent);
-	if (!EnhancedInputComponent || !TakePhotoAction)
+	if (!EnhancedInputComponent)
 	{
 		UE_LOG(
 			LogNPPhoto,
-			Warning,
-			TEXT("[Input] Photo binding skipped. EnhancedInput=%s TakePhotoAction=%s"),
-			*GetNameSafe(EnhancedInputComponent),
-			*GetNameSafe(TakePhotoAction));
+			Error,
+			TEXT("[Input] Photo bindings skipped: Enhanced Input Component is missing."));
 		return;
 	}
 
-	EnhancedInputComponent->BindAction(
-		TakePhotoAction,
-		ETriggerEvent::Started,
-		this,
-		&ANoPhotosPlayerController::HandleTakePhotoInput);
-	UE_LOG(LogNPPhoto, Log, TEXT("[Input] Photo action bound. Action=%s"), *GetNameSafe(TakePhotoAction));
+	if (TogglePhotoModeAction)
+	{
+		EnhancedInputComponent->BindAction(
+			TogglePhotoModeAction,
+			ETriggerEvent::Started,
+			this,
+			&ANoPhotosPlayerController::HandleTogglePhotoModeInput);
+		UE_LOG(LogNPPhoto, Log, TEXT("[Input] Photo mode action bound. Action=%s"), *GetNameSafe(TogglePhotoModeAction));
+	}
+	else
+	{
+		UE_LOG(LogNPPhoto, Warning, TEXT("[Input] TogglePhotoModeAction is not assigned."));
+	}
+
+	if (TakePhotoAction)
+	{
+		EnhancedInputComponent->BindAction(
+			TakePhotoAction,
+			ETriggerEvent::Started,
+			this,
+			&ANoPhotosPlayerController::HandleTakePhotoInput);
+		UE_LOG(LogNPPhoto, Log, TEXT("[Input] Photo shot action bound. Action=%s"), *GetNameSafe(TakePhotoAction));
+	}
+	else
+	{
+		UE_LOG(LogNPPhoto, Warning, TEXT("[Input] TakePhotoAction is not assigned."));
+	}
+}
+
+void ANoPhotosPlayerController::HandleTogglePhotoModeInput()
+{
+	if (!PhotoCaptureComponent)
+	{
+		UE_LOG(LogNPPhoto, Error, TEXT("[Input] PhotoCaptureComponent is null."));
+		return;
+	}
+
+	PhotoCaptureComponent->TogglePhotoMode();
+	UE_LOG(
+		LogNPPhoto,
+		Log,
+		TEXT("[Input] Photo mode toggled. Active=%s"),
+		PhotoCaptureComponent->IsPhotoModeActive() ? TEXT("true") : TEXT("false"));
 }
 
 void ANoPhotosPlayerController::HandleTakePhotoInput()

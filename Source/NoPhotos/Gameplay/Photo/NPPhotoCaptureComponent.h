@@ -32,6 +32,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Photo")
 	bool TakePhoto();
 
+	UFUNCTION(BlueprintCallable, Category="Photo")
+	void TogglePhotoMode();
+
+	UFUNCTION(BlueprintCallable, Category="Photo")
+	bool EnterPhotoMode();
+
+	UFUNCTION(BlueprintCallable, Category="Photo")
+	void ExitPhotoMode();
+
+	UFUNCTION(BlueprintPure, Category="Photo")
+	bool IsPhotoModeActive() const { return bPhotoModeActive; }
+
 	UFUNCTION(BlueprintPure, Category="Photo")
 	UTextureRenderTarget2D* GetPhotoRenderTarget() const { return PhotoRenderTarget; }
 
@@ -76,6 +88,9 @@ private:
 		FVector_NetQuantizeNormal CameraForward,
 		uint16 CaptureSequence);
 
+	UFUNCTION(Server, Reliable)
+	void ServerSetPhotoModeActive(bool bActive);
+
 	UFUNCTION(Client, Reliable)
 	void ClientReceivePhotoResult(const FNPPhotoEvidenceResult& Result);
 
@@ -97,7 +112,10 @@ private:
 	double LastServerCaptureTime = -TNumericLimits<double>::Max();
 	uint16 NextCaptureSequence = 0;
 	bool bPhotoAttemptInProgress = false;
+	bool bPhotoModeActive = false;
+	bool bServerPhotoModeActive = false;
 	bool bMovementLockApplied = false;
+	TWeakObjectPtr<ANPStablePhysicsPawn> PhotoModePawn;
 	TWeakObjectPtr<ANPStablePhysicsPawn> MovementLockedPawn;
 	FTimerHandle MovementUnlockTimer;
 };
