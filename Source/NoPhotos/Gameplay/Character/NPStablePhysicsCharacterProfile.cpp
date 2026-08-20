@@ -421,6 +421,12 @@ void UNPStablePhysicsCharacterProfile::PostEditChangeProperty(
 			GrabLinearBreakThreshold)
 		|| PropertyName == GET_MEMBER_NAME_CHECKED(
 			UNPStablePhysicsCharacterProfile,
+			ReplicatedGrabFrameBlendDuration)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
+			GrabRetryCooldown)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
 			RightHandReachDistance)
 		|| PropertyName == GET_MEMBER_NAME_CHECKED(
 			UNPStablePhysicsCharacterProfile,
