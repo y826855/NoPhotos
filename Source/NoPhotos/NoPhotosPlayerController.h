@@ -9,6 +9,7 @@
 class UInputMappingContext;
 class UInputAction;
 class UNPPhotoCaptureComponent;
+class UNPPhotoFlashWidget;
 class UNPPhotoTransferComponent;
 class UNPPhotoPreviewWidget;
 class UUserWidget;
@@ -31,8 +32,15 @@ public:
 	UFUNCTION(BlueprintPure, Category="Photo")
 	UNPPhotoTransferComponent* GetPhotoTransferComponent() const { return PhotoTransferComponent; }
 
+	/** 로컬 사진 플래시 UI 애니메이션을 실행합니다. */
+	void PlayPhotoFlash();
+
 protected:
-	/** IMC에서 마우스 우클릭 등에 매핑할 사진 촬영 액션입니다. */
+	/** 마우스 우클릭에 매핑할 사진 모드 진입/해제 액션입니다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Input|Photo")
+	TObjectPtr<UInputAction> TogglePhotoModeAction;
+
+	/** 사진 모드에서 마우스 좌클릭에 매핑할 실제 촬영 액션입니다. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Input|Photo")
 	TObjectPtr<UInputAction> TakePhotoAction;
 
@@ -63,6 +71,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Photo|UI")
 	TSubclassOf<UNPPhotoPreviewWidget> PhotoPreviewWidgetClass;
 
+	/** UNPPhotoFlashWidget을 부모로 만든 전체 화면 플래시 WBP 클래스입니다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Photo|UI")
+	TSubclassOf<UNPPhotoFlashWidget> PhotoFlashWidgetClass;
+
 	/** Input mapping context setup */
 	virtual void SetupInputComponent() override;
 
@@ -70,6 +82,7 @@ protected:
 	bool ShouldUseTouchControls() const;
 
 private:
+	void HandleTogglePhotoModeInput();
 	void HandleTakePhotoInput();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Photo", meta=(AllowPrivateAccess="true"))
@@ -80,5 +93,8 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNPPhotoPreviewWidget> PhotoPreviewWidget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNPPhotoFlashWidget> PhotoFlashWidget;
 
 };

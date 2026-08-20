@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/EngineTypes.h"
 #include "Gameplay/Character/NPStablePhysicsPawn.h"
 #include "NPRStablePhysicsPawn.generated.h"
 
@@ -28,11 +29,12 @@ struct FReplicatedStableGrabState
 	FTransform ConstraintFrame2 = FTransform::Identity;
 };
 
-/** 서버 권한으로 이동과 그랩 물리를 처리하는 Stable Physics Pawn입니다. */
+/** 소유 클라이언트가 이동 물리 상태를 전송하고, Grab 판정과 Constraint는 서버가 처리합니다. */
 UCLASS()
 class NOPHOTOS_API ANPRStablePhysicsPawn : public ANPStablePhysicsPawn
 {
 	GENERATED_BODY()
+	friend class UNPStablePhysicsDebugComponent;
 
 public:
 	ANPRStablePhysicsPawn();
@@ -73,6 +75,10 @@ private:
 	UFUNCTION(Server, Reliable)
 	void ServerRequestJump();
 
+	/** 소유 클라이언트의 골반 Root Body 상태를 서버 물리에 적용합니다. */
+	UFUNCTION(Server, Unreliable)
+	void ServerSetClientPhysicsState(const FRigidBodyState& ClientState);
+
 	UFUNCTION(Server, Reliable)
 	void ServerSetRightHandActive(bool bActive);
 
@@ -84,10 +90,12 @@ private:
 
 	void HandleGrabbedComponentChanged(UPrimitiveComponent* NewGrabbedComponent);
 	UPrimitiveComponent* ResolveReplicatedGrabbedComponent() const;
+	void UpdateClientSimulationState();
+	void UpdateServerReplicatedState();
+	void UpdateClientPhysicsStateReplication(float DeltaSeconds);
 	void UpdateViewRotationReplication(float DeltaSeconds);
 	void SetReplicatedViewRotation(const FRotator& NewViewRotation);
 	void SetServerRightHandState(bool bActive);
-	void DrawGrabNetworkDebug() const;
 
 	/** 다른 클라이언트에서도 오른손 IK 상태를 동일하게 표시하기 위한 값입니다. */
 	UPROPERTY(ReplicatedUsing=OnRep_RightHandActive)
@@ -124,5 +132,7 @@ private:
 	FRotator ReplicatedViewRotation = FRotator::ZeroRotator;
 
 	bool bClientWasMoving = false;
+	bool bLocalRightHandActive = false;
+	float ClientPhysicsStateSendAccumulator = 0.0f;
 	float ViewRotationSendAccumulator = 0.05f;
 };

@@ -30,9 +30,15 @@ UPrimitiveComponent* UGrabbableComponent::ResolveGrabTarget(
 
 void UGrabbableComponent::NotifyGrabStarted(UPrimitiveComponent* GrabbedComponent)
 {
-	if (CanBeGrabbed())
+	if (!CanBeGrabbed())
 	{
-		bIsGrabbed = true;
+		return;
+	}
+
+	++ActiveGrabCount;
+	bIsGrabbed = true;
+	if (ActiveGrabCount == 1)
+	{
 		CurrentLinearGrabForce = FVector::ZeroVector;
 		CurrentAngularGrabForce = FVector::ZeroVector;
 		OnGrabStarted.Broadcast(GrabbedComponent);
@@ -59,12 +65,18 @@ void UGrabbableComponent::NotifyGrabForce(
 
 void UGrabbableComponent::NotifyGrabEnded()
 {
-	if (!bIsGrabbed)
+	if (ActiveGrabCount <= 0)
 	{
 		return;
 	}
 
-	bIsGrabbed = false;
+	--ActiveGrabCount;
+	bIsGrabbed = ActiveGrabCount > 0;
+	if (bIsGrabbed)
+	{
+		return;
+	}
+
 	CurrentLinearGrabForce = FVector::ZeroVector;
 	CurrentAngularGrabForce = FVector::ZeroVector;
 	OnGrabEnded.Broadcast();
