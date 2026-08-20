@@ -1,0 +1,109 @@
+#include "Gameplay/Relic/Components/NPImpactReceiveComponent.h"
+
+#include "Components/PrimitiveComponent.h"
+#include "Engine/World.h"
+#include "GameFramework/Actor.h"
+#include "Gameplay/Character/NPStablePhysicsPawn.h"
+
+UNPImpactReceiveComponent::UNPImpactReceiveComponent()
+{
+	PrimaryComponentTick.bCanEverTick = false;
+}
+
+void UNPImpactReceiveComponent::BeginPlay()
+{
+	Super::BeginPlay();
+
+	MaxHealth = FMath::Max(1, MaxHealth);
+	CurrentHealth = MaxHealth;
+
+	AActor* Owner = GetOwner();
+	UPrimitiveComponent* CollisionComponent = Owner
+		? Cast<UPrimitiveComponent>(Owner->GetRootComponent())
+		: nullptr;
+	if (CollisionComponent)
+	{
+		CollisionComponent->OnComponentHit.AddDynamic(
+			this,
+			&UNPImpactReceiveComponent::HandleHit);
+	}
+}
+
+void UNPImpactReceiveComponent::IgnoreGrabImpact()
+{
+	if (const UWorld* World = GetWorld())
+	{
+		IgnoreDamageUntilTime = FMath::Max(
+			IgnoreDamageUntilTime,
+			World->GetTimeSeconds()
+				+ FMath::Max(0.0f, GrabImpactIgnoreDuration));
+	}
+}
+
+void UNPImpactReceiveComponent::HandleHit(
+	UPrimitiveComponent* HitComponent,
+	AActor* OtherActor,
+	UPrimitiveComponent* OtherComponent,
+	const FVector NormalImpulse,
+	const FHitResult& Hit)
+{
+	AActor* Owner = GetOwner();
+	if (!Owner || !Owner->HasAuthority() || CurrentHealth <= 0)
+	{
+		return;
+	}
+	if (OtherActor && OtherActor->IsA<ANPStablePhysicsPawn>())
+	{
+		return;
+	}
+
+	const UWorld* World = GetWorld();
+	const double CurrentTime = World ? World->GetTimeSeconds() : 0.0;
+	if (CurrentTime < IgnoreDamageUntilTime
+		|| CurrentTime < NextDamageAllowedTime)
+	{
+		return;
+	}
+
+	const float ImpactStrength = NormalImpulse.Size();
+	const float ValidMinImpact = FMath::Min(
+		MinImpactThreshold,
+		MaxImpactThreshold);
+	const float ValidMaxImpact = FMath::Max(
+		MinImpactThreshold,
+		MaxImpactThreshold);
+	if (ImpactStrength < ValidMinImpact)
+	{
+		return;
+	}
+
+	const int32 ValidMinDamage = FMath::Max(
+		1,
+		FMath::Min(MinDamage, MaxDamage));
+	const int32 ValidMaxDamage = FMath::Max(
+		ValidMinDamage,
+		FMath::Max(MinDamage, MaxDamage));
+	const float ImpactAlpha = ValidMaxImpact > ValidMinImpact
+		? FMath::Clamp(
+			(ImpactStrength - ValidMinImpact)
+				/ (ValidMaxImpact - ValidMinImpact),
+			0.0f,
+			1.0f)
+		: 1.0f;
+	const int32 Damage = FMath::RoundToInt(FMath::Lerp(
+		static_cast<float>(ValidMinDamage),
+		static_cast<float>(ValidMaxDamage),
+		ImpactAlpha));
+
+	NextDamageAllowedTime = CurrentTime + FMath::Max(0.0f, DamageCooldown);
+	CurrentHealth = FMath::Max(0, CurrentHealth - Damage);
+	OnDamaged.Broadcast(Damage, CurrentHealth, MaxHealth);
+
+	if (CurrentHealth <= 0)
+	{
+		const FVector ImpactLocation = Hit.ImpactPoint.IsNearlyZero()
+			? HitComponent->GetComponentLocation()
+			: FVector(Hit.ImpactPoint);
+		OnDepleted.Broadcast(ImpactLocation);
+	}
+}

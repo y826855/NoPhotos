@@ -1,17 +1,23 @@
 #include "Gameplay/Relic/NPBaseRelic.h"
 
+#include "Components/PrimitiveComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/CollisionProfile.h"
 #include "Gameplay/Interaction/Components/GrabbableComponent.h"
 #include "Net/UnrealNetwork.h"
 
-ANPBaseRelic::ANPBaseRelic()
+const FName ANPBaseRelic::RelicComponentName(TEXT("RelicMesh"));
+
+ANPBaseRelic::ANPBaseRelic(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
 	PrimaryActorTick.bCanEverTick = false;
 	bReplicates = true;
 	SetReplicateMovement(true);
 
-	RelicMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("RelicMesh"));
+	RelicMesh = CreateDefaultSubobject<
+		UPrimitiveComponent,
+		UStaticMeshComponent>(RelicComponentName);
 	SetRootComponent(RelicMesh);
 	RelicMesh->SetCollisionProfileName(UCollisionProfile::PhysicsActor_ProfileName);
 	RelicMesh->SetSimulatePhysics(false);
@@ -55,7 +61,13 @@ void ANPBaseRelic::SetUnlocked(bool bUnlocked)
 
 void ANPBaseRelic::OnRep_IsDisplayed()
 {
-	RelicMesh->SetSimulatePhysics(!bIsDisplayed);
+	const ECollisionEnabled::Type CollisionEnabled = RelicMesh->GetCollisionEnabled();
+	const bool bHasPhysicsCollision =
+		CollisionEnabled == ECollisionEnabled::QueryAndPhysics
+		|| CollisionEnabled == ECollisionEnabled::PhysicsOnly;
+	const bool bCanSimulate = RelicMesh->CanEditSimulatePhysics()
+		&& bHasPhysicsCollision;
+	RelicMesh->SetSimulatePhysics(!bIsDisplayed && bCanSimulate);
 }
 
 void ANPBaseRelic::ReleaseFromDisplay()
