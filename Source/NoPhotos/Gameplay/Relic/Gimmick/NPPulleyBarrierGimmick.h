@@ -149,6 +149,7 @@ protected:
 private:
 	void ConfigureHandleConstraint();
 	float GetSignedHandleTravelDistance() const;
+	float ClampHandleTravel();
 	void ApplyHandleReturnForce(float SignedTravelDistance);
 	void LimitHandleDownwardSpeed();
 	bool TrySettleHandle(float SignedTravelDistance);
