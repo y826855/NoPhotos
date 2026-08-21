@@ -1,8 +1,10 @@
 #include "Gameplay/Relic/NPRelicRopeSetup.h"
 
-#include "Components/SceneComponent.h"
 #include "CollisionQueryParams.h"
+#include "Components/PrimitiveComponent.h"
+#include "Components/SceneComponent.h"
 #include "Engine/World.h"
+#include "Gameplay/Interaction/Components/GrabbableComponent.h"
 #include "Gameplay/Relic/Gimmick/Components/NPRelicGimmickComponent.h"
 #include "Gameplay/Relic/NPBaseRelic.h"
 #include "Gameplay/Rope/NPRopeAnchorActor.h"
@@ -455,11 +457,7 @@ void ANPRelicRopeSetup::StartRopeRelease()
 
 	bRopeReleaseScheduled = false;
 	bRopeReleaseStarted = true;
-	if (Relic)
-	{
-		Relic->SetUnlocked(true);
-		Relic->ReleaseFromDisplay();
-	}
+	ReleaseRelicThroughGrabContract();
 
 	if (!SpawnedRopeReleaseRoot)
 	{
@@ -504,6 +502,77 @@ void ANPRelicRopeSetup::StartRopeRelease()
 		*RopeReleaseStartLocation.ToCompactString(),
 		*RopeReleaseTargetLocation.ToCompactString(),
 		bReleaseRopeWrapToGround ? TEXT("true") : TEXT("false"));
+}
+
+void ANPRelicRopeSetup::ReleaseRelicThroughGrabContract()
+{
+	if (!Relic)
+	{
+		return;
+	}
+
+	// BaseRelic을 수정하지 않고 기존 Grab 경로를 통해
+	// 내부 Display 상태와 물리 상태를 함께 전환합니다.
+	Relic->SetUnlocked(true);
+	if (!Relic->IsDisplayed())
+	{
+		return;
+	}
+
+	UGrabbableComponent* Grabbable =
+		Relic->FindComponentByClass<UGrabbableComponent>();
+	UPrimitiveComponent* RootPrimitive =
+		Cast<UPrimitiveComponent>(Relic->GetRootComponent());
+	if (!Grabbable || !RootPrimitive || !Grabbable->CanBeGrabbed())
+	{
+		UE_LOG(
+			LogNoPhotos,
+			Warning,
+			TEXT("[%s] Could not release Relic through the Grab contract. Relic=%s Grabbable=%s RootPrimitive=%s CanGrab=%s"),
+			*GetNameSafe(this),
+			*GetNameSafe(Relic),
+			*GetNameSafe(Grabbable),
+			*GetNameSafe(RootPrimitive),
+			Grabbable && Grabbable->CanBeGrabbed()
+				? TEXT("true")
+				: TEXT("false"));
+		return;
+	}
+
+	Grabbable->NotifyGrabStarted(RootPrimitive);
+	Grabbable->NotifyGrabEnded();
+	if (Relic->IsDisplayed())
+	{
+		UE_LOG(
+			LogNoPhotos,
+			Warning,
+			TEXT("[%s] Relic remained displayed after the Grab release signal. Relic=%s"),
+			*GetNameSafe(this),
+			*GetNameSafe(Relic));
+		return;
+	}
+
+	const bool bSimulatingPhysics = RootPrimitive->IsSimulatingPhysics();
+	UE_LOG(
+		LogNoPhotos,
+		Log,
+		TEXT("[%s] Relic Rope release applied. Relic=%s Root=%s SimulatingPhysics=%s CanEditSimulatePhysics=%s CollisionEnabled=%d"),
+		*GetNameSafe(this),
+		*GetNameSafe(Relic),
+		*GetNameSafe(RootPrimitive),
+		bSimulatingPhysics ? TEXT("true") : TEXT("false"),
+		RootPrimitive->CanEditSimulatePhysics()
+			? TEXT("true")
+			: TEXT("false"),
+		static_cast<int32>(RootPrimitive->GetCollisionEnabled()));
+	if (!bSimulatingPhysics)
+	{
+		UE_LOG(
+			LogNoPhotos,
+			Warning,
+			TEXT("[%s] Relic release completed, but RootComponent is not simulating physics. Check the RelicMesh asset and physics collision settings."),
+			*GetNameSafe(this));
+	}
 }
 
 void ANPRelicRopeSetup::UpdateRopeRelease(float DeltaSeconds)
