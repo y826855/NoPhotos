@@ -132,6 +132,7 @@ void ANPBreakableRelic::ApplyBrokenState()
 	{
 		return;
 	}
+	GrabbableComponent->SetGrabEnabled(false);
 
 	if (!bBrokenEventDispatched)
 	{

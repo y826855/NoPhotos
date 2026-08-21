@@ -11,6 +11,18 @@ UGrabbableComponent::UGrabbableComponent()
 void UGrabbableComponent::SetGrabEnabled(bool bEnabled)
 {
 	bGrabEnabled = bEnabled;
+	if (!bGrabEnabled)
+	{
+		ForceReleaseAllGrabs();
+	}
+}
+
+void UGrabbableComponent::ForceReleaseAllGrabs()
+{
+	if (ActiveGrabCount > 0)
+	{
+		OnForceReleaseAllGrabs.Broadcast();
+	}
 }
 
 UPrimitiveComponent* UGrabbableComponent::ResolveGrabTarget(

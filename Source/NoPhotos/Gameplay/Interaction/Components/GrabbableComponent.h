@@ -13,6 +13,7 @@ DECLARE_MULTICAST_DELEGATE_ThreeParams(
 	const FVector&,
 	float);
 DECLARE_MULTICAST_DELEGATE(FOnGrabEnded);
+DECLARE_MULTICAST_DELEGATE(FOnForceReleaseAllGrabs);
 
 UCLASS(ClassGroup=(Interaction), meta=(BlueprintSpawnableComponent))
 class NOPHOTOS_API UGrabbableComponent : public UActorComponent
@@ -37,6 +38,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Interaction")
 	void SetGrabEnabled(bool bEnabled);
 
+	UFUNCTION(BlueprintCallable, Category="Interaction")
+	void ForceReleaseAllGrabs();
+
 	UPrimitiveComponent* ResolveGrabTarget(UPrimitiveComponent* DetectedComponent) const;
 
 	void NotifyGrabStarted(UPrimitiveComponent* GrabbedComponent);
@@ -49,6 +53,7 @@ public:
 	FOnGrabStarted OnGrabStarted;
 	FOnGrabForceUpdated OnGrabForceUpdated;
 	FOnGrabEnded OnGrabEnded;
+	FOnForceReleaseAllGrabs OnForceReleaseAllGrabs;
 
 private:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Interaction", meta=(AllowPrivateAccess="true"))
