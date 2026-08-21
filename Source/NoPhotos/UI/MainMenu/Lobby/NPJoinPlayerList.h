@@ -6,6 +6,7 @@
 
 class UVerticalBox;
 class UNPJoinPlayer;
+class ANPRoomGameState;
 
 UCLASS()
 class NOPHOTOS_API UNPJoinPlayerList : public UNPUserWidget
@@ -23,6 +24,7 @@ private:
 	TSubclassOf<UNPJoinPlayer> JoinPlayerWidgetClass;
 	
 	FTimerHandle PlayerNameRefreshTimer;
+	TWeakObjectPtr<ANPRoomGameState> BoundRoomGameState;
 	
 	UFUNCTION()
 	void OnRoomStateChanged();

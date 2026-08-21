@@ -334,6 +334,10 @@ bool ANPRoomGameMode::TryActivateExistingWaitingRoom()
 	{
 		return true;
 	}
+	if (GetNetMode() != NM_ListenServer)
+	{
+		return false;
+	}
 
 	UGameInstance* GameInstance = GetGameInstance();
 	UNPRoomSubsystem* RoomSubsystem = GameInstance ? GameInstance->GetSubsystem<UNPRoomSubsystem>() : nullptr;

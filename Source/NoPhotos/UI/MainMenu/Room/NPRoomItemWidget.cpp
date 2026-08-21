@@ -22,13 +22,25 @@ void UNPRoomItemWidget::NativeDestruct()
 	Super::NativeDestruct();
 }
 
-void UNPRoomItemWidget::SetupRoomInfo(int32 InRoomNumber, int32 CurrentPlayers, int32 MaxPlayers)
+void UNPRoomItemWidget::SetupRoomInfo(
+	const int32 InRoomNumber,
+	const FString& HostName,
+	const int32 CurrentPlayers,
+	const int32 MaxPlayers)
 {
 	RoomNumber = InRoomNumber;
 
 	if (IsValid(RoomNameText))
 	{
-		RoomNameText->SetText(FText::FromString(FString::Printf(TEXT("방 #%d"), RoomNumber)));
+		const FString RoomTitle = HostName.IsEmpty()
+			? FString::Printf(TEXT("방 #%d"), RoomNumber)
+			: FString::Printf(TEXT("%s님의 방"), *HostName);
+		RoomNameText->SetText(FText::FromString(RoomTitle));
+	}
+
+	if (IsValid(HostNameText))
+	{
+		HostNameText->SetText(FText::FromString(HostName));
 	}
 
 	if (IsValid(PlayerCountText))

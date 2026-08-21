@@ -1,8 +1,17 @@
 #include "UI/MainMenu/NPMainMenuWidget.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/Border.h"
 #include "Components/Button.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/TextBlock.h"
 #include "Core/NPPlayerController.h"
+#include "Core/Room/NPRoomSubsystem.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "SubSystem/NPUIManagerSubsystem.h"
+#include "TimerManager.h"
 
 UNPMainMenuWidget::UNPMainMenuWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -28,12 +37,27 @@ void UNPMainMenuWidget::NativeConstruct()
 	{
 		ExitButton->OnClicked.AddDynamic(this, &UNPMainMenuWidget::OnExitClicked);
 	}
+
+	if (UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (UNPRoomSubsystem* RoomSubsystem = GameInstance->GetSubsystem<UNPRoomSubsystem>())
+		{
+			FText FailureMessage;
+			if (RoomSubsystem->ConsumeConnectionFailureMessage(FailureMessage))
+			{
+				ShowConnectionFailureMessage(FailureMessage);
+			}
+		}
+	}
 }
 
 void UNPMainMenuWidget::NativeDestruct()
 {
-	Super::NativeDestruct();
-	
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(ConnectionFailureMessageTimer);
+	}
+
 	if (IsValid(HostButton))
 	{
 		HostButton->OnClicked.RemoveAll(this);
@@ -48,6 +72,8 @@ void UNPMainMenuWidget::NativeDestruct()
 	{
 		ExitButton->OnClicked.RemoveAll(this);
 	}
+
+	Super::NativeDestruct();
 }
 
 void UNPMainMenuWidget::OnHostGameClicked()
@@ -77,4 +103,59 @@ void UNPMainMenuWidget::OnExitClicked()
 {
 	APlayerController* PC = GetOwningPlayer();
 	UKismetSystemLibrary::QuitGame(GetWorld(), PC, EQuitPreference::Quit, false);
+}
+
+void UNPMainMenuWidget::ShowConnectionFailureMessage(const FText& Message)
+{
+	UCanvasPanel* RootCanvas = WidgetTree
+		? Cast<UCanvasPanel>(WidgetTree->RootWidget)
+		: nullptr;
+	if (!RootCanvas)
+	{
+		return;
+	}
+
+	ConnectionFailureBanner = WidgetTree->ConstructWidget<UBorder>();
+	UTextBlock* MessageText = WidgetTree->ConstructWidget<UTextBlock>();
+	if (!ConnectionFailureBanner || !MessageText)
+	{
+		ConnectionFailureBanner = nullptr;
+		return;
+	}
+
+	ConnectionFailureBanner->SetBrushColor(FLinearColor(0.35f, 0.02f, 0.02f, 0.95f));
+	ConnectionFailureBanner->SetPadding(FMargin(24.0f, 12.0f));
+	ConnectionFailureBanner->SetContent(MessageText);
+	MessageText->SetText(Message);
+	MessageText->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+	MessageText->SetJustification(ETextJustify::Center);
+	MessageText->SetAutoWrapText(true);
+	FSlateFontInfo Font = MessageText->GetFont();
+	Font.Size = 24;
+	MessageText->SetFont(Font);
+
+	UCanvasPanelSlot* BannerSlot = RootCanvas->AddChildToCanvas(ConnectionFailureBanner);
+	BannerSlot->SetAnchors(FAnchors(0.5f, 0.0f));
+	BannerSlot->SetAlignment(FVector2D(0.5f, 0.0f));
+	BannerSlot->SetPosition(FVector2D(0.0f, 60.0f));
+	BannerSlot->SetSize(FVector2D(720.0f, 80.0f));
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			ConnectionFailureMessageTimer,
+			this,
+			&UNPMainMenuWidget::HideConnectionFailureMessage,
+			6.0f,
+			false);
+	}
+}
+
+void UNPMainMenuWidget::HideConnectionFailureMessage()
+{
+	if (IsValid(ConnectionFailureBanner))
+	{
+		ConnectionFailureBanner->RemoveFromParent();
+		ConnectionFailureBanner = nullptr;
+	}
 }

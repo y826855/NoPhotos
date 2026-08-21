@@ -16,8 +16,9 @@ class NOPHOTOS_API UNPRoomItemWidget : public UNPUserWidget
 	GENERATED_BODY()
 
 public:
-	// 방 정보(방 번호, 현재 인원, 최대 인원) 데이터 세팅
-	void SetupRoomInfo(int32 InRoomNumber, int32 CurrentPlayers, int32 MaxPlayers);
+	// 방 정보(방 번호, 호스트 이름, 현재 인원, 최대 인원) 데이터 세팅
+	UFUNCTION(BlueprintCallable, Category = "Room")
+	void SetupRoomInfo(int32 InRoomNumber, const FString& HostName, int32 CurrentPlayers, int32 MaxPlayers);
 
 	FOnRoomSelectedDelegate OnRoomSelected;
 
@@ -28,6 +29,8 @@ protected:
 private:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> RoomNameText;
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> HostNameText;
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> PlayerCountText;
 	UPROPERTY(meta = (BindWidget))

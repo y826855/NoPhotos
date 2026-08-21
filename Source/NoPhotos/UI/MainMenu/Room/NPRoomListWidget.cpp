@@ -81,15 +81,17 @@ void UNPRoomListWidget::RefreshRoomList()
 	UNPRoomSubsystem* RoomSubsystem = GI ? GI->GetSubsystem<UNPRoomSubsystem>() : nullptr;
 	if (!IsValid(RoomSubsystem)) return;
 
-	const TArray<int32>& RoomIndices = RoomSubsystem->GetListedRoomResultIndices();
-	for (int32 Index = 0; Index < RoomIndices.Num(); ++Index)
+	const TArray<FNPRoomListEntry> Rooms = RoomSubsystem->GetListedRooms();
+	for (const FNPRoomListEntry& Room : Rooms)
 	{
-		const int32 RoomNumber = Index + 1;
 		UNPRoomItemWidget* ItemWidget = CreateWidget<UNPRoomItemWidget>(this, RoomItemClass);
 		if (IsValid(ItemWidget))
 		{
-			//현재 인원/최대 인원 데이터 세팅
-			ItemWidget->SetupRoomInfo(RoomNumber, 1, 6);
+			ItemWidget->SetupRoomInfo(
+				Room.RoomNumber,
+				Room.HostName,
+				Room.CurrentPlayers,
+				Room.MaxPlayers);
 			ItemWidget->OnRoomSelected.AddDynamic(this, &UNPRoomListWidget::OnRoomItemSelected);
 			RoomListScrollBox->AddChild(ItemWidget);
 		}

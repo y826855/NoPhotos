@@ -18,15 +18,25 @@ void UNPImpactReceiveComponent::BeginPlay()
 	CurrentHealth = MaxHealth;
 
 	AActor* Owner = GetOwner();
-	UPrimitiveComponent* CollisionComponent = Owner
-		? Cast<UPrimitiveComponent>(Owner->GetRootComponent())
-		: nullptr;
+	UPrimitiveComponent* CollisionComponent = ImpactTargetComponent;
+	if (!CollisionComponent)
+	{
+		CollisionComponent = Owner
+			? Cast<UPrimitiveComponent>(Owner->GetRootComponent())
+			: nullptr;
+	}
 	if (CollisionComponent)
 	{
 		CollisionComponent->OnComponentHit.AddDynamic(
 			this,
 			&UNPImpactReceiveComponent::HandleHit);
 	}
+}
+
+void UNPImpactReceiveComponent::SetImpactTargetComponent(
+	UPrimitiveComponent* InTargetComponent)
+{
+	ImpactTargetComponent = InTargetComponent;
 }
 
 void UNPImpactReceiveComponent::IgnoreGrabImpact()
