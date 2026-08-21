@@ -7,7 +7,6 @@
 
 class UGrabbableComponent;
 class UPrimitiveComponent;
-class UStaticMeshComponent;
 class FLifetimeProperty;
 class APlayerState;
 
@@ -17,7 +16,8 @@ class NOPHOTOS_API ANPBaseRelic : public AActor
 	GENERATED_BODY()
 
 public:
-	ANPBaseRelic();
+	ANPBaseRelic(
+		const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	UFUNCTION(BlueprintPure, Category="Relic")
@@ -44,6 +44,8 @@ public:
 	bool TryMarkReturned();
 
 protected:
+	static const FName RelicComponentName;
+
 	virtual void BeginPlay() override;
 
 	UFUNCTION()
@@ -56,7 +58,7 @@ protected:
 	void HandleGrabStarted(UPrimitiveComponent* GrabbedComponent);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
-	TObjectPtr<UStaticMeshComponent> RelicMesh;
+	TObjectPtr<UPrimitiveComponent> RelicMesh;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	TObjectPtr<UGrabbableComponent> GrabbableComponent;

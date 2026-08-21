@@ -1,26 +1,69 @@
 #include "Gameplay/Relic/NPBreakableRelic.h"
 
-#include "Components/StaticMeshComponent.h"
-#include "Engine/StaticMesh.h"
+#include "Gameplay/Interaction/Components/GrabbableComponent.h"
+#include "Gameplay/Relic/Components/NPImpactReceiveComponent.h"
+#include "GeometryCollection/GeometryCollectionComponent.h"
 #include "Net/UnrealNetwork.h"
-#include "NoPhotos.h"
 
-ANPBreakableRelic::ANPBreakableRelic()
+ANPBreakableRelic::ANPBreakableRelic(
+	const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer.SetDefaultSubobjectClass<
+		UGeometryCollectionComponent>(RelicComponentName))
 {
-	RelicMesh->SetNotifyRigidBodyCollision(true);
+	GeometryCollectionComponent = CastChecked<UGeometryCollectionComponent>(RelicMesh);
+	GeometryCollectionComponent->ObjectType =
+		EObjectStateTypeEnum::Chaos_Object_Dynamic;
+	GeometryCollectionComponent->SetCollisionResponseToChannel(
+		ECC_Destructible,
+		ECR_Ignore);
+	GeometryCollectionComponent->SetNotifyRigidBodyCollision(true);
+
+	ImpactReceiveComponent = CreateDefaultSubobject<UNPImpactReceiveComponent>(
+		TEXT("ImpactReceiveComponent"));
 }
 
 void ANPBreakableRelic::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (!IntactMesh)
+	if (GeometryCollectionComponent->GetRestCollection())
 	{
-		IntactMesh = RelicMesh->GetStaticMesh();
+		GeometryCollectionComponent->SetVisibility(true, true);
+		GeometryCollectionComponent->SetHiddenInGame(false, true);
+		GeometryCollectionComponent->SetIsReplicated(false);
+		GeometryCollectionComponent->SetEnableReplication(false);
+		GeometryCollectionComponent->ForceBrokenForCustomRenderer(true);
+		GeometryCollectionComponent->SetEnableDamageFromCollision(false);
+		GeometryCollectionComponent->SetNotifyBreaks(true);
+		GeometryCollectionComponent->SetCollisionEnabled(
+			ECollisionEnabled::QueryAndPhysics);
+		GeometryCollectionComponent->SetEnableGravity(true);
+		if (!bIsBroken)
+		{
+			GeometryCollectionComponent->SetSimulatePhysics(true);
+			if (IsDisplayed())
+			{
+				const int32 RootIndex = GeometryCollectionComponent->GetRootIndex();
+				if (RootIndex != INDEX_NONE)
+				{
+					GeometryCollectionComponent->SetAnchoredByIndex(
+						RootIndex,
+						true);
+				}
+			}
+		}
 	}
 
 	ApplyBrokenState();
-	RelicMesh->OnComponentHit.AddDynamic(this, &ANPBreakableRelic::HandleRelicHit);
+	ImpactReceiveComponent->OnDamaged.AddUObject(
+		this,
+		&ANPBreakableRelic::HandleDurabilityDamaged);
+	ImpactReceiveComponent->OnDepleted.AddUObject(
+		this,
+		&ANPBreakableRelic::HandleDurabilityDepleted);
+	GrabbableComponent->OnGrabStarted.AddUObject(
+		this,
+		&ANPBreakableRelic::HandleBreakableGrabStarted);
 }
 
 void ANPBreakableRelic::GetLifetimeReplicatedProps(
@@ -28,67 +71,117 @@ void ANPBreakableRelic::GetLifetimeReplicatedProps(
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ANPBreakableRelic, bIsBroken);
+	DOREPLIFETIME(ANPBreakableRelic, BreakLocation);
 }
 
 void ANPBreakableRelic::OnRep_IsBroken()
 {
+	// Multicast를 놓치는 늦은 접속 클라이언트를 위한 보조 경로입니다.
 	ApplyBrokenState();
 }
 
-void ANPBreakableRelic::HandleRelicHit(
-	UPrimitiveComponent* HitComponent,
-	AActor* OtherActor,
-	UPrimitiveComponent* OtherComponent,
-	const FVector NormalImpulse,
-	const FHitResult& Hit)
+void ANPBreakableRelic::MulticastBreakRelic_Implementation(
+	const FVector_NetQuantize10 InBreakLocation)
 {
-	if (!HasAuthority() || bIsBroken)
-	{
-		return;
-	}
-
-	const float ImpactStrength = NormalImpulse.Size();
-	if (ImpactStrength >= BreakImpactThreshold)
-	{
-		BreakRelic(ImpactStrength);
-	}
-}
-
-void ANPBreakableRelic::BreakRelic(const float ImpactStrength)
-{
-	if (!HasAuthority() || bIsBroken)
-	{
-		return;
-	}
-
+	BreakLocation = InBreakLocation;
 	bIsBroken = true;
 	ApplyBrokenState();
-	ForceNetUpdate();
+}
 
-	UE_LOG(
-		LogNoPhotos,
-		Log,
-		TEXT("[%s] Relic broken. Impact=%.1f Threshold=%.1f"),
-		*GetNameSafe(this),
-		ImpactStrength,
-		BreakImpactThreshold);
+void ANPBreakableRelic::HandleDurabilityDamaged(
+	const int32 Damage,
+	const int32 CurrentHealth,
+	const int32 MaxHealth)
+{
+	OnRelicDamaged(Damage, CurrentHealth, MaxHealth);
+}
+
+void ANPBreakableRelic::HandleDurabilityDepleted(
+	const FVector& ImpactLocation)
+{
+	BreakRelic(ImpactLocation);
+}
+
+void ANPBreakableRelic::HandleBreakableGrabStarted(
+	UPrimitiveComponent* GrabbedComponent)
+{
+	ImpactReceiveComponent->IgnoreGrabImpact();
+	if (GeometryCollectionComponent)
+	{
+		GeometryCollectionComponent->RemoveAllAnchors();
+	}
+}
+
+void ANPBreakableRelic::BreakRelic(
+	const FVector& ImpactLocation)
+{
+	if (!HasAuthority() || bIsBroken)
+	{
+		return;
+	}
+
+	BreakLocation = ImpactLocation;
+	bIsBroken = true;
+	MulticastBreakRelic(BreakLocation);
+	ForceNetUpdate();
 }
 
 void ANPBreakableRelic::ApplyBrokenState()
 {
-	UStaticMesh* TargetMesh = bIsBroken ? BrokenMesh.Get() : IntactMesh.Get();
-	if (TargetMesh)
+	if (!bIsBroken)
 	{
-		RelicMesh->SetStaticMesh(TargetMesh);
 		return;
 	}
 
-	if (bIsBroken)
+	if (!bBrokenEventDispatched)
 	{
-		UE_LOG(
-			LogNoPhotos,
-			Warning,
-			TEXT("[%s] Relic is broken but BrokenMesh is not assigned."),
-			*GetNameSafe(this));
+		bBrokenEventDispatched = true;
+		OnRelicBroken();
 	}
+
+	if (bClusterBreakApplied)
+	{
+		return;
+	}
+
+	if (!IsValid(GeometryCollectionComponent))
+	{
+		return;
+	}
+
+	bClusterBreakApplied = true;
+	GeometryCollectionComponent->SetMobility(EComponentMobility::Movable);
+	GeometryCollectionComponent->SetVisibility(true, true);
+	GeometryCollectionComponent->SetHiddenInGame(false, true);
+	GeometryCollectionComponent->Activate(true);
+
+	GeometryCollectionComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	GeometryCollectionComponent->SetCollisionObjectType(ECC_Destructible);
+	GeometryCollectionComponent->ObjectType = EObjectStateTypeEnum::Chaos_Object_Dynamic;
+	GeometryCollectionComponent->SetEnableGravity(true);
+	// Cluster를 해제하기 전에 동적 물리 상태를 보장합니다.
+	GeometryCollectionComponent->SetSimulatePhysics(true);
+	GeometryCollectionComponent->RemoveAllAnchors();
+	GeometryCollectionComponent->WakeAllRigidBodies();
+
+	BreakRootCluster();
+}
+
+void ANPBreakableRelic::BreakRootCluster()
+{
+	if (!IsValid(GeometryCollectionComponent) || !bIsBroken)
+	{
+		return;
+	}
+
+	GeometryCollectionComponent->SetEnableGravity(true);
+	GeometryCollectionComponent->SetSimulatePhysics(true);
+	GeometryCollectionComponent->WakeAllRigidBodies();
+	const int32 RootIndex = GeometryCollectionComponent->GetRootIndex();
+	if (RootIndex == INDEX_NONE)
+	{
+		return;
+	}
+
+	GeometryCollectionComponent->CrumbleCluster(RootIndex);
 }
