@@ -15,34 +15,45 @@ class NOPHOTOS_API ANPMainPlayerController : public ANoPhotosPlayerController
 	GENERATED_BODY()
 
 public:
+	ANPMainPlayerController();
+
+	UFUNCTION(BlueprintPure, Category = "Room")
+	bool IsListenServerHost() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Room")
+	void RequestRestartRoom();
+	UFUNCTION(BlueprintCallable, Category = "Room")
+    void ExitToMainMenu();
+
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void ShowGameScreenUI();
-
 	UFUNCTION(Client, Reliable)
 	void ClientShowGameScreenUI();
 
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void ShowSelectPictureUI();
-
 	UFUNCTION(Client, Reliable)
 	void ClientShowSelectPictureUI();
 
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void ShowResultUI();
-
 	UFUNCTION(Client, Reliable)
 	void ClientShowResultUI();
 
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UNPUserWidget> GameScreenWidgetClass;
-
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UNPUserWidget> SelectPictureWidgetClass;
-
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UNPUserWidget> ResultWidgetClass;
+	
+	UPROPERTY(EditDefaultsOnly, Category = "Room")
+    TSoftObjectPtr<UWorld> MainMenuLevel;
 
 private:
+	UFUNCTION(Server, Reliable)
+	void ServerRequestRestartRoom();
+
 	void ShowSingleScreen(TSubclassOf<UNPUserWidget> WidgetClass);
 };

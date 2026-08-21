@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/GameModeBase.h"
+#include "GameFramework/GameMode.h"
 #include "Gameplay/Photo/NPPhotoEvidenceTypes.h"
 #include "NoPhotosGameMode.generated.h"
 
@@ -16,7 +16,7 @@ class APlayerController;
  *  Simple GameMode for a third person game
  */
 UCLASS(abstract)
-class ANoPhotosGameMode : public AGameModeBase
+class ANoPhotosGameMode : public AGameMode
 {
 	GENERATED_BODY()
 

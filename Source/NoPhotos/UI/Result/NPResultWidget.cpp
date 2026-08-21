@@ -1,7 +1,7 @@
 #include "UI/Result/NPResultWidget.h"
 
 #include "Components/Button.h"
-#include "Core/NPPlayerController.h"
+#include "Core/Main/NPMainPlayerController.h"
 
 UNPResultWidget::UNPResultWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -12,8 +12,8 @@ void UNPResultWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	ANPPlayerController* NPPC = Cast<ANPPlayerController>(GetOwningPlayer());
-	const bool bIsRoomHost = IsValid(NPPC) && NPPC->IsRoomHost();
+	ANPMainPlayerController* NPPC = Cast<ANPMainPlayerController>(GetOwningPlayer());
+	const bool bIsRoomHost = IsValid(NPPC) && NPPC->IsListenServerHost();
 
 	if (IsValid(RetryButton))
 	{
@@ -49,8 +49,8 @@ void UNPResultWidget::NativeDestruct()
 
 void UNPResultWidget::OnRetryClicked()
 {
-	ANPPlayerController* NPPC = Cast<ANPPlayerController>(GetOwningPlayer());
-	if (!IsValid(NPPC) || !NPPC->IsRoomHost())
+	ANPMainPlayerController* NPPC = Cast<ANPMainPlayerController>(GetOwningPlayer());
+	if (!IsValid(NPPC) || !NPPC->IsListenServerHost())
 	{
 		return;
 	}
@@ -60,8 +60,8 @@ void UNPResultWidget::OnRetryClicked()
 
 void UNPResultWidget::OnExitClicked()
 {
-	if (ANPPlayerController* NPPC = Cast<ANPPlayerController>(GetOwningPlayer()))
+	if (ANPMainPlayerController* NPPC=Cast<ANPMainPlayerController>(GetOwningPlayer()))
 	{
-		NPPC->ExitRoom();
+		NPPC->ExitToMainMenu();
 	}
 }
