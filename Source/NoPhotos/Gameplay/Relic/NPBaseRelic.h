@@ -27,13 +27,16 @@ public:
 
 	void SetUnlocked(bool bUnlocked);
 
+	/** 전시 고정 상태를 끝내고 RelicMesh의 물리 시뮬레이션을 활성화합니다. */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category="Relic")
+	void ReleaseFromDisplay();
+
 protected:
 	virtual void BeginPlay() override;
 
 	UFUNCTION()
 	void OnRep_IsDisplayed();
 
-	void ReleaseFromDisplay();
 	void HandleGrabStarted(UPrimitiveComponent* GrabbedComponent);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")

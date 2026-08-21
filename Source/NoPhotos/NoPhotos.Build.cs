@@ -18,6 +18,7 @@ public class NoPhotos : ModuleRules
 			"ChaosSolverEngine",
 			"StateTreeModule",
 			"GameplayStateTreeModule",
+			"CableComponent",
 			"UMG",
 			"Slate",
 			"OnlineSubsystem"
