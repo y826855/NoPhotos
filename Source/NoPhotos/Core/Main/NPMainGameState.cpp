@@ -4,7 +4,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Net/UnrealNetwork.h"
 #include "NPMainGameLog.h"
-#include "Core/NPPlayerController.h"
+#include "Core/Main/NPMainPlayerController.h"
 
 void ANPMainGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -122,7 +122,7 @@ void ANPMainGameState::FinishMainGame()
 	
 	for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator;	++Iterator)
 	{
-		ANPPlayerController* NPPlayerController = Cast<ANPPlayerController>(Iterator->Get());
+		ANPMainPlayerController* NPPlayerController = Cast<ANPMainPlayerController>(Iterator->Get());
 
 		if (IsValid(NPPlayerController))
 		{

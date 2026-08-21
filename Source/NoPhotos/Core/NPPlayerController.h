@@ -9,7 +9,6 @@
 class UInputMappingContext;
 class UNPRoomPlayerComponent;
 class UUserWidget;
-class UNPUserWidget;
 
 UCLASS()
 class NOPHOTOS_API ANPPlayerController : public APlayerController
@@ -75,42 +74,4 @@ protected:
 	UFUNCTION(Client, Reliable)
 	void ClientLeaveRoom();
 	
-#pragma region UI
-public: 
-	UFUNCTION(BlueprintCallable, Category = "UI")
-	void ShowMainMenuUI();
-	UFUNCTION(Client, Reliable)
-	void ClientShowMainMenuUI();
-	UFUNCTION(BlueprintCallable, Category = "UI")
-	void ShowLobbyUI();
-	UFUNCTION(Client, Reliable)
-	void ClientShowLobbyUI();
-	UFUNCTION(BlueprintCallable, Category = "UI")
-	void ShowGameScreenUI();
-	UFUNCTION(Client, Reliable)
-	void ClientShowGameScreenUI();
-	UFUNCTION(BlueprintCallable, Category = "UI")
-	void ShowSelectPictureUI();
-	UFUNCTION(Client, Reliable)
-	void ClientShowSelectPictureUI();
-	UFUNCTION(BlueprintCallable, Category = "UI")
-	void ShowResultUI();
-	UFUNCTION(Client, Reliable)
-	void ClientShowResultUI();
-	
-protected:
-	UPROPERTY(EditDefaultsOnly, Category = "UI")
-	TSubclassOf<UNPUserWidget> MainMenuWidgetClass;
-	UPROPERTY(EditDefaultsOnly, Category = "UI")
-	TSubclassOf<UNPUserWidget> LobbyWidgetClass;
-	UPROPERTY(EditDefaultsOnly, Category = "UI")
-    TSubclassOf<UNPUserWidget> GameScreenWidgetClass;
-	UPROPERTY(EditDefaultsOnly, Category = "UI")
-	TSubclassOf<UNPUserWidget> SelectPictureWidgetClass;
-	UPROPERTY(EditDefaultsOnly, Category = "UI")
-    TSubclassOf<UNPUserWidget> ResultWidgetClass;
-	
-private:
-	void ShowSingleScreen(TSubclassOf<UNPUserWidget> WidgetClass);
-#pragma endregion
 };

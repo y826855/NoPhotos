@@ -16,8 +16,6 @@
 #include "Room/NPRoomCheatManager.h"
 #include "Room/NPRoomLog.h"
 #include "Room/NPRoomSubsystem.h"
-#include "SubSystem/NPUIManagerSubsystem.h"
-#include "UI/NPUserWidget.h"
 
 ANPPlayerController::ANPPlayerController()
 {
@@ -151,75 +149,3 @@ void ANPPlayerController::ClientLeaveRoom_Implementation()
 	
 }
 
-#pragma region UI
-
-void ANPPlayerController::ShowMainMenuUI()
-{
-	ShowSingleScreen(MainMenuWidgetClass);
-}
-void ANPPlayerController::ClientShowMainMenuUI_Implementation()
-{
-	ShowMainMenuUI();
-}
-
-void ANPPlayerController::ShowLobbyUI()
-{
-	ShowSingleScreen(LobbyWidgetClass);
-}
-void ANPPlayerController::ClientShowLobbyUI_Implementation()
-{
-	ShowLobbyUI();
-}
-
-void ANPPlayerController::ShowGameScreenUI()
-{
-	ShowSingleScreen(GameScreenWidgetClass);
-}
-void ANPPlayerController::ClientShowGameScreenUI_Implementation()
-{
-	ShowGameScreenUI();
-}
-
-void ANPPlayerController::ShowSelectPictureUI()
-{
-	ShowSingleScreen(SelectPictureWidgetClass);
-}
-void ANPPlayerController::ClientShowSelectPictureUI_Implementation()
-{
-	ShowSelectPictureUI();
-}
-
-void ANPPlayerController::ShowResultUI()
-{
-	ShowSingleScreen(ResultWidgetClass);
-}
-
-void ANPPlayerController::ClientShowResultUI_Implementation()
-{
-	ShowResultUI();
-}
-
-void ANPPlayerController::ShowSingleScreen(TSubclassOf<UNPUserWidget> WidgetClass)
-{
-	if (!IsLocalController() || !IsValid(WidgetClass))
-	{
-		return;
-	}
-
-	UGameInstance* GameInstance = GetGameInstance();
-	if (!IsValid(GameInstance))
-	{
-		return;
-	}
-
-	UNPUIManagerSubsystem* UIManager =
-		GameInstance->GetSubsystem<UNPUIManagerSubsystem>();
-	if (!IsValid(UIManager))
-	{
-		return;
-	}
-
-	UIManager->PopAllWidgets();
-	UIManager->PushWidget(WidgetClass);
-}
-#pragma endregion

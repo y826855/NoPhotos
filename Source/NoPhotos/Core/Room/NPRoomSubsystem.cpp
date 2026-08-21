@@ -17,7 +17,7 @@
 #include "OnlineSubsystem.h"
 #include "OnlineSubsystemUtils.h"
 #include "TimerManager.h"
-#include "Core/NPPlayerController.h"
+#include "Core/Room/NPRoomPlayerController.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 
@@ -659,7 +659,7 @@ void UNPRoomSubsystem::HandleCreateSessionComplete(const FName SessionName, cons
 		return;
 	}
 	
-	if (ANPPlayerController* HostPC = Cast<ANPPlayerController>(HostPlayer))
+	if (ANPRoomPlayerController* HostPC = Cast<ANPRoomPlayerController>(HostPlayer))
 	{
 		HostPC->ShowLobbyUI();
 	}

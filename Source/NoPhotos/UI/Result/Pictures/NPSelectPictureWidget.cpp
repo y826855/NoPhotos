@@ -5,7 +5,7 @@
 #include "Engine/Texture2D.h"
 #include "UI/Result/Pictures/NPPictureList.h"
 #include "UI/Result/Pictures/NPShowPicture.h"
-#include "Core/NPPlayerController.h"
+#include "Core/Main/NPMainPlayerController.h"
 
 void UNPSelectPictureWidget::NativeConstruct()
 {
@@ -111,7 +111,7 @@ void UNPSelectPictureWidget::HandleNextButtonClicked()
 
 	BP_OnSelectionConfirmed(SelectedPictureIndices);
 
-	if (ANPPlayerController* NPPlayerController=Cast<ANPPlayerController>(GetOwningPlayer()))
+	if (ANPMainPlayerController* NPPlayerController=Cast<ANPMainPlayerController>(GetOwningPlayer()))
 	{
 		NPPlayerController->ShowResultUI();
 	}

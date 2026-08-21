@@ -1,7 +1,7 @@
 #include "NPRoomGameMode.h"
 
 #include "Core/Component/NPRoomPlayerComponent.h"
-#include "Core/NPPlayerController.h"
+#include "Core/Room/NPRoomPlayerController.h"
 #include "Core/NPPlayerState.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -15,7 +15,7 @@
 ANPRoomGameMode::ANPRoomGameMode()
 {
 	GameStateClass = ANPRoomGameState::StaticClass();
-	PlayerControllerClass = ANPPlayerController::StaticClass();
+	PlayerControllerClass = ANPRoomPlayerController::StaticClass();
 	PlayerStateClass = ANPPlayerState::StaticClass();
 	bUseSeamlessTravel = true;
 }
@@ -39,7 +39,7 @@ void ANPRoomGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
 
-	ANPPlayerController* NPPC = Cast<ANPPlayerController>(NewPlayer);
+	ANPRoomPlayerController* NPPC = Cast<ANPRoomPlayerController>(NewPlayer);
 	if (!IsValid(NPPC))
 	{
 		return;
@@ -132,7 +132,7 @@ void ANPRoomGameMode::HandleSeamlessTravelPlayer(AController*& Controller)
 
 	RestoreReturningPlayer(Controller);
 
-	if (ANPPlayerController* NPPlayerController = Cast<ANPPlayerController>(Controller))
+	if (ANPRoomPlayerController* NPPlayerController = Cast<ANPRoomPlayerController>(Controller))
 	{
 		NPPlayerController->ClientShowLobbyUI();
 	}
