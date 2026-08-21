@@ -1,38 +1,48 @@
 #include "Core/Main/NPMainPlayerController.h"
 
 #include "Core/Main/NPMainGameMode.h"
+#include "Core/Main/NPMainGameState.h"
+#include "Core/Room/NPRoomSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
-#include "InputAction.h"
-#include "InputMappingContext.h"
+#include "GameFramework/PlayerState.h"
+#include "NoPhotosGameState.h"
 #include "SubSystem/NPUIManagerSubsystem.h"
 #include "UI/NPUserWidget.h"
 #include "UObject/ConstructorHelpers.h"
-#include "Core/Room/NPRoomSubsystem.h"
+#include "InputAction.h"
+#include "InputMappingContext.h"
+#include "UObject/ConstructorHelpers.h"
 
 ANPMainPlayerController::ANPMainPlayerController()
 {
-	static ConstructorHelpers::FObjectFinder<UInputMappingContext> DefaultMapping(
-		TEXT("/Game/Input/IMC_Default.IMC_Default"));
-	static ConstructorHelpers::FObjectFinder<UInputMappingContext> MouseLookMapping(
-		TEXT("/Game/Input/IMC_MouseLook.IMC_MouseLook"));
-	static ConstructorHelpers::FObjectFinder<UInputAction> PhotoModeAction(
-		TEXT("/Game/Input/Actions/IA_PhotoMode.IA_PhotoMode"));
-	static ConstructorHelpers::FObjectFinder<UInputAction> PhotoShotAction(
-		TEXT("/Game/Input/Actions/IA_PhotoShot.IA_PhotoShot"));
+	static ConstructorHelpers::FObjectFinder<UInputMappingContext>
+	DefaultMapping(TEXT("/Game/Input/IMC_Default.IMC_Default"));
+
+	static ConstructorHelpers::FObjectFinder<UInputMappingContext>
+		MouseLookMapping(TEXT("/Game/Input/IMC_MouseLook.IMC_MouseLook"));
+
+	static ConstructorHelpers::FObjectFinder<UInputAction>
+		PhotoModeAction(TEXT("/Game/Input/Actions/IA_PhotoMode.IA_PhotoMode"));
+
+	static ConstructorHelpers::FObjectFinder<UInputAction>
+		PhotoShotAction(TEXT("/Game/Input/Actions/IA_PhotoShot.IA_PhotoShot"));
 
 	if (DefaultMapping.Succeeded())
 	{
 		DefaultMappingContexts.Add(DefaultMapping.Object);
 	}
+
 	if (MouseLookMapping.Succeeded())
 	{
 		DefaultMappingContexts.Add(MouseLookMapping.Object);
 	}
+
 	if (PhotoModeAction.Succeeded())
 	{
 		TogglePhotoModeAction = PhotoModeAction.Object;
 	}
+
 	if (PhotoShotAction.Succeeded())
 	{
 		TakePhotoAction = PhotoShotAction.Object;
@@ -113,6 +123,58 @@ void ANPMainPlayerController::ClientShowResultUI_Implementation()
 	ShowResultUI();
 }
 
+void ANPMainPlayerController::ServerConfirmPictureSelection_Implementation(
+	const TArray<FGuid>& SelectedPhotoIds)
+{
+	ANPMainGameState* MainGameState = GetWorld()
+		? GetWorld()->GetGameState<ANPMainGameState>()
+		: nullptr;
+
+	ANoPhotosGameState* PhotoGameState = GetWorld()
+		? GetWorld()->GetGameState<ANoPhotosGameState>()
+		: nullptr;
+
+	if (!IsValid(MainGameState)	|| !IsValid(PhotoGameState)	|| !IsValid(PlayerState))
+	{
+		return;
+	}
+
+	//선택된 사진들이 이 플레이어가 찍은 성공 사진인지 검증
+	TSet<FGuid> VerifiedPhotoIds;
+
+	for (const FGuid& PhotoId : SelectedPhotoIds)
+	{
+		if (!PhotoId.IsValid()
+			|| VerifiedPhotoIds.Contains(PhotoId))
+		{
+			return;
+		}
+
+		bool bIsOwnedSuccessPhoto = false;
+
+		for (const FNPReplicatedPhotoEvidence& Evidence :
+			PhotoGameState->GetPhotoEvidence())
+		{
+			if (Evidence.PhotoId == PhotoId
+				&& Evidence.Photographer == PlayerState)
+			{
+				bIsOwnedSuccessPhoto = true;
+				break;
+			}
+		}
+
+		if (!bIsOwnedSuccessPhoto)
+		{
+			return;
+		}
+
+		VerifiedPhotoIds.Add(PhotoId);
+	}
+
+	PhotoGameState->SetSelectedPhotoIds(PlayerState, SelectedPhotoIds);
+	MainGameState->ConfirmPictureSelection(this);
+}
+
 void ANPMainPlayerController::ShowSingleScreen(
 	TSubclassOf<UNPUserWidget> WidgetClass)
 {
@@ -122,9 +184,11 @@ void ANPMainPlayerController::ShowSingleScreen(
 	}
 
 	UGameInstance* GameInstance = GetGameInstance();
+
 	UNPUIManagerSubsystem* UIManager = GameInstance
 		? GameInstance->GetSubsystem<UNPUIManagerSubsystem>()
 		: nullptr;
+
 	if (!UIManager)
 	{
 		return;
@@ -133,4 +197,3 @@ void ANPMainPlayerController::ShowSingleScreen(
 	UIManager->PopAllWidgets();
 	UIManager->PushWidget(WidgetClass);
 }
-

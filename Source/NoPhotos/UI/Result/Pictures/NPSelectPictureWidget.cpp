@@ -2,10 +2,16 @@
 
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
+#include "Core/Main/NPMainPlayerController.h"
 #include "Engine/Texture2D.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
+#include "Gameplay/Photo/NPPhotoTransferComponent.h"
+#include "NoPhotosGameState.h"
+#include "NoPhotosPlayerController.h"
 #include "UI/Result/Pictures/NPPictureList.h"
 #include "UI/Result/Pictures/NPShowPicture.h"
-#include "Core/Main/NPMainPlayerController.h"
 
 void UNPSelectPictureWidget::NativeConstruct()
 {
@@ -32,8 +38,50 @@ void UNPSelectPictureWidget::NativeConstruct()
 			&UNPSelectPictureWidget::HandleNextButtonClicked);
 	}
 
+	if (ANoPhotosPlayerController* Controller =
+		Cast<ANoPhotosPlayerController>(GetOwningPlayer()))
+	{
+		TransferComponent = Controller->GetPhotoTransferComponent();
+		if (IsValid(TransferComponent))
+		{
+			TransferComponent->OnPhotoTextureReceived.AddUniqueDynamic(
+				this,
+				&UNPSelectPictureWidget::HandlePhotoTextureReceived);
+		}
+	}
+
+	ObservedGameState = GetWorld()
+		? GetWorld()->GetGameState<ANoPhotosGameState>()
+		: nullptr;
+
+	if (IsValid(ObservedGameState))
+	{
+		ObservedGameState->OnPhotoEvidenceChanged.AddUniqueDynamic(
+			this,
+			&UNPSelectPictureWidget::HandlePhotoEvidenceChanged);
+	}
+
 	UpdateSelectedPictureCountText();
-	InitializeSamplePictures();
+	RequestOwnedPictures();
+}
+
+void UNPSelectPictureWidget::NativeDestruct()
+{
+	if (IsValid(TransferComponent))
+	{
+		TransferComponent->OnPhotoTextureReceived.RemoveDynamic(
+			this,
+			&UNPSelectPictureWidget::HandlePhotoTextureReceived);
+	}
+
+	if (IsValid(ObservedGameState))
+	{
+		ObservedGameState->OnPhotoEvidenceChanged.RemoveDynamic(
+			this,
+			&UNPSelectPictureWidget::HandlePhotoEvidenceChanged);
+	}
+
+	Super::NativeDestruct();
 }
 
 void UNPSelectPictureWidget::InitializePictures(
@@ -47,6 +95,7 @@ void UNPSelectPictureWidget::InitializePictures(
 	PictureListWidget->ClearPictures();
 
 	PictureTextures.Empty();
+	PicturePhotoIds.Empty();
 	CurrentPictureIndex = INDEX_NONE;
 
 	for (UTexture2D* PictureTexture : InPictures)
@@ -57,6 +106,7 @@ void UNPSelectPictureWidget::InitializePictures(
 		}
 
 		PictureTextures.Add(PictureTexture);
+		PicturePhotoIds.Add(FGuid());
 		PictureListWidget->AddPicture(PictureTexture);
 	}
 
@@ -66,6 +116,22 @@ void UNPSelectPictureWidget::InitializePictures(
 	}
 
 	UpdateSelectedPictureCountText();
+}
+
+TArray<FGuid> UNPSelectPictureWidget::GetSelectedPhotoIds() const
+{
+	TArray<FGuid> SelectedPhotoIds;
+
+	for (const int32 PictureIndex : GetSelectedPictureIndices())
+	{
+		if (PicturePhotoIds.IsValidIndex(PictureIndex)
+			&& PicturePhotoIds[PictureIndex].IsValid())
+		{
+			SelectedPhotoIds.Add(PicturePhotoIds[PictureIndex]);
+		}
+	}
+
+	return SelectedPhotoIds;
 }
 
 void UNPSelectPictureWidget::HandlePictureClicked(
@@ -83,9 +149,9 @@ void UNPSelectPictureWidget::HandleSelectRequested(
 		return;
 	}
 
-	const bool bWasSelected = PictureListWidget->IsPictureSelected(PictureIndex);
+	const bool bWasSelected =
+		PictureListWidget->IsPictureSelected(PictureIndex);
 
-	//사진 선택 해제
 	if (bWasSelected)
 	{
 		PictureListWidget->SetPictureSelected(PictureIndex, false);
@@ -94,8 +160,8 @@ void UNPSelectPictureWidget::HandleSelectRequested(
 		return;
 	}
 
-	//사진 선택은 5장까지만 허용
-	if (PictureListWidget->GetSelectedPictureCount() >= MaxSelectedPictureCount)
+	if (PictureListWidget->GetSelectedPictureCount()
+		>= MaxSelectedPictureCount)
 	{
 		return;
 	}
@@ -107,17 +173,147 @@ void UNPSelectPictureWidget::HandleSelectRequested(
 
 void UNPSelectPictureWidget::HandleNextButtonClicked()
 {
-	const TArray<int32> SelectedPictureIndices = GetSelectedPictureIndices();
-
-	BP_OnSelectionConfirmed(SelectedPictureIndices);
-
-	if (ANPMainPlayerController* NPPlayerController=Cast<ANPMainPlayerController>(GetOwningPlayer()))
+	if (bWaitingForOtherPlayers)
 	{
-		NPPlayerController->ShowResultUI();
+		return;
+	}
+
+	ANPMainPlayerController* MainPlayerController =
+		Cast<ANPMainPlayerController>(GetOwningPlayer());
+
+	if (!IsValid(MainPlayerController))
+	{
+		return;
+	}
+
+	bWaitingForOtherPlayers = true;
+	
+	if (IsValid(NextButton))
+	{
+		NextButton->SetIsEnabled(false);
+	}
+
+	if (IsValid(SelectedPictureCountText))
+	{
+		SelectedPictureCountText->SetText(FText::FromString(TEXT("다른 유저를 기다리는 중...")));
+	}
+
+	BP_OnSelectionConfirmed(GetSelectedPictureIndices());
+	MainPlayerController->ServerConfirmPictureSelection(GetSelectedPhotoIds());
+}
+
+void UNPSelectPictureWidget::HandlePhotoEvidenceChanged()
+{
+	RequestOwnedPictures();
+}
+
+void UNPSelectPictureWidget::RequestOwnedPictures()
+{
+	if (!IsValid(ObservedGameState))
+	{
+		ObservedGameState = GetWorld()
+			? GetWorld()->GetGameState<ANoPhotosGameState>()
+			: nullptr;
+
+		if (IsValid(ObservedGameState))
+		{
+			ObservedGameState->OnPhotoEvidenceChanged.AddUniqueDynamic(
+				this,
+				&UNPSelectPictureWidget::HandlePhotoEvidenceChanged);
+		}
+	}
+
+	APlayerController* OwningPlayer = GetOwningPlayer();
+	APlayerState* LocalPlayerState =
+		IsValid(OwningPlayer) ? OwningPlayer->PlayerState : nullptr;
+
+	if (!IsValid(ObservedGameState) || !IsValid(LocalPlayerState))
+	{
+		return;
+	}
+
+	for (const FNPReplicatedPhotoEvidence& Evidence :
+		ObservedGameState->GetPhotoEvidence())
+	{
+		if (Evidence.Photographer != LocalPlayerState
+			|| !Evidence.PhotoId.IsValid()
+			|| RequestedPhotoIds.Contains(Evidence.PhotoId))
+		{
+			continue;
+		}
+
+		RequestedPhotoIds.Add(Evidence.PhotoId);
+		PendingPhotoIds.Add(Evidence.PhotoId);
+	}
+
+	RequestNextPicture();
+}
+
+void UNPSelectPictureWidget::RequestNextPicture()
+{
+	if (!IsValid(TransferComponent)
+		|| !IsValid(PictureListWidget)
+		|| DownloadingPhotoId.IsValid())
+	{
+		return;
+	}
+
+	while (!PendingPhotoIds.IsEmpty())
+	{
+		const FGuid NextPhotoId = PendingPhotoIds[0];
+		PendingPhotoIds.RemoveAt(0);
+
+		if (!NextPhotoId.IsValid())
+		{
+			continue;
+		}
+
+		DownloadingPhotoId = NextPhotoId;
+
+		if (UTexture2D* CachedTexture =
+			TransferComponent->FindReceivedPhoto(DownloadingPhotoId))
+		{
+			HandlePhotoTextureReceived(
+				DownloadingPhotoId,
+				CachedTexture);
+			return;
+		}
+
+		TransferComponent->RequestPhoto(DownloadingPhotoId);
+		return;
 	}
 }
 
-void UNPSelectPictureWidget::ShowPicture(const int32 PictureIndex)
+void UNPSelectPictureWidget::HandlePhotoTextureReceived(
+	const FGuid PhotoId,
+	UTexture2D* Texture)
+{
+	if (PhotoId != DownloadingPhotoId || !IsValid(Texture))
+	{
+		return;
+	}
+
+	DownloadingPhotoId.Invalidate();
+
+	PictureTextures.Add(Texture);
+	PicturePhotoIds.Add(PhotoId);
+
+	if (IsValid(PictureListWidget))
+	{
+		PictureListWidget->AddPicture(Texture);
+	}
+
+	if (CurrentPictureIndex == INDEX_NONE)
+	{
+		ShowPicture(0);
+	}
+
+	UpdateSelectedPictureCountText();
+	RequestNextPicture();
+}
+
+void UNPSelectPictureWidget::ShowPicture(
+	const int32 PictureIndex)
 {
 	if (!PictureTextures.IsValidIndex(PictureIndex)
 		|| !IsValid(ShowPictureWidget))
@@ -176,33 +372,4 @@ TArray<int32> UNPSelectPictureWidget::GetSelectedPictureIndices() const
 	}
 
 	return SelectedIndices;
-}
-
-//테스트용
-void UNPSelectPictureWidget::InitializeSamplePictures()
-{
-	TArray<UTexture2D*> SamplePictures;
-
-	const TArray<FString> SamplePicturePaths =
-	{
-		TEXT("/Game/NoPhotos/Blueprints/UI/Result/Pictures/SamplePicture/LJJ.LJJ"),
-		TEXT("/Game/NoPhotos/Blueprints/UI/Result/Pictures/SamplePicture/KMU.KMU"),
-		TEXT("/Game/NoPhotos/Blueprints/UI/Result/Pictures/SamplePicture/HWH.HWH"),
-		TEXT("/Game/NoPhotos/Blueprints/UI/Result/Pictures/SamplePicture/CBS.CBS"),
-		TEXT("/Game/NoPhotos/Blueprints/UI/Result/Pictures/SamplePicture/0820_1.0820_1"),
-		TEXT("/Game/NoPhotos/Blueprints/UI/Result/Pictures/SamplePicture/0820.0820"),
-		TEXT("/Game/NoPhotos/Blueprints/UI/Result/Pictures/SamplePicture/0819.0819"),
-		TEXT("/Game/NoPhotos/Blueprints/UI/Result/Pictures/SamplePicture/0818_1.0818_1")
-	};
-
-	for (const FString& PicturePath : SamplePicturePaths)
-	{
-		if (UTexture2D* PictureTexture =
-			LoadObject<UTexture2D>(nullptr, *PicturePath))
-		{
-			SamplePictures.Add(PictureTexture);
-		}
-	}
-
-	InitializePictures(SamplePictures);
 }

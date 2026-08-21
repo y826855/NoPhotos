@@ -1,8 +1,8 @@
 #include "UI/Result/NPResultListWidget.h"
 
 #include "Components/VerticalBox.h"
-#include "Core/NPPlayerState.h"
 #include "Core/Main/NPMainGameState.h"
+#include "Core/NPPlayerState.h"
 #include "UI/Result/NPPersonalResultWidget.h"
 
 void UNPResultListWidget::NativeConstruct()
@@ -19,9 +19,7 @@ void UNPResultListWidget::RefreshResultList()
 		return;
 	}
 
-	ANPMainGameState* NPMGS = GetWorld()
-		? GetWorld()->GetGameState<ANPMainGameState>()
-		: nullptr;
+	ANPMainGameState* NPMGS = GetWorld() ? GetWorld()->GetGameState<ANPMainGameState>()	: nullptr;
 
 	if (!IsValid(NPMGS))
 	{
@@ -35,23 +33,16 @@ void UNPResultListWidget::RefreshResultList()
 	for (int32 RankingIndex = 0; RankingIndex < PlayerRankings.Num(); ++RankingIndex)
 	{
 		const FNPPlayerRanking& Ranking = PlayerRankings[RankingIndex];
-		const FString PlayerName = Ranking.PlayerState
-			? Ranking.PlayerState->GetPlayerName()
-			: TEXT("Unknown");
+		const FString PlayerName = Ranking.PlayerState ? Ranking.PlayerState->GetPlayerName() : TEXT("Unknown");
 
-		UNPPersonalResultWidget* PersonalResultWidget =
-			CreateWidget<UNPPersonalResultWidget>(GetOwningPlayer(), PersonalResultWidgetClass);
+		UNPPersonalResultWidget* PersonalResultWidget =	CreateWidget<UNPPersonalResultWidget>(GetOwningPlayer(), PersonalResultWidgetClass);
 
 		if (!IsValid(PersonalResultWidget))
 		{
 			continue;
 		}
 
-		PersonalResultWidget->SetupResult(
-			RankingIndex + 1,
-			PlayerName,
-			Ranking.Score);
-
+		PersonalResultWidget->SetupResult(RankingIndex + 1, PlayerName, Ranking.Score, Ranking.PlayerState);
 		RankList->AddChild(PersonalResultWidget);
 	}
 }
