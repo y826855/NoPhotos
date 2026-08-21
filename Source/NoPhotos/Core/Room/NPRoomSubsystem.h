@@ -12,7 +12,26 @@ class UNetDriver;
 class UWorld;
 
 //UI
+USTRUCT(BlueprintType)
+struct NOPHOTOS_API FNPRoomListEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Room")
+	int32 RoomNumber = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Room")
+	FString HostName;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Room")
+	int32 CurrentPlayers = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Room")
+	int32 MaxPlayers = 0;
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnFindRoomsCompleteDelegate, const TArray<int32>&, RoomIndices);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FNPOnRoomListUpdated, const TArray<FNPRoomListEntry>&, Rooms);
 
 struct FNPRoomDebugMessage
 {
@@ -58,6 +77,7 @@ public:
 
 	void LogOnlineServiceStatus();
 	void DisplayDebugMessage(const FString& Message, const FLinearColor& Color);
+	bool ConsumeConnectionFailureMessage(FText& OutMessage);
 
 private:
 	void HandleCreateSessionComplete(FName SessionName, bool bWasSuccessful);
@@ -96,6 +116,7 @@ private:
 	bool bSearchingForMigration = false;
 	bool bCleaningSessionAfterNetworkFailure = false;
 	bool bHasLoggedOnlineServiceStatus = false;
+	FText PendingConnectionFailureMessage;
 	TArray<FNPRoomDebugMessage> DebugMessages;
 	
 #pragma region UI
@@ -103,6 +124,13 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Room")
 	FOnFindRoomsCompleteDelegate OnFindRoomsComplete;
 
-	const TArray<int32>& GetListedRoomResultIndices() const { return ListedRoomResultIndices; }
+	UPROPERTY(BlueprintAssignable, Category = "Room")
+	FNPOnRoomListUpdated OnRoomListUpdated;
+
+	UFUNCTION(BlueprintPure, Category = "Room")
+	TArray<FNPRoomListEntry> GetListedRooms() const { return ListedRooms; }
 #pragma endregion
+
+private:
+	TArray<FNPRoomListEntry> ListedRooms;
 };

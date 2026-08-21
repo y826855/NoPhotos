@@ -10,6 +10,7 @@
 #include "Engine/World.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
 #include "HAL/PlatformTime.h"
 #include "Kismet/GameplayStatics.h"
 #include "Online/OnlineSessionNames.h"
@@ -26,6 +27,7 @@ namespace NPRoomSession
 	const FName ProjectKey(TEXT("NP_PROJECT"));
 	const FName RoomStateKey(TEXT("NP_ROOM_STATE"));
 	const FName PlayerCountKey(TEXT("NP_PLAYER_COUNT"));
+	const FName HostNameKey(TEXT("NP_HOST_NAME"));
 	const FName MigrationKey(TEXT("NP_MIGRATION_ID"));
 	const FString ProjectValue(TEXT("NoPhotos"));
 	const FString WaitingState(TEXT("Waiting"));
@@ -112,6 +114,7 @@ void UNPRoomSubsystem::Deinitialize()
 	DebugMessages.Reset();
 	SessionSearch.Reset();
 	ListedRoomResultIndices.Reset();
+	ListedRooms.Reset();
 	PendingExitAction = ENPRoomExitAction::None;
 	PendingMigrationId.Reset();
 	ReturnMapPath.Reset();
@@ -162,6 +165,13 @@ bool UNPRoomSubsystem::HostRoom()
 	}
 
 	FOnlineSessionSettings SessionSettings;
+	FString HostName;
+	if (const APlayerController* HostPlayer = World->GetFirstPlayerController();
+		HostPlayer && HostPlayer->PlayerState)
+	{
+		HostName = HostPlayer->PlayerState->GetPlayerName();
+	}
+
 	SessionSettings.bIsLANMatch = false;
 	SessionSettings.NumPublicConnections = NPRoomSession::MaxPublicConnections;
 	SessionSettings.bShouldAdvertise = true;
@@ -181,6 +191,10 @@ bool UNPRoomSubsystem::HostRoom()
 	SessionSettings.Set(
 		NPRoomSession::PlayerCountKey,
 		1,
+		EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+	SessionSettings.Set(
+		NPRoomSession::HostNameKey,
+		HostName,
 		EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 	if (PendingExitAction == ENPRoomExitAction::BecomeHost && !PendingMigrationId.IsEmpty())
 	{
@@ -235,6 +249,7 @@ bool UNPRoomSubsystem::FindRooms()
 
 	SessionSearch = MakeShared<FOnlineSessionSearch>();
 	ListedRoomResultIndices.Reset();
+	ListedRooms.Reset();
 	SessionSearch->MaxSearchResults = NPRoomSession::MaxSearchResults;
 	SessionSearch->bIsLanQuery = false;
 	SessionSearch->QuerySettings.Set(SEARCH_LOBBIES, true, EOnlineComparisonOp::Equals);
@@ -710,15 +725,18 @@ void UNPRoomSubsystem::HandleFindSessionsComplete(const bool bWasSuccessful)
 
 	int32 VisibleRoomCount = 0;
 	ListedRoomResultIndices.Reset();
+	ListedRooms.Reset();
 	for (int32 SearchResultIndex = 0; SearchResultIndex < SessionSearch->SearchResults.Num(); ++SearchResultIndex)
 	{
 		const FOnlineSessionSearchResult& SearchResult = SessionSearch->SearchResults[SearchResultIndex];
 		FString ProjectValue;
 		FString RoomState;
+		FString HostName;
 		int32 CurrentPlayers = 0;
 		SearchResult.Session.SessionSettings.Get(NPRoomSession::ProjectKey, ProjectValue);
 		SearchResult.Session.SessionSettings.Get(NPRoomSession::RoomStateKey, RoomState);
 		SearchResult.Session.SessionSettings.Get(NPRoomSession::PlayerCountKey, CurrentPlayers);
+		SearchResult.Session.SessionSettings.Get(NPRoomSession::HostNameKey, HostName);
 		const int32 MaxPlayers = SearchResult.Session.SessionSettings.NumPublicConnections;
 
 		if (!SearchResult.IsValid()
@@ -731,13 +749,19 @@ void UNPRoomSubsystem::HandleFindSessionsComplete(const bool bWasSuccessful)
 
 		ListedRoomResultIndices.Add(SearchResultIndex);
 		const int32 RoomNumber = ListedRoomResultIndices.Num();
+		FNPRoomListEntry& Room = ListedRooms.AddDefaulted_GetRef();
+		Room.RoomNumber = RoomNumber;
+		Room.HostName = HostName.IsEmpty() ? SearchResult.Session.OwningUserName : HostName;
+		Room.CurrentPlayers = CurrentPlayers;
+		Room.MaxPlayers = MaxPlayers;
 		if (!bWasMigrationSearch)
 		{
 			NPRoomLog::Info(
 				this,
 				FString::Printf(
-					TEXT("방 목록: Room=%d, Player=%d/%d"),
+					TEXT("방 목록: Room=%d, Host=%s, Player=%d/%d"),
 					RoomNumber,
+					*Room.HostName,
 					CurrentPlayers,
 					MaxPlayers));
 		}
@@ -765,6 +789,7 @@ void UNPRoomSubsystem::HandleFindSessionsComplete(const bool bWasSuccessful)
 	}
 	
 	OnFindRoomsComplete.Broadcast(ListedRoomResultIndices);
+	OnRoomListUpdated.Broadcast(ListedRooms);
 }
 
 void UNPRoomSubsystem::HandleJoinSessionComplete(
@@ -889,6 +914,10 @@ void UNPRoomSubsystem::HandleNetworkFailure(
 	const FString& ErrorString)
 {
 	UWorld* FailureWorld = World ? World : NetDriver ? NetDriver->GetWorld() : nullptr;
+	if (!FailureWorld || !FailureWorld->GetGameInstance())
+	{
+		FailureWorld = GetWorld();
+	}
 	if (!FailureWorld || FailureWorld->GetGameInstance() != GetGameInstance())
 	{
 		return;
@@ -899,12 +928,18 @@ void UNPRoomSubsystem::HandleNetworkFailure(
 	{
 	case ENetworkFailure::ConnectionTimeout:
 		FailureMessage = TEXT("접속 실패: 서버 응답 시간이 초과되었습니다.");
+		PendingConnectionFailureMessage = FText::FromString(
+			TEXT("방에 연결하지 못했습니다. 호스트의 응답 시간이 초과되었습니다."));
 		break;
 	case ENetworkFailure::PendingConnectionFailure:
 		FailureMessage = TEXT("접속 실패: 서버에 연결할 수 없습니다.");
+		PendingConnectionFailureMessage = FText::FromString(
+			TEXT("방에 연결하지 못했습니다. 호스트와 연결할 수 없습니다."));
 		break;
 	case ENetworkFailure::ConnectionLost:
 		FailureMessage = TEXT("서버와의 연결이 끊어졌습니다.");
+		PendingConnectionFailureMessage = FText::FromString(
+			TEXT("호스트와의 연결이 끊어졌습니다."));
 		break;
 	case ENetworkFailure::NetDriverCreateFailure:
 		FailureMessage = TEXT("네트워크 초기화 실패: NetDriver를 생성하지 못했습니다.");
@@ -943,6 +978,7 @@ void UNPRoomSubsystem::HandleNetworkFailure(
 
 	SessionSearch.Reset();
 	ListedRoomResultIndices.Reset();
+	ListedRooms.Reset();
 	bSearchingForMigration = false;
 	FailureWorld->GetTimerManager().ClearTimer(MigrationSearchTimer);
 	PendingExitAction = ENPRoomExitAction::None;
@@ -962,6 +998,18 @@ void UNPRoomSubsystem::HandleNetworkFailure(
 		NPRoomLog::Warning(this, TEXT("이전 온라인 방 정리 요청을 시작하지 못해 로컬 방 정보를 제거했습니다."));
 		NPRoomLog::Info(this, TEXT("이제 list로 새 방을 검색할 수 있습니다."));
 	}
+}
+
+bool UNPRoomSubsystem::ConsumeConnectionFailureMessage(FText& OutMessage)
+{
+	if (PendingConnectionFailureMessage.IsEmpty())
+	{
+		return false;
+	}
+
+	OutMessage = PendingConnectionFailureMessage;
+	PendingConnectionFailureMessage = FText::GetEmpty();
+	return true;
 }
 
 void UNPRoomSubsystem::RestoreWaitingRoom(FNPOnWaitingRoomRestored CompletionDelegate)

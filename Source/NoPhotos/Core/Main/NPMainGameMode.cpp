@@ -4,7 +4,9 @@
 #include "Core/NPPlayerState.h"
 #include "Core/Room/NPRoomSubsystem.h"
 #include "Engine/GameInstance.h"
+#include "EngineUtils.h"
 #include "Engine/World.h"
+#include "GameFramework/PlayerStart.h"
 #include "NPMainGameLog.h"
 #include "NPMainGameState.h"
 #include "TimerManager.h"
@@ -80,6 +82,42 @@ void ANPMainGameMode::HandleSeamlessTravelPlayer(AController*& Controller)
 
 	RefreshPlayerRankings();
 	TryAwardInitialScore();
+}
+
+AActor* ANPMainGameMode::ChoosePlayerStart_Implementation(AController* Player)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return Super::ChoosePlayerStart_Implementation(Player);
+	}
+
+	TSet<const AActor*> AssignedStartSpots;
+	for (FConstPlayerControllerIterator Iterator = World->GetPlayerControllerIterator(); Iterator; ++Iterator)
+	{
+		const APlayerController* PlayerController = Iterator->Get();
+		if (IsValid(PlayerController) && PlayerController != Player && PlayerController->StartSpot.IsValid())
+		{
+			AssignedStartSpots.Add(PlayerController->StartSpot.Get());
+		}
+	}
+
+	TArray<APlayerStart*> AvailableStartSpots;
+	for (TActorIterator<APlayerStart> Iterator(World); Iterator; ++Iterator)
+	{
+		APlayerStart* PlayerStart = *Iterator;
+		if (IsValid(PlayerStart) && !AssignedStartSpots.Contains(PlayerStart))
+		{
+			AvailableStartSpots.Add(PlayerStart);
+		}
+	}
+
+	if (AvailableStartSpots.IsEmpty())
+	{
+		return Super::ChoosePlayerStart_Implementation(Player);
+	}
+
+	return AvailableStartSpots[FMath::RandHelper(AvailableStartSpots.Num())];
 }
 
 void ANPMainGameMode::RequestRestartRoom(APlayerController* RequestingPlayer)

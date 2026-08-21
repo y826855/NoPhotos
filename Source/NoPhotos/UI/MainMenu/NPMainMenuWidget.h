@@ -5,6 +5,7 @@
 #include "NPMainMenuWidget.generated.h"
 
 class UButton;
+class UBorder;
 
 UCLASS()
 class NOPHOTOS_API UNPMainMenuWidget : public UNPUserWidget
@@ -35,4 +36,10 @@ private:
 	void OnJoinGameClicked();
 	UFUNCTION()
 	void OnExitClicked();
+	void ShowConnectionFailureMessage(const FText& Message);
+	void HideConnectionFailureMessage();
+
+	UPROPERTY(Transient)
+	TObjectPtr<UBorder> ConnectionFailureBanner;
+	FTimerHandle ConnectionFailureMessageTimer;
 };

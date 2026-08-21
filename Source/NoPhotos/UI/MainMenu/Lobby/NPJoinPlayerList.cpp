@@ -10,14 +10,6 @@ void UNPJoinPlayerList::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	if (ANPRoomGameState* RoomGameState =
-			GetWorld() ? GetWorld()->GetGameState<ANPRoomGameState>() : nullptr)
-	{
-		RoomGameState->OnRoomStateChanged.AddDynamic(
-			this,
-			&UNPJoinPlayerList::OnRoomStateChanged);
-	}
-
 	RefreshPlayerList();
 }
 
@@ -28,10 +20,11 @@ void UNPJoinPlayerList::NativeDestruct()
 		World->GetTimerManager().ClearTimer(PlayerNameRefreshTimer);
 	}
 
-	if (ANPRoomGameState* RoomGameState = GetWorld() ? GetWorld()->GetGameState<ANPRoomGameState>() : nullptr)
+	if (ANPRoomGameState* RoomGameState = BoundRoomGameState.Get())
 	{
 		RoomGameState->OnRoomStateChanged.RemoveAll(this);
 	}
+	BoundRoomGameState.Reset();
 
 	Super::NativeDestruct();
 }
@@ -69,6 +62,19 @@ void UNPJoinPlayerList::RefreshPlayerList()
 
         return;
     }
+
+	if (BoundRoomGameState.Get() != RoomGameState)
+	{
+		if (ANPRoomGameState* PreviousGameState = BoundRoomGameState.Get())
+		{
+			PreviousGameState->OnRoomStateChanged.RemoveAll(this);
+		}
+
+		BoundRoomGameState = RoomGameState;
+		RoomGameState->OnRoomStateChanged.AddUniqueDynamic(
+			this,
+			&UNPJoinPlayerList::OnRoomStateChanged);
+	}
 
     PlayerList->ClearChildren();
 
