@@ -25,7 +25,7 @@ protected:
 	/** 애니메이션 실행 후 위젯을 자동으로 숨길 때까지의 시간입니다. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Photo|Flash", meta=(ClampMin="0.0"))
 	float FlashDisplayDuration = 0.2f;
-
+//temp
 private:
 	void FinishFlash();
 
