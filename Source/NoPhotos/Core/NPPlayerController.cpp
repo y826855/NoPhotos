@@ -8,6 +8,15 @@
 #include "InputMappingContext.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
+#include "NPGameMode.h"
+#include "NPGameState.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerState.h"
+#include "Room/NPRoomCheatManager.h"
+#include "Room/NPRoomLog.h"
+#include "Room/NPRoomSubsystem.h"
+
 ANPPlayerController::ANPPlayerController()
 {
 	RoomComponent = CreateDefaultSubobject<UNPRoomPlayerComponent>(TEXT("RoomComponent"));
@@ -134,3 +143,9 @@ bool ANPPlayerController::ShouldUseTouchControls() const
 {
 	return SVirtualJoystick::ShouldDisplayTouchInterface() || bForceTouchControls;
 }
+
+void ANPPlayerController::ClientLeaveRoom_Implementation()
+{
+	
+}
+

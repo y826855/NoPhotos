@@ -246,6 +246,12 @@ void UNPRoomPlayerComponent::ServerRequestExitRoom_Implementation()
 		RoomGameMode->RequestExitRoom(PlayerController);
 		return;
 	}
+	
+	if (ANPMainGameMode* MainGameMode =	GetWorld() ? GetWorld()->GetAuthGameMode<ANPMainGameMode>() : nullptr)
+	{
+		ClientLeaveRoom();
+		return;
+	}
 
 	NPRoomLog::Warning(this, TEXT("호스트 방 나가기 실패: ANPRoomGameMode를 찾지 못했습니다."));
 }
