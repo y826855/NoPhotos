@@ -155,10 +155,12 @@ void ANPPulleyBarrierGimmick::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
-	if (!HasAuthority() || IsOpened())
+	if (!HasAuthority())
 	{
 		return;
 	}
+
+	const float SignedTravelDistance = ClampHandleTravel();
 
 	if (!GrabbableComponent->IsGrabbed()
 		&& !HandleMesh->RigidBodyIsAwake())
@@ -167,7 +169,6 @@ void ANPPulleyBarrierGimmick::Tick(float DeltaSeconds)
 		return;
 	}
 
-	const float SignedTravelDistance = GetSignedHandleTravelDistance();
 	if (TrySettleHandle(SignedTravelDistance))
 	{
 		UpdateTravelFromHandle();
@@ -181,13 +182,15 @@ void ANPPulleyBarrierGimmick::Tick(float DeltaSeconds)
 
 void ANPPulleyBarrierGimmick::ConfigureHandleConstraint()
 {
-	const FVector ConstraintLocation = HandleMesh->GetComponentLocation();
+	const float HalfTravelDistance = HandleTravelDistance * 0.5f;
+	const FVector ConstraintLocation = InitialHandleWorldLocation
+		- GetActorUpVector() * HalfTravelDistance;
 	HandleConstraint->SetWorldLocationAndRotation(
 		ConstraintLocation,
 		GetActorQuat());
 	HandleConstraint->SetLinearXLimit(LCM_Locked, 0.0f);
 	HandleConstraint->SetLinearYLimit(LCM_Locked, 0.0f);
-	HandleConstraint->SetLinearZLimit(LCM_Limited, HandleTravelDistance);
+	HandleConstraint->SetLinearZLimit(LCM_Limited, HalfTravelDistance);
 	HandleConstraint->SetAngularSwing1Limit(ACM_Locked, 0.0f);
 	HandleConstraint->SetAngularSwing2Limit(ACM_Locked, 0.0f);
 	HandleConstraint->SetAngularTwistLimit(ACM_Locked, 0.0f);
@@ -203,6 +206,36 @@ float ANPPulleyBarrierGimmick::GetSignedHandleTravelDistance() const
 	return FVector::DotProduct(
 		InitialHandleWorldLocation - HandleMesh->GetComponentLocation(),
 		GetActorUpVector());
+}
+
+float ANPPulleyBarrierGimmick::ClampHandleTravel()
+{
+	const float SignedTravelDistance = GetSignedHandleTravelDistance();
+	const float ClampedTravelDistance = FMath::Clamp(
+		SignedTravelDistance,
+		0.0f,
+		HandleTravelDistance);
+	if (FMath::IsNearlyEqual(
+		SignedTravelDistance,
+		ClampedTravelDistance,
+		0.1f))
+	{
+		return ClampedTravelDistance;
+	}
+
+	HandleMesh->SetWorldLocation(
+		InitialHandleWorldLocation
+		- GetActorUpVector() * ClampedTravelDistance,
+		false,
+		nullptr,
+		ETeleportType::TeleportPhysics);
+
+	const FVector CurrentVelocity = HandleMesh->GetPhysicsLinearVelocity();
+	HandleMesh->SetPhysicsLinearVelocity(
+		CurrentVelocity
+		- GetActorUpVector()
+			* FVector::DotProduct(CurrentVelocity, GetActorUpVector()));
+	return ClampedTravelDistance;
 }
 
 void ANPPulleyBarrierGimmick::ApplyHandleReturnForce(
@@ -312,10 +345,8 @@ void ANPPulleyBarrierGimmick::UpdateTravelFromHandle()
 		ApplyTravel(ReplicatedTravelDistance);
 	}
 
-	if (GetNormalizedTravel() >= OpenTravelRatio)
+	if (!IsOpened() && GetNormalizedTravel() >= OpenTravelRatio)
 	{
-		ReplicatedTravelDistance = HandleTravelDistance;
-		ApplyTravel(ReplicatedTravelDistance);
 		GimmickComponent->CompleteGimmick();
 		ForceNetUpdate();
 	}
@@ -426,8 +457,6 @@ void ANPPulleyBarrierGimmick::ApplyPulleyRotation(
 
 void ANPPulleyBarrierGimmick::HandleGimmickCompleted()
 {
-	ReplicatedTravelDistance = HandleTravelDistance;
-	ApplyTravel(ReplicatedTravelDistance);
 	OnBarrierOpened.Broadcast();
 }
 
