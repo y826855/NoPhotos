@@ -141,6 +141,7 @@ private:
 	void RefreshRelicLock();
 	void ScheduleRopeRelease();
 	void StartRopeRelease();
+	void ReleaseRelicThroughGrabContract();
 	void UpdateRopeRelease(float DeltaSeconds);
 	FVector ResolveRopeReleaseTargetLocation() const;
 	bool IsRopeBindingCompleted(const FNPRelicRopeBinding& Binding) const;
