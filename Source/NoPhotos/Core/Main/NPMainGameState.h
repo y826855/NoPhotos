@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "NoPhotosGameState.h"
+#include "GameFramework/GameState.h"
 #include "NPMainGameState.generated.h"
 
 class ANPPlayerState;
@@ -22,7 +22,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FNPOnPlayerRankingsChanged);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FNPOnMainGameStateChanged);
 
 UCLASS()
-class NOPHOTOS_API ANPMainGameState : public ANoPhotosGameState
+class NOPHOTOS_API ANPMainGameState : public AGameState
 {
 	GENERATED_BODY()
 

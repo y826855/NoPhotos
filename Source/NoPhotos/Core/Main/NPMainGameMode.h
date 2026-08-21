@@ -1,13 +1,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "NoPhotosGameMode.h"
+#include "GameFramework/GameMode.h"
 #include "NPMainGameMode.generated.h"
 
 class UWorld;
 
 UCLASS()
-class NOPHOTOS_API ANPMainGameMode : public ANoPhotosGameMode
+class NOPHOTOS_API ANPMainGameMode : public AGameMode
 {
 	GENERATED_BODY()
 
