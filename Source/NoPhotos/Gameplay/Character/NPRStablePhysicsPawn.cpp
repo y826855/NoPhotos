@@ -5,6 +5,8 @@
 #include "Net/UnrealNetwork.h"
 #include "PhysicsEngine/BodyInstance.h"
 #include "Gameplay/Character/NPStablePhysicsGrabComponent.h"
+#include "Gameplay/Relic/NPBaseRelic.h"
+#include "Core/NPPlayerState.h"
 #include "Gameplay/Character/NPStablePhysicsMovementComponent.h"
 
 ANPRStablePhysicsPawn::ANPRStablePhysicsPawn()
@@ -343,12 +345,22 @@ void ANPRStablePhysicsPawn::HandleGrabbedComponentChanged(
 			EConstraintFrame::Frame2);
 		ReplicatedServerHandWorldLocation =
 			PhysicsMesh->GetSocketLocation(RightHandBoneName);
+
+		if (ANPBaseRelic* Relic = Cast<ANPBaseRelic>(NewGrabbedComponent->GetOwner()))
+		{
+			Relic->SetLastCarrierPlayerState(GetPlayerState<ANPPlayerState>());
+		}
 	}
 	else
 	{
 		ReplicatedGrabState = FReplicatedStableGrabState();
 	}
 	ForceNetUpdate();
+}
+
+AActor* ANPRStablePhysicsPawn::GetHeldRelic_Implementation() const
+{
+	return Cast<ANPBaseRelic>(ReplicatedGrabState.GrabbedActor);
 }
 
 UPrimitiveComponent* ANPRStablePhysicsPawn::ResolveReplicatedGrabbedComponent() const

@@ -9,6 +9,7 @@ class UGrabbableComponent;
 class UPrimitiveComponent;
 class UStaticMeshComponent;
 class FLifetimeProperty;
+class APlayerState;
 
 UCLASS(Abstract, Blueprintable)
 class NOPHOTOS_API ANPBaseRelic : public AActor
@@ -25,13 +26,31 @@ public:
 	UFUNCTION(BlueprintPure, Category="Relic")
 	bool IsUnlocked() const { return bIsUnlocked; }
 
+	UFUNCTION(BlueprintPure, Category="Relic|Delivery")
+	bool IsReturned() const { return bIsReturned; }
+
+	UFUNCTION(BlueprintPure, Category="Relic|Delivery")
+	APlayerState* GetLastCarrierPlayerState() const { return LastCarrierPlayerState; }
+
+	UFUNCTION(BlueprintPure, Category="Relic|Delivery")
+	int32 GetEvidencePhotographerCount() const { return EvidencePhotographers.Num(); }
+
+	UFUNCTION(BlueprintPure, Category="Relic|Delivery")
+	int32 GetBasePrice() const;
+
 	void SetUnlocked(bool bUnlocked);
+	void SetLastCarrierPlayerState(APlayerState* PlayerState);
+	bool RegisterEvidencePhotographer(APlayerState* Photographer);
+	bool TryMarkReturned();
 
 protected:
 	virtual void BeginPlay() override;
 
 	UFUNCTION()
 	void OnRep_IsDisplayed();
+
+	UFUNCTION()
+	void OnRep_IsReturned();
 
 	void ReleaseFromDisplay();
 	void HandleGrabStarted(UPrimitiveComponent* GrabbedComponent);
@@ -50,4 +69,14 @@ protected:
 
 	UPROPERTY(Replicated, VisibleInstanceOnly, BlueprintReadOnly, Category="Relic")
 	bool bIsUnlocked = true;
+
+	UPROPERTY(ReplicatedUsing=OnRep_IsReturned, VisibleInstanceOnly, BlueprintReadOnly, Category="Relic|Delivery")
+	bool bIsReturned = false;
+
+	UPROPERTY(Replicated, VisibleInstanceOnly, BlueprintReadOnly, Category="Relic|Delivery")
+	TObjectPtr<APlayerState> LastCarrierPlayerState;
+
+	/** 이 Relic을 유효하게 촬영한 고유 플레이어 목록입니다. */
+	UPROPERTY(Replicated, VisibleInstanceOnly, BlueprintReadOnly, Category="Relic|Delivery")
+	TArray<TObjectPtr<APlayerState>> EvidencePhotographers;
 };

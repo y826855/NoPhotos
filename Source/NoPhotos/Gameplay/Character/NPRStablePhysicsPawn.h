@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/EngineTypes.h"
 #include "Gameplay/Character/NPStablePhysicsPawn.h"
+#include "Gameplay/Photo/NPRelicHolderInterface.h"
 #include "NPRStablePhysicsPawn.generated.h"
 
 class UPrimitiveComponent;
@@ -31,7 +32,7 @@ struct FReplicatedStableGrabState
 
 /** 소유 클라이언트가 이동 물리 상태를 전송하고, Grab 판정과 Constraint는 서버가 처리합니다. */
 UCLASS()
-class NOPHOTOS_API ANPRStablePhysicsPawn : public ANPStablePhysicsPawn
+class NOPHOTOS_API ANPRStablePhysicsPawn : public ANPStablePhysicsPawn, public INPRelicHolderInterface
 {
 	GENERATED_BODY()
 	friend class UNPStablePhysicsDebugComponent;
@@ -50,6 +51,8 @@ public:
 
 	/** 서버 사진 검증 등에서 소유 클라이언트가 복제한 최신 시점 회전을 조회합니다. */
 	FRotator GetServerViewRotation() const { return GetTargetViewRotation(); }
+
+	virtual AActor* GetHeldRelic_Implementation() const override;
 
 protected:
 	virtual void BeginPlay() override;

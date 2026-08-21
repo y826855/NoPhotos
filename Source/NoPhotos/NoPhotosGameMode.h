@@ -3,20 +3,21 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/GameModeBase.h"
+#include "Core/Main/NPMainGameMode.h"
 #include "Gameplay/Photo/NPPhotoEvidenceTypes.h"
 #include "NoPhotosGameMode.generated.h"
 
 class UNPMatchScorePolicy;
 class UNPPhotoEvidenceService;
 class UNPPhotoRepository;
+class UNPRelicDeliveryService;
 class APlayerController;
 
 /**
  *  Simple GameMode for a third person game
  */
 UCLASS(abstract)
-class ANoPhotosGameMode : public AGameModeBase
+class ANoPhotosGameMode : public ANPMainGameMode
 {
 	GENERATED_BODY()
 
@@ -31,6 +32,7 @@ public:
 
 	FNPPhotoEvidenceResult HandlePhotoCaptureRequest(const FNPPhotoCaptureRequest& Request);
 	UNPPhotoRepository* GetPhotoRepository() const { return PhotoRepository; }
+	UNPRelicDeliveryService* GetRelicDeliveryService() const { return RelicDeliveryService; }
 	void HandlePhotoStored(APlayerController* Photographer, uint16 CaptureSequence, const FGuid& PhotoId);
 
 protected:
@@ -49,6 +51,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNPPhotoRepository> PhotoRepository;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNPRelicDeliveryService> RelicDeliveryService;
 };
 
 

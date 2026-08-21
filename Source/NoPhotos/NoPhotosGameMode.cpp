@@ -4,10 +4,12 @@
 
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
+#include "Core/NPPlayerState.h"
 #include "Gameplay/Photo/NPMatchScorePolicy.h"
 #include "Gameplay/Photo/NPPhotoEvidenceService.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
 #include "Gameplay/Photo/NPPhotoRepository.h"
+#include "Gameplay/Relic/NPRelicDeliveryService.h"
 #include "NoPhotosGameState.h"
 
 ANoPhotosGameMode::ANoPhotosGameMode()
@@ -39,6 +41,9 @@ void ANoPhotosGameMode::InitGame(
 
 	PhotoRepository = NewObject<UNPPhotoRepository>(this, TEXT("PhotoRepository"));
 	PhotoRepository->Initialize(this);
+
+	RelicDeliveryService = NewObject<UNPRelicDeliveryService>(this, TEXT("RelicDeliveryService"));
+	RelicDeliveryService->Initialize(this);
 }
 
 FNPPhotoEvidenceResult ANoPhotosGameMode::HandlePhotoCaptureRequest(
@@ -69,9 +74,19 @@ FNPPhotoEvidenceResult ANoPhotosGameMode::HandlePhotoCaptureRequest(
 		return Result;
 	}
 
-	const int32 AwardedScore = MatchScorePolicy->CalculateEvidenceScore(Result);
-	if (IsValid(Result.Photographer))
+	if (RelicDeliveryService)
 	{
+		RelicDeliveryService->RegisterPhotoEvidence(Result);
+	}
+
+	const int32 AwardedScore = MatchScorePolicy->CalculateEvidenceScore(Result);
+	if (ANPPlayerState* PhotographerPlayerState = Cast<ANPPlayerState>(Result.Photographer))
+	{
+		PhotographerPlayerState->AddScore(AwardedScore);
+	}
+	else if (IsValid(Result.Photographer))
+	{
+		// 커스텀 PlayerState가 아닌 테스트 환경에서도 기존 동작을 유지합니다.
 		Result.Photographer->SetScore(Result.Photographer->GetScore() + AwardedScore);
 	}
 	if (ANoPhotosGameState* PhotoGameState = GetGameState<ANoPhotosGameState>())
