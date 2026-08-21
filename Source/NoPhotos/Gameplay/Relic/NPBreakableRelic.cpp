@@ -28,6 +28,12 @@ void ANPBreakableRelic::BeginPlay()
 
 	if (GeometryCollectionComponent->GetRestCollection())
 	{
+		if (HasAuthority())
+		{
+			GeometryCollectionComponent->OnFullyDecayedEvent.AddDynamic(
+				this,
+				&ANPBreakableRelic::HandleFullyDecayed);
+		}
 		GeometryCollectionComponent->SetVisibility(true, true);
 		GeometryCollectionComponent->SetHiddenInGame(false, true);
 		GeometryCollectionComponent->SetIsReplicated(false);
@@ -78,6 +84,14 @@ void ANPBreakableRelic::OnRep_IsBroken()
 {
 	// Multicast를 놓치는 늦은 접속 클라이언트를 위한 보조 경로입니다.
 	ApplyBrokenState();
+}
+
+void ANPBreakableRelic::HandleFullyDecayed()
+{
+	if (HasAuthority())
+	{
+		Destroy();
+	}
 }
 
 void ANPBreakableRelic::MulticastBreakRelic_Implementation(
