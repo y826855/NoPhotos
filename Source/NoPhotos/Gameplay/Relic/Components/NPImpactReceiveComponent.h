@@ -25,6 +25,8 @@ public:
 	UNPImpactReceiveComponent();
 
 	void IgnoreGrabImpact();
+	/** 루트가 아닌 Primitive에서 충격을 받을 오브젝트가 지정할 수 있습니다. */
+	void SetImpactTargetComponent(UPrimitiveComponent* InTargetComponent);
 
 	FOnDurabilityDamaged OnDamaged;
 	FOnDurabilityDepleted OnDepleted;
@@ -65,6 +67,9 @@ protected:
 	float GrabImpactIgnoreDuration = 0.25f;
 
 private:
+	UPROPERTY(Transient)
+	TObjectPtr<UPrimitiveComponent> ImpactTargetComponent;
+
 	double IgnoreDamageUntilTime = 0.0;
 	double NextDamageAllowedTime = 0.0;
 };
