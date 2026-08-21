@@ -11,6 +11,10 @@ ANPBreakableRelic::ANPBreakableRelic(
 		UGeometryCollectionComponent>(RelicComponentName))
 {
 	GeometryCollectionComponent = CastChecked<UGeometryCollectionComponent>(RelicMesh);
+	// 루트 위치만 보정하고 파편은 각 환경에서 별도로 시뮬레이션합니다.
+	GeometryCollectionComponent->SetEnableReplication(true);
+	GeometryCollectionComponent->SetReplicationAbandonAfterLevel(100);
+	GeometryCollectionComponent->SetReplicationMaxPositionAndVelocityCorrectionLevel(0);
 	GeometryCollectionComponent->ObjectType =
 		EObjectStateTypeEnum::Chaos_Object_Dynamic;
 	GeometryCollectionComponent->SetCollisionResponseToChannel(
@@ -36,14 +40,13 @@ void ANPBreakableRelic::BeginPlay()
 		}
 		GeometryCollectionComponent->SetVisibility(true, true);
 		GeometryCollectionComponent->SetHiddenInGame(false, true);
-		GeometryCollectionComponent->SetIsReplicated(false);
-		GeometryCollectionComponent->SetEnableReplication(false);
 		GeometryCollectionComponent->ForceBrokenForCustomRenderer(true);
 		GeometryCollectionComponent->SetEnableDamageFromCollision(false);
 		GeometryCollectionComponent->SetNotifyBreaks(true);
 		GeometryCollectionComponent->SetCollisionEnabled(
 			ECollisionEnabled::QueryAndPhysics);
 		GeometryCollectionComponent->SetEnableGravity(true);
+
 		if (!bIsBroken)
 		{
 			GeometryCollectionComponent->SetSimulatePhysics(true);
