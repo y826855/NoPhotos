@@ -61,6 +61,7 @@ private:
 
 	void LogLocalGameStatus();
 	void TryLogFinalRankings();
+	void ShowPlayerRankingsDebugMessage() const;
 
 	UPROPERTY(ReplicatedUsing = OnRep_PlayerRankings)
 	TArray<FNPPlayerRanking> PlayerRankings;

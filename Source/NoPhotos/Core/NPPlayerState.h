@@ -29,6 +29,8 @@ private:
 	UFUNCTION()
 	void OnRep_PlayerScore();
 
+	void ShowScoreDebugMessage() const;
+
 	UPROPERTY(ReplicatedUsing = OnRep_PlayerScore)
 	int32 PlayerScore = 0;
 };

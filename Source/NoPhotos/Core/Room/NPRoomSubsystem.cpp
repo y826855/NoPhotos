@@ -868,8 +868,8 @@ void UNPRoomSubsystem::DrawDebugMessages(UCanvas* Canvas, APlayerController* Pla
 	float ScreenY = 50.0f;
 	for (const FNPRoomDebugMessage& DebugMessage : DebugMessages)
 	{
-		Canvas->SetDrawColor(DebugMessage.Color.ToFColor(true));
-		Canvas->DrawText(GEngine->GetSmallFont(), DebugMessage.Message, 40.0f, ScreenY);
+		//Canvas->SetDrawColor(DebugMessage.Color.ToFColor(true));
+		//Canvas->DrawText(GEngine->GetSmallFont(), DebugMessage.Message, 40.0f, ScreenY);
 		ScreenY += 20.0f;
 	}
 }

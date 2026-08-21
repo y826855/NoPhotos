@@ -1,6 +1,7 @@
 #include "NPPlayerState.h"
 
 #include "Main/NPMainGameState.h"
+#include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Net/UnrealNetwork.h"
 
@@ -27,6 +28,7 @@ void ANPPlayerState::AddScore(const int32 ScoreToAdd)
 	PlayerScore += ScoreToAdd;
 	ForceNetUpdate();
 	OnPlayerScoreChanged.Broadcast();
+	ShowScoreDebugMessage();
 	MainGameState->RefreshPlayerRankings();
 }
 
@@ -45,9 +47,28 @@ void ANPPlayerState::ResetPlayerScore()
 	PlayerScore = 0;
 	ForceNetUpdate();
 	OnPlayerScoreChanged.Broadcast();
+	ShowScoreDebugMessage();
 }
 
 void ANPPlayerState::OnRep_PlayerScore()
 {
 	OnPlayerScoreChanged.Broadcast();
+	ShowScoreDebugMessage();
+}
+
+void ANPPlayerState::ShowScoreDebugMessage() const
+{
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			5.0f,
+			FColor::Green,
+			FString::Printf(
+				TEXT("[점수 변경] %s: %d점"),
+				*GetPlayerName(),
+				PlayerScore));
+	}
+#endif
 }
