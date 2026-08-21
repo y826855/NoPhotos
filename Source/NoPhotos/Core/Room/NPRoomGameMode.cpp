@@ -1,7 +1,7 @@
 #include "NPRoomGameMode.h"
 
 #include "Core/Component/NPRoomPlayerComponent.h"
-#include "Core/NPPlayerController.h"
+#include "Core/Room/NPRoomPlayerController.h"
 #include "Core/NPPlayerState.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -15,7 +15,7 @@
 ANPRoomGameMode::ANPRoomGameMode()
 {
 	GameStateClass = ANPRoomGameState::StaticClass();
-	PlayerControllerClass = ANPPlayerController::StaticClass();
+	PlayerControllerClass = ANPRoomPlayerController::StaticClass();
 	PlayerStateClass = ANPPlayerState::StaticClass();
 	bUseSeamlessTravel = true;
 }
@@ -39,8 +39,20 @@ void ANPRoomGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
 
+	ANPRoomPlayerController* NPPC = Cast<ANPRoomPlayerController>(NewPlayer);
+	if (!IsValid(NPPC))
+	{
+		return;
+	}
+	
 	if (!bRoomActive)
 	{
+		TryActivateExistingWaitingRoom();
+	}
+
+	if (!bRoomActive)
+	{
+		NPPC->ClientShowMainMenuUI();
 		return;
 	}
 
@@ -66,6 +78,8 @@ void ANPRoomGameMode::PostLogin(APlayerController* NewPlayer)
 				TEXT("플레이어 입장 완료: Player=%s, Role=Guest, PlayerCount=%d"),
 				*NewPlayer->PlayerState->GetPlayerName(),
 				GetNumPlayers()));
+		
+		NPPC->ClientShowLobbyUI();
 		return;
 	}
 
@@ -111,9 +125,16 @@ void ANPRoomGameMode::HandleSeamlessTravelPlayer(AController*& Controller)
 {
 	Super::HandleSeamlessTravelPlayer(Controller);
 
-	if (TryActivateExistingWaitingRoom())
+	if (!TryActivateExistingWaitingRoom())
 	{
-		RestoreReturningPlayer(Controller);
+		return;
+	}
+
+	RestoreReturningPlayer(Controller);
+
+	if (ANPRoomPlayerController* NPPlayerController = Cast<ANPRoomPlayerController>(Controller))
+	{
+		NPPlayerController->ClientShowLobbyUI();
 	}
 }
 

@@ -17,7 +17,7 @@ class APlayerController;
  *  Simple GameMode for a third person game
  */
 UCLASS(abstract)
-class ANoPhotosGameMode : public ANPMainGameMode
+class NOPHOTOS_API ANoPhotosGameMode : public ANPMainGameMode
 {
 	GENERATED_BODY()
 

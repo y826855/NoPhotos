@@ -11,6 +11,9 @@ class UCanvas;
 class UNetDriver;
 class UWorld;
 
+//UI
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnFindRoomsCompleteDelegate, const TArray<int32>&, RoomIndices);
+
 struct FNPRoomDebugMessage
 {
 	FString Message;
@@ -94,4 +97,12 @@ private:
 	bool bCleaningSessionAfterNetworkFailure = false;
 	bool bHasLoggedOnlineServiceStatus = false;
 	TArray<FNPRoomDebugMessage> DebugMessages;
+	
+#pragma region UI
+public:
+	UPROPERTY(BlueprintAssignable, Category = "Room")
+	FOnFindRoomsCompleteDelegate OnFindRoomsComplete;
+
+	const TArray<int32>& GetListedRoomResultIndices() const { return ListedRoomResultIndices; }
+#pragma endregion
 };

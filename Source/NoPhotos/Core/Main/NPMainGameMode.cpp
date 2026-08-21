@@ -1,6 +1,6 @@
 #include "NPMainGameMode.h"
 
-#include "Core/NPPlayerController.h"
+#include "Core/Main/NPMainPlayerController.h"
 #include "Core/NPPlayerState.h"
 #include "Core/Room/NPRoomSubsystem.h"
 #include "Engine/GameInstance.h"
@@ -12,7 +12,7 @@
 ANPMainGameMode::ANPMainGameMode()
 {
 	GameStateClass = ANPMainGameState::StaticClass();
-	PlayerControllerClass = ANPPlayerController::StaticClass();
+	PlayerControllerClass = ANPMainPlayerController::StaticClass();
 	PlayerStateClass = ANPPlayerState::StaticClass();
 	bUseSeamlessTravel = true;
 }
@@ -26,6 +26,12 @@ void ANPMainGameMode::BeginPlay()
 void ANPMainGameMode::PostLogin(APlayerController* NewPlayer)
 {
 	Super::PostLogin(NewPlayer);
+
+	if (ANPMainPlayerController* NPPlayerController = Cast<ANPMainPlayerController>(NewPlayer))
+	{
+		NPPlayerController->ClientShowGameScreenUI();
+	}
+
 	RefreshPlayerRankings();
 	TryAwardInitialScore();
 }
@@ -66,6 +72,12 @@ void ANPMainGameMode::Logout(AController* Exiting)
 void ANPMainGameMode::HandleSeamlessTravelPlayer(AController*& Controller)
 {
 	Super::HandleSeamlessTravelPlayer(Controller);
+
+	if (ANPMainPlayerController* NPPlayerController = Cast<ANPMainPlayerController>(Controller))
+	{
+		NPPlayerController->ClientShowGameScreenUI();
+	}
+
 	RefreshPlayerRankings();
 	TryAwardInitialScore();
 }

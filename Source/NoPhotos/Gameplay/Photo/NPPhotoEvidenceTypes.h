@@ -98,3 +98,16 @@ struct NOPHOTOS_API FNPReplicatedPhotoEvidence
 	UPROPERTY(BlueprintReadOnly, Category="Photo")
 	float ServerCaptureTime = 0.0f;
 };
+
+/** 정산 화면에서 플레이어가 공개하기로 확정한 사진 목록입니다. */
+USTRUCT(BlueprintType)
+struct NOPHOTOS_API FNPPlayerSelectedPhotos
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category="Photo")
+	TObjectPtr<APlayerState> PlayerState = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category="Photo")
+	TArray<FGuid> PhotoIds;
+};

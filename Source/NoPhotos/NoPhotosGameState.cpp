@@ -1,5 +1,6 @@
 #include "NoPhotosGameState.h"
 
+#include "GameFramework/PlayerState.h"
 #include "Net/UnrealNetwork.h"
 
 void ANoPhotosGameState::GetLifetimeReplicatedProps(
@@ -9,6 +10,53 @@ void ANoPhotosGameState::GetLifetimeReplicatedProps(
 
 	DOREPLIFETIME(ANoPhotosGameState, PhotoEvidence);
 	DOREPLIFETIME(ANoPhotosGameState, TransferredPhotoIds);
+	DOREPLIFETIME(ANoPhotosGameState, SelectedPhotos);
+}
+
+TArray<FGuid> ANoPhotosGameState::GetSelectedPhotoIds(
+	const APlayerState* PlayerState) const
+{
+	if (!IsValid(PlayerState))
+	{
+		return {};
+	}
+
+	for (const FNPPlayerSelectedPhotos& Selected : SelectedPhotos)
+	{
+		if (Selected.PlayerState == PlayerState)
+		{
+			return Selected.PhotoIds;
+		}
+	}
+
+	return {};
+}
+
+void ANoPhotosGameState::SetSelectedPhotoIds(
+	APlayerState* PlayerState,
+	const TArray<FGuid>& PhotoIds)
+{
+	if (!HasAuthority() || !IsValid(PlayerState))
+	{
+		return;
+	}
+
+	for (FNPPlayerSelectedPhotos& Selected : SelectedPhotos)
+	{
+		if (Selected.PlayerState == PlayerState)
+		{
+			Selected.PhotoIds = PhotoIds;
+			ForceNetUpdate();
+			OnPhotoEvidenceChanged.Broadcast();
+			return;
+		}
+	}
+
+	FNPPlayerSelectedPhotos& NewSelected = SelectedPhotos.AddDefaulted_GetRef();
+	NewSelected.PlayerState = PlayerState;
+	NewSelected.PhotoIds = PhotoIds;
+	ForceNetUpdate();
+	OnPhotoEvidenceChanged.Broadcast();
 }
 
 void ANoPhotosGameState::AddPhotoEvidence(
@@ -71,6 +119,11 @@ void ANoPhotosGameState::OnRep_PhotoEvidence()
 }
 
 void ANoPhotosGameState::OnRep_TransferredPhotoIds()
+{
+	OnPhotoEvidenceChanged.Broadcast();
+}
+
+void ANoPhotosGameState::OnRep_SelectedPhotos()
 {
 	OnPhotoEvidenceChanged.Broadcast();
 }

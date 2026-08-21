@@ -1,12 +1,16 @@
 #include "NPMainGameState.h"
 
+#include "Core/Main/NPMainPlayerController.h"
 #include "Core/NPPlayerState.h"
 #include "Engine/Engine.h"
+#include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
 #include "Net/UnrealNetwork.h"
 #include "NPMainGameLog.h"
 
-void ANPMainGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+void ANPMainGameState::GetLifetimeReplicatedProps(
+	TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
@@ -14,6 +18,9 @@ void ANPMainGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(ANPMainGameState, RemainingGameTime);
 	DOREPLIFETIME(ANPMainGameState, bMainGameActive);
 	DOREPLIFETIME(ANPMainGameState, bMainGameEnded);
+	DOREPLIFETIME(
+		ANPMainGameState,
+		PictureSelectionCompletedPlayers);
 }
 
 TArray<FNPPlayerRanking> ANPMainGameState::GetPlayerRankings() const
@@ -36,6 +43,49 @@ bool ANPMainGameState::IsMainGameEnded() const
 	return bMainGameEnded;
 }
 
+bool ANPMainGameState::IsPlayerPictureSelectionComplete(const APlayerState* PlayerState) const
+{
+	return IsValid(PlayerState)
+		&& PictureSelectionCompletedPlayers.Contains(
+			const_cast<APlayerState*>(PlayerState));
+}
+
+void ANPMainGameState::ConfirmPictureSelection(APlayerController* PlayerController)
+{
+	if (!HasAuthority()
+		|| !bMainGameEnded
+		|| !IsValid(PlayerController)
+		|| !IsValid(PlayerController->PlayerState))
+	{
+		return;
+	}
+
+	PictureSelectionCompletedPlayers.AddUnique(
+		PlayerController->PlayerState);
+
+	ForceNetUpdate();
+	OnPictureSelectionStateChanged.Broadcast();
+
+	if (!AreAllConnectedPlayersPictureSelectionComplete())
+	{
+		return;
+	}
+
+	for (FConstPlayerControllerIterator Iterator =
+		GetWorld()->GetPlayerControllerIterator();
+		Iterator;
+		++Iterator)
+	{
+		ANPMainPlayerController* MainPlayerController =
+			Cast<ANPMainPlayerController>(Iterator->Get());
+
+		if (IsValid(MainPlayerController))
+		{
+			MainPlayerController->ClientShowResultUI();
+		}
+	}
+}
+
 void ANPMainGameState::RefreshPlayerRankings()
 {
 	if (!HasAuthority())
@@ -44,15 +94,20 @@ void ANPMainGameState::RefreshPlayerRankings()
 	}
 
 	PlayerRankings.Reset();
+
 	for (APlayerState* PlayerState : PlayerArray)
 	{
-		ANPPlayerState* NPPlayerState = Cast<ANPPlayerState>(PlayerState);
+		ANPPlayerState* NPPlayerState =
+			Cast<ANPPlayerState>(PlayerState);
+
 		if (!NPPlayerState)
 		{
 			continue;
 		}
 
-		FNPPlayerRanking& Ranking = PlayerRankings.AddDefaulted_GetRef();
+		FNPPlayerRanking& Ranking =
+			PlayerRankings.AddDefaulted_GetRef();
+
 		Ranking.PlayerState = NPPlayerState;
 		Ranking.Score = NPPlayerState->GetPlayerScore();
 	}
@@ -85,11 +140,19 @@ void ANPMainGameState::StartMainGame(const int32 DurationSeconds)
 	RemainingGameTime = FMath::Max(1, DurationSeconds);
 	bMainGameActive = true;
 	bMainGameEnded = false;
+
+	//새게임 시작시 이전게임 완료상태 초기화
+	PictureSelectionCompletedPlayers.Empty();
+
 	LastLoggedRemainingTime = INDEX_NONE;
 	bFinalRankingsLogged = false;
+
 	RefreshPlayerRankings();
 	ForceNetUpdate();
+
 	OnMainGameStateChanged.Broadcast();
+	OnPictureSelectionStateChanged.Broadcast();
+
 	LogLocalGameStatus();
 }
 
@@ -116,10 +179,24 @@ void ANPMainGameState::FinishMainGame()
 	RemainingGameTime = 0;
 	bMainGameActive = false;
 	bMainGameEnded = true;
+
+	//사진선택 시작 전 완료목록 비우기
+	PictureSelectionCompletedPlayers.Empty();
+
 	RefreshPlayerRankings();
 	ForceNetUpdate();
 	OnMainGameStateChanged.Broadcast();
+	OnPictureSelectionStateChanged.Broadcast();
 	TryLogFinalRankings();
+
+	for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator;	++Iterator)
+	{
+		ANPMainPlayerController* MainPlayerController = Cast<ANPMainPlayerController>(Iterator->Get());
+		if (IsValid(MainPlayerController))
+		{
+			MainPlayerController->ClientShowSelectPictureUI();
+		}
+	}
 }
 
 void ANPMainGameState::OnRep_PlayerRankings()
@@ -127,42 +204,6 @@ void ANPMainGameState::OnRep_PlayerRankings()
 	OnPlayerRankingsChanged.Broadcast();
 	ShowPlayerRankingsDebugMessage();
 	TryLogFinalRankings();
-}
-
-void ANPMainGameState::ShowPlayerRankingsDebugMessage() const
-{
-#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	if (!GEngine)
-	{
-		return;
-	}
-
-	FString ScoreText = TEXT("=== 현재 점수 ===\n");
-	if (PlayerRankings.IsEmpty())
-	{
-		ScoreText += TEXT("플레이어 없음");
-	}
-	else
-	{
-		for (int32 RankingIndex = 0; RankingIndex < PlayerRankings.Num(); ++RankingIndex)
-		{
-			const FNPPlayerRanking& Ranking = PlayerRankings[RankingIndex];
-			ScoreText += FString::Printf(
-				TEXT("%d. %s : %d점%s"),
-				RankingIndex + 1,
-				Ranking.PlayerState ? *Ranking.PlayerState->GetPlayerName() : TEXT("Unknown"),
-				Ranking.Score,
-				RankingIndex + 1 < PlayerRankings.Num() ? TEXT("\n") : TEXT(""));
-		}
-	}
-
-	constexpr uint64 PlayerRankingsDebugMessageKey = 1001;
-	GEngine->AddOnScreenDebugMessage(
-		PlayerRankingsDebugMessageKey,
-		10.0f,
-		FColor::Cyan,
-		ScoreText);
-#endif
 }
 
 void ANPMainGameState::OnRep_MainGameState()
@@ -175,6 +216,41 @@ void ANPMainGameState::OnRep_MainGameState()
 	}
 
 	TryLogFinalRankings();
+}
+
+void ANPMainGameState::OnRep_PictureSelectionCompletedPlayers()
+{
+	OnPictureSelectionStateChanged.Broadcast();
+}
+
+bool ANPMainGameState::AreAllConnectedPlayersPictureSelectionComplete() const
+{
+	bool bHasConnectedPlayer = false;
+
+	for (FConstPlayerControllerIterator Iterator =
+		GetWorld()->GetPlayerControllerIterator();
+		Iterator;
+		++Iterator)
+	{
+		const APlayerController* PlayerController =
+			Iterator->Get();
+
+		if (!IsValid(PlayerController)
+			|| !IsValid(PlayerController->PlayerState))
+		{
+			continue;
+		}
+
+		bHasConnectedPlayer = true;
+
+		if (!PictureSelectionCompletedPlayers.Contains(
+			PlayerController->PlayerState))
+		{
+			return false;
+		}
+	}
+
+	return bHasConnectedPlayer;
 }
 
 void ANPMainGameState::LogLocalGameStatus()
@@ -204,7 +280,7 @@ void ANPMainGameState::LogLocalGameStatus()
 
 void ANPMainGameState::TryLogFinalRankings()
 {
-	if (!bMainGameEnded || bFinalRankingsLogged || PlayerRankings.IsEmpty())
+	if (!bMainGameEnded	|| bFinalRankingsLogged	|| PlayerRankings.IsEmpty())
 	{
 		return;
 	}
@@ -231,4 +307,40 @@ void ANPMainGameState::TryLogFinalRankings()
 				*PlayerName,
 				Ranking.Score));
 	}
+}
+
+void ANPMainGameState::ShowPlayerRankingsDebugMessage() const
+{
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	if (!GEngine)
+	{
+		return;
+	}
+
+	FString ScoreText = TEXT("=== 현재 점수 ===\n");
+	if (PlayerRankings.IsEmpty())
+	{
+		ScoreText += TEXT("플레이어 없음");
+	}
+	else
+	{
+		for (int32 RankingIndex = 0; RankingIndex < PlayerRankings.Num(); ++RankingIndex)
+		{
+			const FNPPlayerRanking& Ranking = PlayerRankings[RankingIndex];
+			ScoreText += FString::Printf(
+				TEXT("%d. %s : %d점%s"),
+				RankingIndex + 1,
+				Ranking.PlayerState ? *Ranking.PlayerState->GetPlayerName() : TEXT("Unknown"),
+				Ranking.Score,
+				RankingIndex + 1 < PlayerRankings.Num() ? TEXT("\n") : TEXT(""));
+		}
+	}
+	
+	constexpr uint64 PlayerRankingsDebugMessageKey = 1001;
+	GEngine->AddOnScreenDebugMessage(
+		PlayerRankingsDebugMessageKey,
+		10.0f,
+		FColor::Cyan,
+		ScoreText);
+#endif
 }

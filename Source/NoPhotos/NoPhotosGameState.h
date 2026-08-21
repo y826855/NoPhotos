@@ -22,12 +22,16 @@ public:
 	UFUNCTION(BlueprintPure, Category="Photo")
 	TArray<FGuid> GetTransferredPhotoIds() const { return TransferredPhotoIds; }
 
+	UFUNCTION(BlueprintPure, Category="Photo")
+	TArray<FGuid> GetSelectedPhotoIds(const APlayerState* PlayerState) const;
+
 	UPROPERTY(BlueprintAssignable, Category="Photo")
 	FOnNoPhotosPhotoEvidenceChanged OnPhotoEvidenceChanged;
 
 	void AddPhotoEvidence(const FNPPhotoEvidenceResult& Result, int32 AwardedScore);
 	void RegisterTransferredPhoto(const FGuid& PhotoId);
 	void AttachPhotoId(APlayerState* Photographer, uint16 CaptureSequence, const FGuid& PhotoId);
+	void SetSelectedPhotoIds(APlayerState* PlayerState, const TArray<FGuid>& PhotoIds);
 
 private:
 	UFUNCTION()
@@ -41,4 +45,10 @@ private:
 
 	UPROPERTY(ReplicatedUsing=OnRep_TransferredPhotoIds)
 	TArray<FGuid> TransferredPhotoIds;
+
+	UPROPERTY(ReplicatedUsing=OnRep_SelectedPhotos)
+	TArray<FNPPlayerSelectedPhotos> SelectedPhotos;
+
+	UFUNCTION()
+	void OnRep_SelectedPhotos();
 };
