@@ -11,6 +11,10 @@ ANPBreakableRelic::ANPBreakableRelic(
 		UGeometryCollectionComponent>(RelicComponentName))
 {
 	GeometryCollectionComponent = CastChecked<UGeometryCollectionComponent>(RelicMesh);
+	// 루트 위치만 보정하고 파편은 각 환경에서 별도로 시뮬레이션합니다.
+	GeometryCollectionComponent->SetEnableReplication(true);
+	GeometryCollectionComponent->SetReplicationAbandonAfterLevel(100);
+	GeometryCollectionComponent->SetReplicationMaxPositionAndVelocityCorrectionLevel(0);
 	GeometryCollectionComponent->ObjectType =
 		EObjectStateTypeEnum::Chaos_Object_Dynamic;
 	GeometryCollectionComponent->SetCollisionResponseToChannel(
@@ -28,16 +32,21 @@ void ANPBreakableRelic::BeginPlay()
 
 	if (GeometryCollectionComponent->GetRestCollection())
 	{
+		if (HasAuthority())
+		{
+			GeometryCollectionComponent->OnFullyDecayedEvent.AddDynamic(
+				this,
+				&ANPBreakableRelic::HandleFullyDecayed);
+		}
 		GeometryCollectionComponent->SetVisibility(true, true);
 		GeometryCollectionComponent->SetHiddenInGame(false, true);
-		GeometryCollectionComponent->SetIsReplicated(false);
-		GeometryCollectionComponent->SetEnableReplication(false);
 		GeometryCollectionComponent->ForceBrokenForCustomRenderer(true);
 		GeometryCollectionComponent->SetEnableDamageFromCollision(false);
 		GeometryCollectionComponent->SetNotifyBreaks(true);
 		GeometryCollectionComponent->SetCollisionEnabled(
 			ECollisionEnabled::QueryAndPhysics);
 		GeometryCollectionComponent->SetEnableGravity(true);
+
 		if (!bIsBroken)
 		{
 			GeometryCollectionComponent->SetSimulatePhysics(true);
@@ -78,6 +87,14 @@ void ANPBreakableRelic::OnRep_IsBroken()
 {
 	// Multicast를 놓치는 늦은 접속 클라이언트를 위한 보조 경로입니다.
 	ApplyBrokenState();
+}
+
+void ANPBreakableRelic::HandleFullyDecayed()
+{
+	if (HasAuthority())
+	{
+		Destroy();
+	}
 }
 
 void ANPBreakableRelic::MulticastBreakRelic_Implementation(
@@ -132,6 +149,7 @@ void ANPBreakableRelic::ApplyBrokenState()
 	{
 		return;
 	}
+	GrabbableComponent->SetGrabEnabled(false);
 
 	if (!bBrokenEventDispatched)
 	{

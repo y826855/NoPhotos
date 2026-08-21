@@ -89,6 +89,7 @@ protected:
 private:
 	UFUNCTION()
 	void HandleConstraintBroken(int32 ConstraintIndex);
+	void HandleForceReleaseAllGrabs();
 
 	void TryGrab();
 	bool Grab(

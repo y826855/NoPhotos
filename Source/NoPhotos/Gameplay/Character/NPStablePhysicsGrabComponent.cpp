@@ -42,7 +42,7 @@ void UNPStablePhysicsGrabComponent::BeginPlay()
 void UNPStablePhysicsGrabComponent::EndPlay(
 	const EEndPlayReason::Type EndPlayReason)
 {
-	ReleaseGrab();
+	ClearReplicatedGrab();
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -182,6 +182,10 @@ void UNPStablePhysicsGrabComponent::ClearReplicatedGrab()
 
 	UGrabbableComponent* ReleasedGrabbableComponent =
 		GrabbedGrabbableComponent;
+	if (ReleasedGrabbableComponent)
+	{
+		ReleasedGrabbableComponent->OnForceReleaseAllGrabs.RemoveAll(this);
+	}
 	BreakConstraint();
 	GrabbedComponent = nullptr;
 	GrabbedGrabbableComponent = nullptr;
@@ -239,6 +243,13 @@ void UNPStablePhysicsGrabComponent::HandleConstraintBroken(int32)
 		return;
 	}
 
+	bGrabRetryCoolingDown = true;
+	GrabRetryCooldownRemaining = GrabRetryCooldown;
+	ReleaseGrab();
+}
+
+void UNPStablePhysicsGrabComponent::HandleForceReleaseAllGrabs()
+{
 	bGrabRetryCoolingDown = true;
 	GrabRetryCooldownRemaining = GrabRetryCooldown;
 	ReleaseGrab();
@@ -312,7 +323,9 @@ bool UNPStablePhysicsGrabComponent::CommitGrab(
 	UGrabbableComponent* GrabbableComponent,
 	FName BoneName)
 {
-	if (!ConstraintInstance.IsValidConstraintInstance())
+	if (!GrabbableComponent
+		|| !GrabbableComponent->CanBeGrabbed()
+		|| !ConstraintInstance.IsValidConstraintInstance())
 	{
 		BreakConstraint();
 		return false;
@@ -321,6 +334,9 @@ bool UNPStablePhysicsGrabComponent::CommitGrab(
 	GrabbedComponent = PrimitiveComponent;
 	GrabbedGrabbableComponent = GrabbableComponent;
 	GrabbedBoneName = BoneName;
+	GrabbedGrabbableComponent->OnForceReleaseAllGrabs.AddUObject(
+		this,
+		&UNPStablePhysicsGrabComponent::HandleForceReleaseAllGrabs);
 	if (PhysicsDebug)
 	{
 		PhysicsDebug->ResetGrabDebug();
@@ -418,6 +434,10 @@ void UNPStablePhysicsGrabComponent::ReleaseGrab()
 
 	UGrabbableComponent* ReleasedGrabbableComponent =
 		GrabbedGrabbableComponent;
+	if (ReleasedGrabbableComponent)
+	{
+		ReleasedGrabbableComponent->OnForceReleaseAllGrabs.RemoveAll(this);
+	}
 	GrabbedComponent = nullptr;
 	GrabbedGrabbableComponent = nullptr;
 	GrabbedBoneName = NAME_None;

@@ -28,6 +28,9 @@ protected:
 	UFUNCTION()
 	void OnRep_IsBroken();
 
+	UFUNCTION()
+	void HandleFullyDecayed();
+
 	/** 논리적인 파괴 상태가 최초 적용될 때 한 번 호출됩니다. */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Relic|Breakable")
 	void OnRelicBroken();
