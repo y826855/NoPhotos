@@ -17,6 +17,7 @@
 #include "OnlineSubsystem.h"
 #include "OnlineSubsystemUtils.h"
 #include "TimerManager.h"
+#include "Core/Room/NPRoomPlayerController.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 
@@ -657,6 +658,11 @@ void UNPRoomSubsystem::HandleCreateSessionComplete(const FName SessionName, cons
 		NPRoomLog::Warning(this, TEXT("방 생성 실패: 방 상태 또는 호스트를 활성화하지 못했습니다."));
 		return;
 	}
+	
+	if (ANPRoomPlayerController* HostPC = Cast<ANPRoomPlayerController>(HostPlayer))
+	{
+		HostPC->ShowLobbyUI();
+	}
 
 	const FNamedOnlineSession* NamedSession = SessionInterface.IsValid()
 		? SessionInterface->GetNamedSession(NAME_GameSession)
@@ -757,6 +763,8 @@ void UNPRoomSubsystem::HandleFindSessionsComplete(const bool bWasSuccessful)
 	{
 		NPRoomLog::Info(this, TEXT("방 목록: 참가 가능한 대기방이 없습니다."));
 	}
+	
+	OnFindRoomsComplete.Broadcast(ListedRoomResultIndices);
 }
 
 void UNPRoomSubsystem::HandleJoinSessionComplete(
