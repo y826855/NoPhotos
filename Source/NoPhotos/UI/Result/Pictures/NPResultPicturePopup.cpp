@@ -90,6 +90,10 @@ void UNPResultPicturePopup::OpenForPlayer(APlayerState* InPlayerState)
 		return;
 	}
 
+	UpdateStatusText(FString::Printf(
+		TEXT("%s 님이 고른 사진"),
+		*ViewedPlayerState->GetPlayerName()));
+
 	ANoPhotosGameState* GameState = GetWorld()
 		? GetWorld()->GetGameState<ANoPhotosGameState>()
 		: nullptr;
@@ -105,10 +109,6 @@ void UNPResultPicturePopup::OpenForPlayer(APlayerState* InPlayerState)
 		UpdateStatusText(TEXT("사진 데이터를 불러올 수 없습니다."));
 		return;
 	}
-
-	UpdateStatusText(FString::Printf(
-		TEXT("%s 님이 고른 사진"),
-		*ViewedPlayerState->GetPlayerName()));
 
 	PendingPhotoIds = GameState->GetSelectedPhotoIds(ViewedPlayerState);
 	if (PendingPhotoIds.IsEmpty())
