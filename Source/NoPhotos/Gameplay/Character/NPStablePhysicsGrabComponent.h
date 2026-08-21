@@ -7,6 +7,7 @@
 class UPrimitiveComponent;
 class USkeletalMeshComponent;
 class UGrabbableComponent;
+class UNPStablePhysicsDebugComponent;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnStableGrabChanged, UPrimitiveComponent*);
 
@@ -15,6 +16,7 @@ UCLASS(ClassGroup=(Physics), meta=(BlueprintSpawnableComponent))
 class NOPHOTOS_API UNPStablePhysicsGrabComponent : public UPhysicsConstraintComponent
 {
 	GENERATED_BODY()
+	friend class UNPStablePhysicsDebugComponent;
 
 public:
 	UNPStablePhysicsGrabComponent();
@@ -28,6 +30,8 @@ public:
 	/** false이면 탐색과 Constraint 생성을 수행하지 않습니다. */
 	void SetGrabSimulationEnabled(bool bEnabled);
 	void SetLinearBreakThreshold(float InLinearBreakThreshold);
+	void SetReplicatedGrabFrameBlendDuration(float InBlendDuration);
+	void SetGrabRetryCooldown(float InRetryCooldown);
 	void SetMovementIntent(const FVector& WorldMovementIntent);
 	void NotifyJumpIntent();
 
@@ -50,6 +54,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	virtual void TickComponent(
 		float DeltaTime,
@@ -60,6 +65,9 @@ protected:
 	float GrabRadius = 18.0f;
 
 	float GrabLinearBreakThreshold = 200000.0f;
+
+	float ReplicatedGrabFrameBlendDuration = 0.15f;
+	float GrabRetryCooldown = 0.5f;
 
 	UPROPERTY(EditAnywhere, Category="Grab Intent", meta=(ClampMin="0.0"))
 	float JumpIntentDuration = 0.15f;
@@ -86,7 +94,12 @@ private:
 	bool Grab(
 		UPrimitiveComponent* PrimitiveComponent,
 		UGrabbableComponent* GrabbableComponent);
+	bool CommitGrab(
+		UPrimitiveComponent* PrimitiveComponent,
+		UGrabbableComponent* GrabbableComponent,
+		FName BoneName);
 	void UpdateGrabForce(float DeltaTime);
+	void UpdateReplicatedGrabFrameBlend(float DeltaTime);
 	void ReleaseGrab();
 
 	UPROPERTY(Transient)
@@ -98,27 +111,20 @@ private:
 	UPROPERTY(Transient)
 	UGrabbableComponent* GrabbedGrabbableComponent = nullptr;
 
+	UPROPERTY(Transient)
+	UNPStablePhysicsDebugComponent* PhysicsDebug = nullptr;
+
 	FName HandBoneName = NAME_None;
 	FName GrabbedBoneName = NAME_None;
 	bool bGrabSimulationEnabled = true;
 	bool bGrabRequested = false;
-	bool bWaitForGrabRelease = false;
+	bool bGrabRetryCoolingDown = false;
+	bool bReplicatedGrabFrameBlendActive = false;
 	FVector MovementIntent = FVector::ZeroVector;
 	float JumpIntentRemainingTime = 0.0f;
+	float GrabRetryCooldownRemaining = 0.0f;
+	float ReplicatedGrabFrameBlendElapsed = 0.0f;
+	FTransform ReplicatedGrabFrameBlendStart = FTransform::Identity;
+	FTransform ReplicatedGrabFrameBlendTarget = FTransform::Identity;
 
-#pragma region Grab Debug Functions
-	void ResetGrabDebug();
-	void UpdateGrabDebug(
-		float DeltaTime,
-		const FVector& RelicForce,
-		const FVector& UserIntent);
-	void DrawGrabDebug() const;
-	void DrawGrabForceDebug(const FVector& ForceStart) const;
-#pragma endregion
-
-#pragma region Grab Debug State
-	FVector LastDebugRelicForce = FVector::ZeroVector;
-	FVector SmoothedDebugUserIntent = FVector::ZeroVector;
-	float LastDebugIntentForceAlignment = 0.0f;
-#pragma endregion
 };

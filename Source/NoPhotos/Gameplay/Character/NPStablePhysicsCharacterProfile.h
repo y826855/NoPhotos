@@ -93,6 +93,12 @@ public:
 	UPROPERTY(EditAnywhere, Category="잡기", meta=(DisplayName="Grab 선형 힘 파괴 임계값", ClampMin="0.0"))
 	float GrabLinearBreakThreshold = 200000.0f;
 
+	UPROPERTY(EditAnywhere, Category="잡기", meta=(DisplayName="복제 Grab Frame 보간 시간", ClampMin="0.0", Units="s"))
+	float ReplicatedGrabFrameBlendDuration = 0.15f;
+
+	UPROPERTY(EditAnywhere, Category="잡기", meta=(DisplayName="Grab 파괴 후 재시도 대기시간", ClampMin="0.0", Units="s"))
+	float GrabRetryCooldown = 0.5f;
+
 	UPROPERTY(EditAnywhere, Category="조작|팔", meta=(DisplayName="손 뻗기 거리", ClampMin="0.0", Units="cm"))
 	float RightHandReachDistance = 120.0f;
 

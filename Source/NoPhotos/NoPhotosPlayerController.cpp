@@ -9,6 +9,7 @@
 #include "Blueprint/UserWidget.h"
 #include "NoPhotos.h"
 #include "Gameplay/Photo/NPPhotoCaptureComponent.h"
+#include "Gameplay/Photo/NPPhotoFlashWidget.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
 #include "Gameplay/Photo/NPPhotoPreviewWidget.h"
 #include "Gameplay/Photo/NPPhotoTransferComponent.h"
@@ -40,6 +41,21 @@ void ANoPhotosPlayerController::BeginPlay()
 		{
 			UE_LOG(LogNPPhoto, Warning, TEXT("[PhotoUI] PhotoPreviewWidgetClass is not assigned."));
 		}
+
+		if (PhotoFlashWidgetClass)
+		{
+			PhotoFlashWidget = CreateWidget<UNPPhotoFlashWidget>(this, PhotoFlashWidgetClass);
+			if (PhotoFlashWidget)
+			{
+				PhotoFlashWidget->AddToPlayerScreen(100);
+				PhotoFlashWidget->SetVisibility(ESlateVisibility::Collapsed);
+				UE_LOG(LogNPPhoto, Log, TEXT("[PhotoUI] Flash widget created. Widget=%s"), *GetNameSafe(PhotoFlashWidget));
+			}
+		}
+		else
+		{
+			UE_LOG(LogNPPhoto, Warning, TEXT("[PhotoUI] PhotoFlashWidgetClass is not assigned."));
+		}
 	}
 
 	// only spawn touch controls on local player controllers
@@ -60,6 +76,23 @@ void ANoPhotosPlayerController::BeginPlay()
 		}
 
 	}
+}
+
+void ANoPhotosPlayerController::PlayPhotoFlash()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	if (!PhotoFlashWidget)
+	{
+		UE_LOG(LogNPPhoto, Warning, TEXT("[PhotoUI] Flash skipped: PhotoFlashWidget is null."));
+		return;
+	}
+
+	PhotoFlashWidget->PlayFlash();
+	UE_LOG(LogNPPhoto, Log, TEXT("[PhotoUI] Flash animation requested."));
 }
 
 void ANoPhotosPlayerController::SetupInputComponent()
@@ -90,23 +123,58 @@ void ANoPhotosPlayerController::SetupInputComponent()
 
 	UEnhancedInputComponent* EnhancedInputComponent =
 		Cast<UEnhancedInputComponent>(InputComponent);
-	if (!EnhancedInputComponent || !TakePhotoAction)
+	if (!EnhancedInputComponent)
 	{
 		UE_LOG(
 			LogNPPhoto,
-			Warning,
-			TEXT("[Input] Photo binding skipped. EnhancedInput=%s TakePhotoAction=%s"),
-			*GetNameSafe(EnhancedInputComponent),
-			*GetNameSafe(TakePhotoAction));
+			Error,
+			TEXT("[Input] Photo bindings skipped: Enhanced Input Component is missing."));
 		return;
 	}
 
-	EnhancedInputComponent->BindAction(
-		TakePhotoAction,
-		ETriggerEvent::Started,
-		this,
-		&ANoPhotosPlayerController::HandleTakePhotoInput);
-	UE_LOG(LogNPPhoto, Log, TEXT("[Input] Photo action bound. Action=%s"), *GetNameSafe(TakePhotoAction));
+	if (TogglePhotoModeAction)
+	{
+		EnhancedInputComponent->BindAction(
+			TogglePhotoModeAction,
+			ETriggerEvent::Started,
+			this,
+			&ANoPhotosPlayerController::HandleTogglePhotoModeInput);
+		UE_LOG(LogNPPhoto, Log, TEXT("[Input] Photo mode action bound. Action=%s"), *GetNameSafe(TogglePhotoModeAction));
+	}
+	else
+	{
+		UE_LOG(LogNPPhoto, Warning, TEXT("[Input] TogglePhotoModeAction is not assigned."));
+	}
+
+	if (TakePhotoAction)
+	{
+		EnhancedInputComponent->BindAction(
+			TakePhotoAction,
+			ETriggerEvent::Started,
+			this,
+			&ANoPhotosPlayerController::HandleTakePhotoInput);
+		UE_LOG(LogNPPhoto, Log, TEXT("[Input] Photo shot action bound. Action=%s"), *GetNameSafe(TakePhotoAction));
+	}
+	else
+	{
+		UE_LOG(LogNPPhoto, Warning, TEXT("[Input] TakePhotoAction is not assigned."));
+	}
+}
+
+void ANoPhotosPlayerController::HandleTogglePhotoModeInput()
+{
+	if (!PhotoCaptureComponent)
+	{
+		UE_LOG(LogNPPhoto, Error, TEXT("[Input] PhotoCaptureComponent is null."));
+		return;
+	}
+
+	PhotoCaptureComponent->TogglePhotoMode();
+	UE_LOG(
+		LogNPPhoto,
+		Log,
+		TEXT("[Input] Photo mode toggled. Active=%s"),
+		PhotoCaptureComponent->IsPhotoModeActive() ? TEXT("true") : TEXT("false"));
 }
 
 void ANoPhotosPlayerController::HandleTakePhotoInput()

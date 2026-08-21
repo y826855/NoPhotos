@@ -3,7 +3,6 @@
 #include "Camera/CameraComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
-#include "DrawDebugHelpers.h"
 #include "EnhancedInputComponent.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -13,9 +12,11 @@
 #include "PhysicsEngine/BodyInstance.h"
 #include "PhysicsEngine/PhysicalAnimationComponent.h"
 #include "PhysicsEngine/PhysicsAsset.h"
+#include "Gameplay/Character/NPStablePhysicsDebugComponent.h"
 #include "Gameplay/Character/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Character/NPStablePhysicsMovementComponent.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
+#include "Core/Audio/NPSoundSubsystem.h"
 
 ANPStablePhysicsPawn::ANPStablePhysicsPawn()
 {
@@ -54,6 +55,7 @@ ANPStablePhysicsPawn::ANPStablePhysicsPawn()
 
 	PhysicalAnimation = CreateDefaultSubobject<UPhysicalAnimationComponent>(TEXT("PhysicalAnimation"));
 	PhysicsMovement = CreateDefaultSubobject<UNPStablePhysicsMovementComponent>(TEXT("NPPhysicsMovement"));
+	PhysicsDebug = CreateDefaultSubobject<UNPStablePhysicsDebugComponent>(TEXT("NPPhysicsDebug"));
 
 	RightHandGrab = CreateDefaultSubobject<UNPStablePhysicsGrabComponent>(TEXT("RightHandGrab"));
 	RightHandGrab->SetupAttachment(PhysicsMesh);
@@ -82,9 +84,14 @@ void ANPStablePhysicsPawn::BeginPlay()
 		RightHandGrab,
 		&UNPStablePhysicsGrabComponent::NotifyJumpIntent);
 	InitializePhysicalAnimation();
+	DefaultCameraArmLength = CameraBoom->TargetArmLength;
+	DefaultCameraFOV = FollowCamera->FieldOfView;
+	CurrentCameraTargetHeight = CameraTargetHeight;
 	UpdateCameraTarget();
 	UpdateFacingTarget();
 	CameraBoom->AddTickPrerequisiteActor(this);
+	PhysicsDebug->AddTickPrerequisiteActor(this);
+	PhysicsDebug->AddTickPrerequisiteComponent(RightHandGrab);
 }
 
 void ANPStablePhysicsPawn::Tick(float DeltaSeconds)
@@ -92,13 +99,9 @@ void ANPStablePhysicsPawn::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 
 	RefreshCharacterProfileIfChanged();
+	UpdatePhotoCamera(DeltaSeconds);
 	UpdateCameraTarget();
 	UpdateFacingTarget();
-
-	// 디버그 전용: 카메라, 캐릭터와 이동 입력의 정면 방향을 표시합니다.
-	DrawFacingDebug();
-	// 디버그 전용: 피지컬 애니메이션 프로필의 본별 강성을 표시합니다.
-	DrawPhysicalProfileDebug();
 
 	UpdateSpinePitch(DeltaSeconds);
 	UpdateRightHandIK(DeltaSeconds);
@@ -172,6 +175,71 @@ bool ANPStablePhysicsPawn::PlayPhotoShotMontage()
 		*GetNameSafe(PhotoShotMontage),
 		Duration);
 	return Duration > 0.0f;
+}
+
+void ANPStablePhysicsPawn::BroadcastPhotoShutterSound(const FVector& SoundLocation)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	MulticastPlayPhotoShutterSound(SoundLocation);
+}
+
+void ANPStablePhysicsPawn::MulticastPlayPhotoShutterSound_Implementation(
+	const FVector_NetQuantize10 SoundLocation)
+{
+	if (!PhotoShutterSound)
+	{
+		UE_LOG(
+			LogNPPhoto,
+			Warning,
+			TEXT("[Audio] PhotoShutterSound is not assigned. Pawn=%s"),
+			*GetNameSafe(this));
+		return;
+	}
+
+	if (UNPSoundSubsystem* SoundSubsystem = UNPSoundSubsystem::Get(this))
+	{
+		SoundSubsystem->PlaySFXAtLocation(
+			PhotoShutterSound,
+			SoundLocation,
+			FRotator::ZeroRotator,
+			1.0f,
+			1.0f,
+			0.0f,
+			PhotoShutterAttenuation);
+	}
+}
+
+void ANPStablePhysicsPawn::SetPhotoViewActive(const bool bActive)
+{
+	if (!IsLocallyControlled() || bPhotoViewActive == bActive)
+	{
+		return;
+	}
+
+	bPhotoViewActive = bActive;
+	if (PhysicsMesh)
+	{
+		// 다른 플레이어에게는 계속 보이고, 이 Pawn을 소유한 로컬 화면에서만 숨깁니다.
+		PhysicsMesh->SetOwnerNoSee(bPhotoViewActive);
+	}
+	UE_LOG(
+		LogNPPhoto,
+		Log,
+		TEXT("[PhotoMode] Pawn view changed. Pawn=%s Active=%s"),
+		*GetNameSafe(this),
+		bPhotoViewActive ? TEXT("true") : TEXT("false"));
+}
+
+bool ANPStablePhysicsPawn::IsPhotoViewReady() const
+{
+	return bPhotoViewActive
+		&& FMath::IsNearlyEqual(CameraBoom->TargetArmLength, PhotoCameraArmLength, 5.0f)
+		&& FMath::IsNearlyEqual(CurrentCameraTargetHeight, PhotoCameraTargetHeight, 5.0f)
+		&& FMath::IsNearlyEqual(FollowCamera->FieldOfView, PhotoCameraFOV, 1.0f);
 }
 
 float ANPStablePhysicsPawn::GetAnimationGroundSpeed() const
@@ -250,6 +318,10 @@ void ANPStablePhysicsPawn::ApplyCharacterProfile()
 	PhysicsMovement->SetJumpVelocityChange(CharacterProfile->JumpVelocityChange);
 	RightHandGrab->SetLinearBreakThreshold(
 		CharacterProfile->GrabLinearBreakThreshold);
+	RightHandGrab->SetReplicatedGrabFrameBlendDuration(
+		CharacterProfile->ReplicatedGrabFrameBlendDuration);
+	RightHandGrab->SetGrabRetryCooldown(
+		CharacterProfile->GrabRetryCooldown);
 }
 
 void ANPStablePhysicsPawn::RefreshCharacterProfileIfChanged()
@@ -332,8 +404,37 @@ void ANPStablePhysicsPawn::UpdateCameraTarget()
 	}
 
 	const FVector TargetLocation = PhysicsMesh->GetSocketLocation(FullBodyRootName)
-		+ FVector::UpVector * CameraTargetHeight;
+		+ FVector::UpVector * CurrentCameraTargetHeight;
 	CameraRoot->SetWorldLocation(TargetLocation);
+}
+
+void ANPStablePhysicsPawn::UpdatePhotoCamera(const float DeltaSeconds)
+{
+	const float TargetArmLength = bPhotoViewActive
+		? PhotoCameraArmLength
+		: DefaultCameraArmLength;
+	const float TargetHeight = bPhotoViewActive
+		? PhotoCameraTargetHeight
+		: CameraTargetHeight;
+	const float TargetFOV = bPhotoViewActive
+		? PhotoCameraFOV
+		: DefaultCameraFOV;
+
+	CameraBoom->TargetArmLength = FMath::FInterpTo(
+		CameraBoom->TargetArmLength,
+		TargetArmLength,
+		DeltaSeconds,
+		PhotoCameraBlendSpeed);
+	CurrentCameraTargetHeight = FMath::FInterpTo(
+		CurrentCameraTargetHeight,
+		TargetHeight,
+		DeltaSeconds,
+		PhotoCameraBlendSpeed);
+	FollowCamera->SetFieldOfView(FMath::FInterpTo(
+		FollowCamera->FieldOfView,
+		TargetFOV,
+		DeltaSeconds,
+		PhotoCameraBlendSpeed));
 }
 
 void ANPStablePhysicsPawn::UpdateFacingTarget()
@@ -507,245 +608,3 @@ void ANPStablePhysicsPawn::SetRightHandVisualState(bool bActive)
 {
 	bRightHandActive = bActive;
 }
-
-#pragma region Pawn Debug Functions
-void ANPStablePhysicsPawn::DrawFacingDebug() const
-{
-	if (!bDrawFacingDebug
-		|| !GetWorld()
-		|| PhysicsMesh->GetBoneIndex(FullBodyRootName) == INDEX_NONE)
-	{
-		return;
-	}
-
-	const FVector ArrowStart = PhysicsMesh->GetSocketLocation(FullBodyRootName)
-		+ FVector::UpVector * FacingDebugHeight;
-
-	const float CameraYaw = GetTargetViewRotation().Yaw;
-	const FVector CameraForward = FRotationMatrix(FRotator(0.0f, CameraYaw, 0.0f))
-		.GetUnitAxis(EAxis::X);
-
-	const FVector CharacterForward = GetVisualForwardDirection();
-
-	DrawDebugDirectionalArrow(
-		GetWorld(),
-		ArrowStart + FVector::UpVector * 8.0f,
-		ArrowStart + FVector::UpVector * 8.0f + CameraForward * FacingDebugArrowLength,
-		20.0f,
-		FColor::Green,
-		false,
-		0.0f,
-		0,
-		3.0f);
-
-	DrawDebugDirectionalArrow(
-		GetWorld(),
-		ArrowStart - FVector::UpVector * 8.0f,
-		ArrowStart - FVector::UpVector * 8.0f + CharacterForward * FacingDebugArrowLength,
-		20.0f,
-		FColor::Red,
-		false,
-		0.0f,
-		0,
-		3.0f);
-
-	if (PhysicsMovement->HasFacingDirection())
-	{
-		DrawDebugDirectionalArrow(
-			GetWorld(),
-			ArrowStart,
-			ArrowStart + PhysicsMovement->GetFacingDirection() * FacingDebugArrowLength,
-			20.0f,
-			FColor::Blue,
-			false,
-			0.0f,
-			0,
-			3.0f);
-	}
-}
-
-void ANPStablePhysicsPawn::DrawPhysicalProfileDebug() const
-{
-	if (!CharacterProfile
-		|| !CharacterProfile->bDrawPhysicalRegionDebug
-		|| !GetWorld())
-	{
-		return;
-	}
-
-	const float LowerBodyRigidity = CharacterProfile->LowerBodyRigidity;
-	const float TorsoRigidity = CharacterProfile->TorsoRigidity;
-	const float HeadRigidity = CharacterProfile->HeadRigidity;
-	const float ArmRigidity = CharacterProfile->ArmRigidity;
-	const float HandRigidity = CharacterProfile->HandRigidity;
-
-	DrawPhysicalProfileLink(
-		CharacterProfile->PelvisBoneName,
-		CharacterProfile->LeftThighBoneName,
-		FColor::Blue,
-		LowerBodyRigidity);
-	DrawPhysicalProfileLink(
-		CharacterProfile->PelvisBoneName,
-		CharacterProfile->RightThighBoneName,
-		FColor::Blue,
-		LowerBodyRigidity);
-	DrawPhysicalProfileLink(
-		CharacterProfile->LeftThighBoneName,
-		CharacterProfile->LeftFootBoneName,
-		FColor::Blue,
-		LowerBodyRigidity);
-	DrawPhysicalProfileLink(
-		CharacterProfile->RightThighBoneName,
-		CharacterProfile->RightFootBoneName,
-		FColor::Blue,
-		LowerBodyRigidity);
-	DrawPhysicalProfileLink(
-		CharacterProfile->PelvisBoneName,
-		CharacterProfile->SpineBoneName,
-		FColor::Green,
-		TorsoRigidity);
-	DrawPhysicalProfileLink(
-		CharacterProfile->SpineBoneName,
-		CharacterProfile->NeckBoneName,
-		FColor::Purple,
-		HeadRigidity);
-	DrawPhysicalProfileLink(
-		CharacterProfile->SpineBoneName,
-		CharacterProfile->LeftUpperArmBoneName,
-		FColor::Orange,
-		ArmRigidity);
-	DrawPhysicalProfileLink(
-		CharacterProfile->SpineBoneName,
-		CharacterProfile->RightUpperArmBoneName,
-		FColor::Orange,
-		ArmRigidity);
-	DrawPhysicalProfileLink(
-		CharacterProfile->LeftUpperArmBoneName,
-		CharacterProfile->LeftHandBoneName,
-		FColor::Orange,
-		ArmRigidity);
-	DrawPhysicalProfileLink(
-		CharacterProfile->RightUpperArmBoneName,
-		CharacterProfile->RightHandBoneName,
-		FColor::Orange,
-		ArmRigidity);
-
-	DrawPhysicalProfileBone(
-		CharacterProfile->PelvisBoneName,
-		FColor::Blue,
-		LowerBodyRigidity,
-		FString::Printf(TEXT("하체 %.0f"), LowerBodyRigidity));
-	DrawPhysicalProfileBone(
-		CharacterProfile->LeftThighBoneName,
-		FColor::Blue,
-		LowerBodyRigidity,
-		FString());
-	DrawPhysicalProfileBone(
-		CharacterProfile->RightThighBoneName,
-		FColor::Blue,
-		LowerBodyRigidity,
-		FString());
-	DrawPhysicalProfileBone(
-		CharacterProfile->LeftFootBoneName,
-		FColor::Blue,
-		LowerBodyRigidity,
-		FString());
-	DrawPhysicalProfileBone(
-		CharacterProfile->RightFootBoneName,
-		FColor::Blue,
-		LowerBodyRigidity,
-		FString());
-	DrawPhysicalProfileBone(
-		CharacterProfile->SpineBoneName,
-		FColor::Green,
-		TorsoRigidity,
-		FString::Printf(TEXT("몸통 %.0f"), TorsoRigidity));
-	DrawPhysicalProfileBone(
-		CharacterProfile->NeckBoneName,
-		FColor::Purple,
-		HeadRigidity,
-		FString::Printf(TEXT("목/머리 %.0f"), HeadRigidity));
-	DrawPhysicalProfileBone(
-		CharacterProfile->LeftUpperArmBoneName,
-		FColor::Orange,
-		ArmRigidity,
-		FString());
-	DrawPhysicalProfileBone(
-		CharacterProfile->RightUpperArmBoneName,
-		FColor::Orange,
-		ArmRigidity,
-		FString::Printf(TEXT("팔 %.0f"), ArmRigidity));
-	DrawPhysicalProfileBone(
-		CharacterProfile->LeftHandBoneName,
-		FColor::Red,
-		HandRigidity,
-		FString());
-	DrawPhysicalProfileBone(
-		CharacterProfile->RightHandBoneName,
-		FColor::Red,
-		HandRigidity,
-		FString::Printf(TEXT("손 %.0f"), HandRigidity));
-}
-
-void ANPStablePhysicsPawn::DrawPhysicalProfileBone(
-	FName BoneName,
-	const FColor& Color,
-	float Rigidity,
-	const FString& Label) const
-{
-	if (PhysicsMesh->GetBoneIndex(BoneName) == INDEX_NONE)
-	{
-		return;
-	}
-
-	const float ClampedRigidity = FMath::Clamp(Rigidity, 0.0f, 100.0f);
-	const FVector BoneLocation = PhysicsMesh->GetSocketLocation(BoneName);
-	DrawDebugSphere(
-		GetWorld(),
-		BoneLocation,
-		4.0f + ClampedRigidity * 0.08f,
-		12,
-		Color,
-		false,
-		0.0f,
-		0,
-		1.0f + ClampedRigidity * 0.02f);
-
-	if (!Label.IsEmpty())
-	{
-		DrawDebugString(
-			GetWorld(),
-			BoneLocation + FVector::UpVector * 14.0f,
-			Label,
-			nullptr,
-			Color,
-			0.0f,
-			false,
-			0.85f);
-	}
-}
-
-void ANPStablePhysicsPawn::DrawPhysicalProfileLink(
-	FName StartBoneName,
-	FName EndBoneName,
-	const FColor& Color,
-	float Rigidity) const
-{
-	if (PhysicsMesh->GetBoneIndex(StartBoneName) == INDEX_NONE
-		|| PhysicsMesh->GetBoneIndex(EndBoneName) == INDEX_NONE)
-	{
-		return;
-	}
-
-	const float ClampedRigidity = FMath::Clamp(Rigidity, 0.0f, 100.0f);
-	DrawDebugLine(
-		GetWorld(),
-		PhysicsMesh->GetSocketLocation(StartBoneName),
-		PhysicsMesh->GetSocketLocation(EndBoneName),
-		Color,
-		false,
-		0.0f,
-		0,
-		1.0f + ClampedRigidity * 0.04f);
-}
-#pragma endregion

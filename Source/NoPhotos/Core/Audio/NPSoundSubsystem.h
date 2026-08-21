@@ -1,0 +1,54 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Subsystems/GameInstanceSubsystem.h"
+#include "NPSoundSubsystem.generated.h"
+
+class UAudioComponent;
+class USoundAttenuation;
+class USoundBase;
+class USoundConcurrency;
+
+/**
+ * 레벨 전환 동안 유지되는 로컬 사운드 재생 창구입니다.
+ * 네트워크 복제를 직접 수행하지 않으며, 멀티플레이 3D 사운드는 RPC를 받은 각 클라이언트가
+ * PlaySFXAtLocation을 호출해야 합니다.
+ */
+UCLASS(BlueprintType)
+class NOPHOTOS_API UNPSoundSubsystem : public UGameInstanceSubsystem
+{
+	GENERATED_BODY()
+
+public:
+	virtual void Deinitialize() override;
+
+	UFUNCTION(BlueprintPure, Category = "Sound|Subsystem", meta = (WorldContext = "WorldContextObject"))
+	static UNPSoundSubsystem* Get(const UObject* WorldContextObject);
+
+	/** UI, 로컬 셔터음처럼 위치가 필요 없는 사운드를 재생합니다. */
+	UFUNCTION(BlueprintCallable, Category = "Sound|SFX")
+	void PlaySFX(USoundBase* Sound, float Volume = 1.0f, float Pitch = 1.0f, float StartTime = 0.0f);
+
+	/** 촬영 위치처럼 월드 공간상의 위치에서 들리는 3D 사운드를 재생합니다. */
+	UFUNCTION(BlueprintCallable, Category = "Sound|SFX")
+	void PlaySFXAtLocation(
+		USoundBase* Sound,
+		FVector Location,
+		FRotator Rotation = FRotator::ZeroRotator,
+		float Volume = 1.0f,
+		float Pitch = 1.0f,
+		float StartTime = 0.0f,
+		USoundAttenuation* AttenuationSettings = nullptr,
+		USoundConcurrency* ConcurrencySettings = nullptr);
+
+	/** 기존 BGM을 페이드아웃하고 새 BGM을 페이드인합니다. 반복 여부는 사운드 에셋에서 설정합니다. */
+	UFUNCTION(BlueprintCallable, Category = "Sound|BGM")
+	void PlayBGM(USoundBase* Sound, float FadeDuration = 1.0f, float Volume = 1.0f);
+
+	UFUNCTION(BlueprintCallable, Category = "Sound|BGM")
+	void StopBGM(float FadeOutDuration = 1.0f);
+
+private:
+	UPROPERTY(Transient)
+	TObjectPtr<UAudioComponent> CurrentBGMComponent;
+};

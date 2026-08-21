@@ -9,6 +9,7 @@ class UNPPulleyBarrierGimmickComponent;
 class UPhysicsConstraintComponent;
 class UPrimitiveComponent;
 class USceneComponent;
+class USplineMeshComponent;
 class UStaticMeshComponent;
 class FLifetimeProperty;
 
@@ -44,6 +45,7 @@ public:
 	FOnPulleyHandleGrabbed OnHandleGrabbed;
 
 protected:
+	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaSeconds) override;
 
@@ -71,6 +73,33 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	TObjectPtr<UNPPulleyBarrierGimmickComponent> GimmickComponent;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components|Wire")
+	TObjectPtr<USplineMeshComponent> HandleWireMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components|Wire")
+	TObjectPtr<USceneComponent> HandleWirePulleyAnchor;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components|Wire")
+	TObjectPtr<USceneComponent> HandleWireHandleAnchor;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components|Wire")
+	TObjectPtr<USplineMeshComponent> TopWireMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components|Wire")
+	TObjectPtr<USceneComponent> TopWireLeftAnchor;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components|Wire")
+	TObjectPtr<USceneComponent> TopWireRightAnchor;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components|Wire")
+	TObjectPtr<USplineMeshComponent> BarrierWireMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components|Wire")
+	TObjectPtr<USceneComponent> BarrierWirePulleyAnchor;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components|Wire")
+	TObjectPtr<USceneComponent> BarrierWireBarrierAnchor;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pulley Barrier", meta=(ClampMin="1.0"))
 	float HandleTravelDistance = 200.0f;
 
@@ -82,6 +111,13 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pulley Barrier", meta=(ClampMin="0.0"))
 	float HandleLinearDamping = 5.0f;
+
+	UPROPERTY(
+		EditAnywhere,
+		BlueprintReadOnly,
+		Category="Pulley Barrier",
+		meta=(ClampMin="0.0", Units="cm/s"))
+	float MaxHandleDownwardSpeed = 30.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pulley Barrier|Return", meta=(ClampMin="1.0"))
 	float ReturnForceRampDistance = 25.0f;
@@ -114,10 +150,16 @@ private:
 	void ConfigureHandleConstraint();
 	float GetSignedHandleTravelDistance() const;
 	void ApplyHandleReturnForce(float SignedTravelDistance);
+	void LimitHandleDownwardSpeed();
 	bool TrySettleHandle(float SignedTravelDistance);
 	void HandleGrabStarted(UPrimitiveComponent* GrabbedComponent);
 	void UpdateTravelFromHandle();
 	void ApplyTravel(float TravelDistance);
+	void UpdateWireMeshes();
+	void UpdateWireMesh(
+		USplineMeshComponent* WireMesh,
+		const USceneComponent* StartAnchor,
+		const USceneComponent* EndAnchor);
 	void ApplyPulleyRotation(
 		UStaticMeshComponent* PulleyMesh,
 		const FQuat& InitialRotation,

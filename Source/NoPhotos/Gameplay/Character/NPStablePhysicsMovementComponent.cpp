@@ -46,7 +46,7 @@ void UNPStablePhysicsMovementComponent::SetJumpVelocityChange(
 
 void UNPStablePhysicsMovementComponent::SetMoveInput(const FVector& InMoveInput)
 {
-	MoveInput = InMoveInput.GetClampedToMaxSize(1.0f);
+	PendingInput.MoveInput = InMoveInput.GetClampedToMaxSize(1.0f);
 }
 
 void UNPStablePhysicsMovementComponent::SetFacingDirection(
@@ -55,8 +55,8 @@ void UNPStablePhysicsMovementComponent::SetFacingDirection(
 	FVector HorizontalDirection(InFacingDirection.X, InFacingDirection.Y, 0.0f);
 	if (!HorizontalDirection.IsNearlyZero())
 	{
-		FacingDirection = HorizontalDirection.GetSafeNormal();
-		bHasFacingDirection = true;
+		PendingInput.FacingDirection = HorizontalDirection.GetSafeNormal();
+		PendingInput.bHasFacingDirection = true;
 	}
 }
 
@@ -88,7 +88,7 @@ void UNPStablePhysicsMovementComponent::SetAnimationStateOverride(
 
 void UNPStablePhysicsMovementComponent::RequestJump()
 {
-	bJumpRequested = true;
+	PendingInput.bJumpRequested = true;
 }
 
 void UNPStablePhysicsMovementComponent::TickComponent(
@@ -104,24 +104,36 @@ void UNPStablePhysicsMovementComponent::TickComponent(
 		CurrentAcceleration = FVector::ZeroVector;
 		bGrounded = false;
 		bIsFalling = true;
-		bJumpRequested = false;
+		ConsumePendingInput();
 		return;
 	}
 
+	const FNPStablePhysicsLocomotionInput Input = ConsumePendingInput();
+	SimulateLocomotion(Input);
+}
+
+FNPStablePhysicsLocomotionInput UNPStablePhysicsMovementComponent::ConsumePendingInput()
+{
+	const FNPStablePhysicsLocomotionInput Input = PendingInput;
+	PendingInput.bJumpRequested = false;
+	return Input;
+}
+
+void UNPStablePhysicsMovementComponent::SimulateLocomotion(
+	const FNPStablePhysicsLocomotionInput& Input)
+{
 	UpdateMovementState();
 	UpdateGroundedState();
 	if (!bPhysicsUpdatesEnabled)
 	{
-		bJumpRequested = false;
 		return;
 	}
 
 	UpdateGroundSupportPhysics();
-	UpdateMovementPhysics();
-	UpdateFacingPhysics();
+	UpdateMovementPhysics(Input.MoveInput);
+	UpdateFacingPhysics(Input.FacingDirection, Input.bHasFacingDirection);
 	UpdateBalancePhysics();
-	UpdateJumpPhysics();
-	bJumpRequested = false;
+	UpdateJumpPhysics(Input.bJumpRequested);
 }
 
 void UNPStablePhysicsMovementComponent::UpdateMovementState()
@@ -213,13 +225,13 @@ void UNPStablePhysicsMovementComponent::UpdateGroundSupportPhysics()
 	PhysicsMesh->AddForce(FVector::UpVector * SupportAcceleration * TotalMass, PelvisBodyName);
 }
 
-void UNPStablePhysicsMovementComponent::UpdateMovementPhysics()
+void UNPStablePhysicsMovementComponent::UpdateMovementPhysics(const FVector& InMoveInput)
 {
 	FVector HorizontalVelocity = Velocity;
 	HorizontalVelocity.Z = 0.0f;
 
 	// 힘을 계속 누적하지 않고 현재 속도가 목표 속도에 가까워지도록 제어합니다.
-	const FVector DesiredVelocity = MoveInput * MaxMoveSpeed;
+	const FVector DesiredVelocity = InMoveInput * MaxMoveSpeed;
 	FVector MoveForce = (DesiredVelocity - HorizontalVelocity) * MoveStrength;
 	MoveForce -= HorizontalVelocity * MoveDamping;
 	MoveForce.Z = 0.0f;
@@ -232,9 +244,11 @@ void UNPStablePhysicsMovementComponent::UpdateMovementPhysics()
 	CurrentAcceleration = MoveForce / TotalMass;
 }
 
-void UNPStablePhysicsMovementComponent::UpdateFacingPhysics()
+void UNPStablePhysicsMovementComponent::UpdateFacingPhysics(
+	const FVector& InFacingDirection,
+	bool bInHasFacingDirection)
 {
-	if (!bOrientRotationToMovement || !bHasFacingDirection)
+	if (!bOrientRotationToMovement || !bInHasFacingDirection)
 	{
 		return;
 	}
@@ -246,8 +260,8 @@ void UNPStablePhysicsMovementComponent::UpdateFacingPhysics()
 	}
 
 	const float YawError = FMath::Atan2(
-		FVector::CrossProduct(CurrentForward, FacingDirection).Z,
-		FVector::DotProduct(CurrentForward, FacingDirection));
+		FVector::CrossProduct(CurrentForward, InFacingDirection).Z,
+		FVector::DotProduct(CurrentForward, InFacingDirection));
 	const float TargetAngularSpeed = FMath::Abs(FMath::RadiansToDegrees(YawError))
 		> FacingStopTolerance
 		? FMath::Clamp(
@@ -279,9 +293,9 @@ void UNPStablePhysicsMovementComponent::UpdateBalancePhysics()
 	PhysicsMesh->AddTorqueInRadians(BalanceTorque, PelvisBodyName);
 }
 
-void UNPStablePhysicsMovementComponent::UpdateJumpPhysics()
+void UNPStablePhysicsMovementComponent::UpdateJumpPhysics(bool bInJumpRequested)
 {
-	if (!bJumpRequested || !bGrounded)
+	if (!bInJumpRequested || !bGrounded)
 	{
 		return;
 	}
