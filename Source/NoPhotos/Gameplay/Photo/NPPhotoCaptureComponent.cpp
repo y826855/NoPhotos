@@ -1,6 +1,7 @@
 #include "Gameplay/Photo/NPPhotoCaptureComponent.h"
 
 #include "Components/SceneCaptureComponent2D.h"
+#include "Engine/Engine.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
@@ -426,6 +427,21 @@ void UNPPhotoCaptureComponent::ClientReceivePhotoResult_Implementation(
 		static_cast<int32>(Result.FailureReason),
 		*GetNameSafe(Result.Thief),
 		*GetNameSafe(Result.Relic));
+
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+	if (Result.bSuccess && GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			5.0f,
+			FColor::Green,
+			FString::Printf(
+				TEXT("[사진 판정 성공]\n촬영자: %s\n도둑: %s\n유물: %s"),
+				*GetNameSafe(Result.Photographer),
+				*GetNameSafe(Result.Thief),
+				*GetNameSafe(Result.Relic)));
+	}
+#endif
 
 	if (TArray<uint8>* JpegData = PendingJpegPhotos.Find(Result.CaptureSequence))
 	{
