@@ -3,9 +3,6 @@
 #include "NoPhotosGameMode.h"
 
 #include "GameFramework/PlayerController.h"
-#include "GameFramework/PlayerState.h"
-#include "Core/NPPlayerState.h"
-#include "Gameplay/Photo/NPMatchScorePolicy.h"
 #include "Gameplay/Photo/NPPhotoEvidenceService.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
 #include "Gameplay/Photo/NPPhotoRepository.h"
@@ -16,7 +13,6 @@ ANoPhotosGameMode::ANoPhotosGameMode()
 {
 	GameStateClass = ANoPhotosGameState::StaticClass();
 	PhotoEvidenceServiceClass = UNPPhotoEvidenceService::StaticClass();
-	MatchScorePolicyClass = UNPMatchScorePolicy::StaticClass();
 }
 
 void ANoPhotosGameMode::InitGame(
@@ -33,12 +29,6 @@ void ANoPhotosGameMode::InitGame(
 		this, EvidenceClass, TEXT("PhotoEvidenceService"));
 	PhotoEvidenceService->Initialize(this);
 
-	UClass* ScoreClass = MatchScorePolicyClass
-		? MatchScorePolicyClass.Get()
-		: UNPMatchScorePolicy::StaticClass();
-	MatchScorePolicy = NewObject<UNPMatchScorePolicy>(
-		this, ScoreClass, TEXT("MatchScorePolicy"));
-
 	PhotoRepository = NewObject<UNPPhotoRepository>(this, TEXT("PhotoRepository"));
 	PhotoRepository->Initialize(this);
 
@@ -51,7 +41,7 @@ FNPPhotoEvidenceResult ANoPhotosGameMode::HandlePhotoCaptureRequest(
 {
 	FNPPhotoEvidenceResult Result;
 	Result.CaptureSequence = Request.CaptureSequence;
-	if (!HasAuthority() || !PhotoEvidenceService || !MatchScorePolicy)
+	if (!HasAuthority() || !PhotoEvidenceService)
 	{
 		Result.FailureReason = ENPPhotoEvidenceFailureReason::InvalidPhotographer;
 		return Result;
@@ -79,28 +69,17 @@ FNPPhotoEvidenceResult ANoPhotosGameMode::HandlePhotoCaptureRequest(
 		RelicDeliveryService->RegisterPhotoEvidence(Result);
 	}
 
-	const int32 AwardedScore = MatchScorePolicy->CalculateEvidenceScore(Result);
-	if (ANPPlayerState* PhotographerPlayerState = Cast<ANPPlayerState>(Result.Photographer))
-	{
-		PhotographerPlayerState->AddScore(AwardedScore);
-	}
-	else if (IsValid(Result.Photographer))
-	{
-		// 커스텀 PlayerState가 아닌 테스트 환경에서도 기존 동작을 유지합니다.
-		Result.Photographer->SetScore(Result.Photographer->GetScore() + AwardedScore);
-	}
 	if (ANoPhotosGameState* PhotoGameState = GetGameState<ANoPhotosGameState>())
 	{
-		PhotoGameState->AddPhotoEvidence(Result, AwardedScore);
+		PhotoGameState->AddPhotoEvidence(Result, 0);
 	}
 	UE_LOG(
 		LogNPPhoto,
 		Log,
-		TEXT("[GameMode] Photo evidence accepted. Photographer=%s Thief=%s Relic=%s Score=%d"),
+		TEXT("[GameMode] Photo evidence accepted. Photographer=%s Thief=%s Relic=%s"),
 		*GetNameSafe(Result.Photographer),
 		*GetNameSafe(Result.Thief),
-		*GetNameSafe(Result.Relic),
-		AwardedScore);
+		*GetNameSafe(Result.Relic));
 	return Result;
 }
 
