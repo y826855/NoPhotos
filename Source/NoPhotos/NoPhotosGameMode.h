@@ -7,7 +7,6 @@
 #include "Gameplay/Photo/NPPhotoEvidenceTypes.h"
 #include "NoPhotosGameMode.generated.h"
 
-class UNPMatchScorePolicy;
 class UNPPhotoEvidenceService;
 class UNPPhotoRepository;
 class UNPRelicDeliveryService;
@@ -39,15 +38,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category="Photo")
 	TSubclassOf<UNPPhotoEvidenceService> PhotoEvidenceServiceClass;
 
-	UPROPERTY(EditDefaultsOnly, Category="Photo")
-	TSubclassOf<UNPMatchScorePolicy> MatchScorePolicyClass;
-
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<UNPPhotoEvidenceService> PhotoEvidenceService;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UNPMatchScorePolicy> MatchScorePolicy;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNPPhotoRepository> PhotoRepository;
