@@ -4,7 +4,7 @@
 #include "Core/NPPlayerState.h"
 #include "Components/PrimitiveComponent.h"
 #include "GameFramework/Pawn.h"
-#include "Gameplay/Character/NPStablePhysicsGrabComponent.h"
+#include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Photo/NPPhotoEvidenceTypes.h"
 #include "Gameplay/Relic/NPBaseRelic.h"
 #include "Gameplay/Relic/NPRelicReturnZone.h"

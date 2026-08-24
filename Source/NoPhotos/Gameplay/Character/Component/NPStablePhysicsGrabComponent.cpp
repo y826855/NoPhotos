@@ -1,11 +1,11 @@
-#include "Gameplay/Character/NPStablePhysicsGrabComponent.h"
+#include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
 
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
-#include "Gameplay/Character/NPStablePhysicsDebugComponent.h"
+#include "Gameplay/Character/Component/NPStablePhysicsDebugComponent.h"
 #include "Gameplay/Interaction/Components/GrabbableComponent.h"
 #include "PhysicsEngine/BodyInstance.h"
 

@@ -1,4 +1,4 @@
-#include "Gameplay/Character/NPStablePhysicsMovementComponent.h"
+#include "Gameplay/Character/Component/NPStablePhysicsMovementComponent.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"

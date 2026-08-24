@@ -1,11 +1,11 @@
-#include "Gameplay/Character/NPStablePhysicsDebugComponent.h"
+#include "Gameplay/Character/Component/NPStablePhysicsDebugComponent.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Gameplay/Character/NPRStablePhysicsPawn.h"
 #include "Gameplay/Character/NPStablePhysicsCharacterProfile.h"
-#include "Gameplay/Character/NPStablePhysicsGrabComponent.h"
-#include "Gameplay/Character/NPStablePhysicsMovementComponent.h"
+#include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
+#include "Gameplay/Character/Component/NPStablePhysicsMovementComponent.h"
 
 UNPStablePhysicsDebugComponent::UNPStablePhysicsDebugComponent()
 {

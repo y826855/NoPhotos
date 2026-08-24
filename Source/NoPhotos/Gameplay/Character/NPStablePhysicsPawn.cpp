@@ -12,9 +12,9 @@
 #include "PhysicsEngine/BodyInstance.h"
 #include "PhysicsEngine/PhysicalAnimationComponent.h"
 #include "PhysicsEngine/PhysicsAsset.h"
-#include "Gameplay/Character/NPStablePhysicsDebugComponent.h"
-#include "Gameplay/Character/NPStablePhysicsGrabComponent.h"
-#include "Gameplay/Character/NPStablePhysicsMovementComponent.h"
+#include "Gameplay/Character/Component/NPStablePhysicsDebugComponent.h"
+#include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
+#include "Gameplay/Character/Component/NPStablePhysicsMovementComponent.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
 #include "Core/Audio/NPSoundSubsystem.h"
 

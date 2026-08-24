@@ -8,7 +8,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "Gameplay/Character/NPStablePhysicsPawn.h"
-#include "Gameplay/Character/NPStablePhysicsGrabComponent.h"
+#include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
 #include "Gameplay/Photo/NPPhotoImageCodec.h"
 #include "Gameplay/Photo/NPPhotoTransferComponent.h"

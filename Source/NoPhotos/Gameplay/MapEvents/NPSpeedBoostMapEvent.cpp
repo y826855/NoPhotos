@@ -2,7 +2,7 @@
 
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
-#include "Gameplay/Character/NPStablePhysicsMovementComponent.h"
+#include "Gameplay/Character/Component/NPStablePhysicsMovementComponent.h"
 #include "Gameplay/Character/NPStablePhysicsPawn.h"
 #include "TimerManager.h"
 
