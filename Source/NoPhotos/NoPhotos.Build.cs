@@ -16,6 +16,7 @@ public class NoPhotos : ModuleRules
 			"EnhancedInput",
 			"AIModule",
 			"ChaosSolverEngine",
+			"PhysicsControl",
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"CableComponent",
