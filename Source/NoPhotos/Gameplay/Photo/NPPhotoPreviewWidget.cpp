@@ -11,7 +11,6 @@
 #include "NoPhotosGameState.h"
 #include "NoPhotosPlayerController.h"
 #include "TimerManager.h"
-#include "GameFramework/PlayerController.h"
 
 void UNPPhotoPreviewWidget::NativeConstruct()
 {
@@ -181,26 +180,6 @@ void UNPPhotoPreviewWidget::SetTransferNotificationVisible(const bool bVisible)
 		PhotoTransferText->SetVisibility(NotificationVisibility);
 	}
 
-	if (APlayerController* PlayerController = GetOwningPlayer())
-	{
-		if (bVisible)
-		{
-			PlayerController->bShowMouseCursor = true;
-
-			FInputModeGameAndUI InputMode;
-			InputMode.SetWidgetToFocus(TakeWidget());
-			InputMode.SetHideCursorDuringCapture(false);
-			InputMode.SetLockMouseToViewportBehavior(
-				EMouseLockMode::DoNotLock);
-
-			PlayerController->SetInputMode(InputMode);
-		}
-		else
-		{
-			PlayerController->bShowMouseCursor = false;
-			PlayerController->SetInputMode(FInputModeGameOnly());
-		}
-	}
 }
 
 void UNPPhotoPreviewWidget::HandleTransferRequestTimeout()
