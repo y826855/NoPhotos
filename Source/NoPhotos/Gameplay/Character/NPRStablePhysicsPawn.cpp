@@ -2,7 +2,6 @@
 
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
-#include "Debug/NPNetworkDebugSubsystem.h"
 #include "Net/UnrealNetwork.h"
 #include "PhysicsEngine/BodyInstance.h"
 #include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
@@ -180,13 +179,6 @@ void ANPRStablePhysicsPawn::ApplyMoveInput(const FVector& WorldMoveInput)
 	}
 
 	bClientWasMoving = true;
-#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	if (!UNPNetworkDebugSubsystem::IsMoveInputEnabled())
-	{
-		return;
-	}
-	UNPNetworkDebugSubsystem::RecordMoveInputRPC(this);
-#endif
 	ServerSetMoveInput(ClampedMoveInput);
 }
 
@@ -237,9 +229,6 @@ FRotator ANPRStablePhysicsPawn::GetTargetViewRotation() const
 void ANPRStablePhysicsPawn::ServerSetMoveInput_Implementation(
 	FVector_NetQuantizeNormal WorldMoveInput)
 {
-#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	UNPNetworkDebugSubsystem::RecordMoveInputRPC(this);
-#endif
 	if (IsPhotoMovementLocked())
 	{
 		Super::ApplyMoveInput(FVector::ZeroVector);
@@ -252,9 +241,6 @@ void ANPRStablePhysicsPawn::ServerSetViewRotation_Implementation(
 	uint16 CompressedYaw,
 	uint16 CompressedPitch)
 {
-#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	UNPNetworkDebugSubsystem::RecordViewRotationRPC(this);
-#endif
 	SetReplicatedViewRotation(FRotator(
 		FRotator::DecompressAxisFromShort(CompressedPitch),
 		FRotator::DecompressAxisFromShort(CompressedYaw),
@@ -274,9 +260,6 @@ void ANPRStablePhysicsPawn::ServerRequestJump_Implementation()
 void ANPRStablePhysicsPawn::ServerSetClientPhysicsState_Implementation(
 	const FRigidBodyState& ClientState)
 {
-#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	UNPNetworkDebugSubsystem::RecordPhysicsStateRPC(this);
-#endif
 	if (ClientState.Position.ContainsNaN()
 		|| ClientState.Quaternion.ContainsNaN()
 		|| !ClientState.Quaternion.IsNormalized()
@@ -409,32 +392,17 @@ void ANPRStablePhysicsPawn::UpdateClientPhysicsStateReplication(float DeltaSecon
 	{
 		return;
 	}
-#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	if (!UNPNetworkDebugSubsystem::IsPhysicsStateEnabled())
-	{
-		return;
-	}
-#endif
 
 	ClientPhysicsStateSendAccumulator += DeltaSeconds;
-#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	const float SendInterval =
-		1.0f / UNPNetworkDebugSubsystem::GetPhysicsStateRate();
-#else
-	constexpr float SendInterval = 1.0f / 30.0f;
-#endif
-	if (ClientPhysicsStateSendAccumulator < SendInterval)
+	if (ClientPhysicsStateSendAccumulator < PhysicsStateSendInterval)
 	{
 		return;
 	}
 
-	ClientPhysicsStateSendAccumulator -= SendInterval;
+	ClientPhysicsStateSendAccumulator -= PhysicsStateSendInterval;
 	FRigidBodyState ClientState;
 	if (PhysicsMesh->GetRigidBodyState(ClientState, FullBodyRootName))
 	{
-#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-		UNPNetworkDebugSubsystem::RecordPhysicsStateRPC(this);
-#endif
 		ServerSetClientPhysicsState(ClientState);
 	}
 }
@@ -454,30 +422,15 @@ void ANPRStablePhysicsPawn::UpdateViewRotationReplication(float DeltaSeconds)
 	{
 		return;
 	}
-#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	if (!UNPNetworkDebugSubsystem::IsViewRotationEnabled())
-	{
-		return;
-	}
-#endif
 
 	ViewRotationSendAccumulator += DeltaSeconds;
-#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	const float SendInterval =
-		1.0f / UNPNetworkDebugSubsystem::GetViewRotationRate();
-#else
-	constexpr float SendInterval = 0.05f;
-#endif
-	if (ViewRotationSendAccumulator < SendInterval)
+	if (ViewRotationSendAccumulator < ViewRotationSendInterval)
 	{
 		return;
 	}
 
-	ViewRotationSendAccumulator -= SendInterval;
+	ViewRotationSendAccumulator -= ViewRotationSendInterval;
 	const FRotator ViewRotation = Controller->GetControlRotation();
-#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
-	UNPNetworkDebugSubsystem::RecordViewRotationRPC(this);
-#endif
 	ServerSetViewRotation(
 		FRotator::CompressAxisToShort(ViewRotation.Yaw),
 		FRotator::CompressAxisToShort(ViewRotation.Pitch));

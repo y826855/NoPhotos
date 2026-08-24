@@ -63,6 +63,9 @@ protected:
 	virtual FRotator GetTargetViewRotation() const override;
 
 private:
+	static constexpr float PhysicsStateSendInterval = 1.0f / 30.0f;
+	static constexpr float ViewRotationSendInterval = 0.05f;
+
 	/** 자주 변경되는 이동 입력은 유실을 허용하는 RPC로 전달합니다. */
 	UFUNCTION(Server, Unreliable)
 	void ServerSetMoveInput(FVector_NetQuantizeNormal WorldMoveInput);
@@ -137,5 +140,5 @@ private:
 	bool bClientWasMoving = false;
 	bool bLocalRightHandActive = false;
 	float ClientPhysicsStateSendAccumulator = 0.0f;
-	float ViewRotationSendAccumulator = 0.05f;
+	float ViewRotationSendAccumulator = ViewRotationSendInterval;
 };
