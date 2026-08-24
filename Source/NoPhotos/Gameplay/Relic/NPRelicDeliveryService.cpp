@@ -39,7 +39,7 @@ bool UNPRelicDeliveryService::RegisterPhotoEvidence(const FNPPhotoEvidenceResult
 		LogNoPhotos,
 		Log,
 		TEXT("[RelicDelivery] Evidence %s. Relic=%s Photographer=%s UniquePhotographers=%d ReturnScore=%d"),
-		bRegistered ? TEXT("registered") : TEXT("ignored as duplicate"),
+		bRegistered ? TEXT("registered") : TEXT("ignored"),
 		*GetNameSafe(Relic),
 		*GetNameSafe(Evidence.Photographer),
 		Relic->GetEvidencePhotographerCount(),

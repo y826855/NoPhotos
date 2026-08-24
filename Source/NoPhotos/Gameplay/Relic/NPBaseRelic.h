@@ -29,10 +29,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="Relic|Delivery")
 	bool IsReturned() const { return bIsReturned; }
 
-	UFUNCTION(BlueprintPure, Category="Relic|Delivery")
+	/** 서버에서만 유효한 반환 점수 지급 대상입니다. */
+	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly, Category="Relic|Delivery")
 	APlayerState* GetLastCarrierPlayerState() const { return LastCarrierPlayerState; }
 
-	UFUNCTION(BlueprintPure, Category="Relic|Delivery")
+	/** 서버에서만 유효한 고유 촬영자 수입니다. */
+	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly, Category="Relic|Delivery")
 	int32 GetEvidencePhotographerCount() const { return EvidencePhotographers.Num(); }
 
 	UFUNCTION(BlueprintPure, Category="Relic|Delivery")
@@ -75,10 +77,12 @@ protected:
 	UPROPERTY(ReplicatedUsing=OnRep_IsReturned, VisibleInstanceOnly, BlueprintReadOnly, Category="Relic|Delivery")
 	bool bIsReturned = false;
 
-	UPROPERTY(Replicated, VisibleInstanceOnly, BlueprintReadOnly, Category="Relic|Delivery")
+	UPROPERTY(Transient)
 	TObjectPtr<APlayerState> LastCarrierPlayerState;
 
 	/** 이 Relic을 유효하게 촬영한 고유 플레이어 목록입니다. */
-	UPROPERTY(Replicated, VisibleInstanceOnly, BlueprintReadOnly, Category="Relic|Delivery")
+	UPROPERTY(Transient)
 	TArray<TObjectPtr<APlayerState>> EvidencePhotographers;
+
+	static constexpr int32 MaximumEvidencePhotographers = 6;
 };

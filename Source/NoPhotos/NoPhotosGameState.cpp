@@ -75,6 +75,10 @@ void ANoPhotosGameState::AddPhotoEvidence(
 	NewEvidence.Relic = Result.Relic;
 	NewEvidence.AwardedScore = AwardedScore;
 	NewEvidence.ServerCaptureTime = Result.ServerCaptureTime;
+	if (PhotoEvidence.Num() > MaximumStoredPhotos)
+	{
+		PhotoEvidence.RemoveAt(0, PhotoEvidence.Num() - MaximumStoredPhotos);
+	}
 	ForceNetUpdate();
 	OnPhotoEvidenceChanged.Broadcast();
 }
@@ -86,6 +90,12 @@ void ANoPhotosGameState::RegisterTransferredPhoto(const FGuid& PhotoId)
 		return;
 	}
 	TransferredPhotoIds.Add(PhotoId);
+	if (TransferredPhotoIds.Num() > MaximumStoredPhotos)
+	{
+		TransferredPhotoIds.RemoveAt(
+			0,
+			TransferredPhotoIds.Num() - MaximumStoredPhotos);
+	}
 	ForceNetUpdate();
 	OnPhotoEvidenceChanged.Broadcast();
 }

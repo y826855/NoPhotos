@@ -34,6 +34,8 @@ public:
 	void SetSelectedPhotoIds(APlayerState* PlayerState, const TArray<FGuid>& PhotoIds);
 
 private:
+	static constexpr int32 MaximumStoredPhotos = 10;
+
 	UFUNCTION()
 	void OnRep_PhotoEvidence();
 

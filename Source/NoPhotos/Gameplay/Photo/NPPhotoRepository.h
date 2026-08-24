@@ -52,6 +52,6 @@ private:
 	TArray<FGuid> StorageOrder;
 	int64 StoredByteCount = 0;
 
-	static constexpr int32 MaximumStoredPhotos = 50;
+	static constexpr int32 MaximumStoredPhotos = 10;
 	static constexpr int64 MaximumStoredBytes = 16 * 1024 * 1024;
 };

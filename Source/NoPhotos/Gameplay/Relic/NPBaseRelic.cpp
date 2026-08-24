@@ -46,8 +46,6 @@ void ANPBaseRelic::GetLifetimeReplicatedProps(
 	DOREPLIFETIME(ANPBaseRelic, bIsDisplayed);
 	DOREPLIFETIME(ANPBaseRelic, bIsUnlocked);
 	DOREPLIFETIME(ANPBaseRelic, bIsReturned);
-	DOREPLIFETIME(ANPBaseRelic, LastCarrierPlayerState);
-	DOREPLIFETIME(ANPBaseRelic, EvidencePhotographers);
 }
 
 int32 ANPBaseRelic::GetBasePrice() const
@@ -87,25 +85,25 @@ void ANPBaseRelic::OnRep_IsDisplayed()
 
 void ANPBaseRelic::SetLastCarrierPlayerState(APlayerState* PlayerState)
 {
-	if (!HasAuthority() || bIsReturned || !IsValid(PlayerState))
+	if (!HasAuthority() || bIsReturned || !IsValid(PlayerState)
+		|| LastCarrierPlayerState == PlayerState)
 	{
 		return;
 	}
 
 	LastCarrierPlayerState = PlayerState;
-	ForceNetUpdate();
 }
 
 bool ANPBaseRelic::RegisterEvidencePhotographer(APlayerState* Photographer)
 {
 	if (!HasAuthority() || bIsReturned || !IsValid(Photographer)
-		|| EvidencePhotographers.Contains(Photographer))
+		|| EvidencePhotographers.Contains(Photographer)
+		|| EvidencePhotographers.Num() >= MaximumEvidencePhotographers)
 	{
 		return false;
 	}
 
 	EvidencePhotographers.Add(Photographer);
-	ForceNetUpdate();
 	return true;
 }
 
@@ -116,9 +114,12 @@ bool ANPBaseRelic::TryMarkReturned()
 		return false;
 	}
 
+	FlushNetDormancy();
 	bIsReturned = true;
+	SetReplicateMovement(false);
 	OnRep_IsReturned();
 	ForceNetUpdate();
+	SetNetDormancy(DORM_DormantAll);
 	return true;
 }
 
