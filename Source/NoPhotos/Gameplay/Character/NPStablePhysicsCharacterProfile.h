@@ -80,6 +80,18 @@ public:
 	UPROPERTY(EditAnywhere, Category="캐릭터 설정", meta=(DisplayName="캐릭터 정면 보정", ClampMin="-180.0", ClampMax="180.0"))
 	float CharacterForwardYawOffset = 90.0f;
 
+	UPROPERTY(EditAnywhere, Category="조작|회전", meta=(DisplayName="회전 강도", ClampMin="0.0"))
+	float FacingAngularStrength = 3.0f;
+
+	UPROPERTY(EditAnywhere, Category="조작|회전", meta=(DisplayName="회전 감쇠비", ClampMin="0.0"))
+	float FacingAngularDampingRatio = 1.0f;
+
+	UPROPERTY(EditAnywhere, Category="조작|회전", meta=(DisplayName="최대 회전 토크", ClampMin="0.0"))
+	float MaxFacingTorque = 750000.0f;
+
+	UPROPERTY(EditAnywhere, Category="조작|회전", meta=(DisplayName="최대 목표 회전 속도", ClampMin="0.0"))
+	float MaxFacingTargetSpeed = 180.0f;
+
 	// 지면에서 pelvis까지 유지할 높이입니다.
 	UPROPERTY(EditAnywhere, Category="캐릭터 설정", meta=(DisplayName="허리 높이", ClampMin="0.0", Units="cm"))
 	float PelvisHeight = 100.0f;

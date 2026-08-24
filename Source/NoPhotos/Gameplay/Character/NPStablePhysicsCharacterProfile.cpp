@@ -409,6 +409,18 @@ void UNPStablePhysicsCharacterProfile::PostEditChangeProperty(
 		CharacterForwardYawOffset)
 		|| PropertyName == GET_MEMBER_NAME_CHECKED(
 			UNPStablePhysicsCharacterProfile,
+			FacingAngularStrength)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
+			FacingAngularDampingRatio)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
+			MaxFacingTorque)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
+			MaxFacingTargetSpeed)
+		|| PropertyName == GET_MEMBER_NAME_CHECKED(
+			UNPStablePhysicsCharacterProfile,
 			PelvisHeight)
 		|| PropertyName == GET_MEMBER_NAME_CHECKED(
 			UNPStablePhysicsCharacterProfile,

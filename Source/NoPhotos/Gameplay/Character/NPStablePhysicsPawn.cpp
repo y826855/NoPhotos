@@ -12,6 +12,7 @@
 #include "PhysicsEngine/BodyInstance.h"
 #include "PhysicsEngine/PhysicalAnimationComponent.h"
 #include "PhysicsEngine/PhysicsAsset.h"
+#include "PhysicsControlComponent.h"
 #include "Gameplay/Character/Component/NPStablePhysicsDebugComponent.h"
 #include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Character/Component/NPStablePhysicsMovementComponent.h"
@@ -54,8 +55,10 @@ ANPStablePhysicsPawn::ANPStablePhysicsPawn()
 	FollowCamera->bUsePawnControlRotation = false;
 
 	PhysicalAnimation = CreateDefaultSubobject<UPhysicalAnimationComponent>(TEXT("PhysicalAnimation"));
+	PhysicsControl = CreateDefaultSubobject<UPhysicsControlComponent>(TEXT("PhysicsControl"));
 	PhysicsMovement = CreateDefaultSubobject<UNPStablePhysicsMovementComponent>(TEXT("NPPhysicsMovement"));
 	PhysicsDebug = CreateDefaultSubobject<UNPStablePhysicsDebugComponent>(TEXT("NPPhysicsDebug"));
+	PhysicsControl->AddTickPrerequisiteComponent(PhysicsMovement);
 
 	RightHandGrab = CreateDefaultSubobject<UNPStablePhysicsGrabComponent>(TEXT("RightHandGrab"));
 	RightHandGrab->SetupAttachment(PhysicsMesh);
@@ -84,6 +87,7 @@ void ANPStablePhysicsPawn::BeginPlay()
 		RightHandGrab,
 		&UNPStablePhysicsGrabComponent::NotifyJumpIntent);
 	InitializePhysicalAnimation();
+	PhysicsMovement->InitializeFacingControl(PhysicsControl);
 	DefaultCameraArmLength = CameraBoom->TargetArmLength;
 	DefaultCameraFOV = FollowCamera->FieldOfView;
 	CurrentCameraTargetHeight = CameraTargetHeight;
@@ -99,6 +103,7 @@ void ANPStablePhysicsPawn::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 
 	RefreshCharacterProfileIfChanged();
+	PhysicsMovement->SetFacingControlEnabled(IsLocallyControlled());
 	UpdatePhotoCamera(DeltaSeconds);
 	UpdateCameraTarget();
 	UpdateFacingTarget();
@@ -307,6 +312,11 @@ void ANPStablePhysicsPawn::ApplyCharacterProfile()
 	PhysicsMovement->SetTargetPelvisHeight(CharacterProfile->PelvisHeight);
 	PhysicsMovement->SetMaxMoveSpeed(CharacterProfile->MaxMoveSpeed);
 	PhysicsMovement->SetJumpVelocityChange(CharacterProfile->JumpVelocityChange);
+	PhysicsMovement->SetFacingControlSettings(
+		CharacterProfile->FacingAngularStrength,
+		CharacterProfile->FacingAngularDampingRatio,
+		CharacterProfile->MaxFacingTorque,
+		CharacterProfile->MaxFacingTargetSpeed);
 	RightHandGrab->SetLinearBreakThreshold(
 		CharacterProfile->GrabLinearBreakThreshold);
 	RightHandGrab->SetReplicatedGrabFrameBlendDuration(
@@ -329,6 +339,7 @@ void ANPStablePhysicsPawn::RefreshCharacterProfileIfChanged()
 	PhysicsMovement->Initialize(PhysicsMesh, CharacterForwardYawOffset);
 	RightHandGrab->Initialize(PhysicsMesh, RightHandBoneName);
 	InitializePhysicalAnimation();
+	PhysicsMovement->InitializeFacingControl(PhysicsControl);
 }
 
 void ANPStablePhysicsPawn::InitializePhysicalAnimation()

@@ -9,6 +9,7 @@ class UCameraComponent;
 class UAnimMontage;
 class UInputAction;
 class UPhysicalAnimationComponent;
+class UPhysicsControlComponent;
 class USceneComponent;
 class USkeletalMeshComponent;
 class USoundAttenuation;
@@ -120,6 +121,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	UPhysicalAnimationComponent* PhysicalAnimation;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
+	UPhysicsControlComponent* PhysicsControl;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	UNPStablePhysicsGrabComponent* RightHandGrab;

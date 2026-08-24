@@ -2,6 +2,9 @@
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
+#include "PhysicsControlComponent.h"
+#include "PhysicsControlData.h"
+#include "PhysicsEngine/BodyInstance.h"
 
 UNPStablePhysicsMovementComponent::UNPStablePhysicsMovementComponent()
 {
@@ -44,6 +47,18 @@ void UNPStablePhysicsMovementComponent::SetJumpVelocityChange(
 	JumpVelocityChange = FMath::Max(InJumpVelocityChange, 0.0f);
 }
 
+void UNPStablePhysicsMovementComponent::SetFacingControlSettings(
+	float InAngularStrength,
+	float InAngularDampingRatio,
+	float InMaxTorque,
+	float InMaxTargetSpeed)
+{
+	FacingAngularStrength = FMath::Max(InAngularStrength, 0.0f);
+	FacingAngularDampingRatio = FMath::Max(InAngularDampingRatio, 0.0f);
+	MaxFacingTorque = FMath::Max(InMaxTorque, 0.0f);
+	MaxFacingTargetSpeed = FMath::Max(InMaxTargetSpeed, 0.0f);
+}
+
 void UNPStablePhysicsMovementComponent::SetMoveInput(const FVector& InMoveInput)
 {
 	PendingInput.MoveInput = InMoveInput.GetClampedToMaxSize(1.0f);
@@ -58,6 +73,78 @@ void UNPStablePhysicsMovementComponent::SetFacingDirection(
 		PendingInput.FacingDirection = HorizontalDirection.GetSafeNormal();
 		PendingInput.bHasFacingDirection = true;
 	}
+}
+
+void UNPStablePhysicsMovementComponent::InitializeFacingControl(
+	UPhysicsControlComponent* InPhysicsControl)
+{
+	if (PhysicsControl && bFacingControlCreated)
+	{
+		PhysicsControl->DestroyControl(FacingControlName, true, false);
+	}
+
+	PhysicsControl = InPhysicsControl;
+	bFacingControlCreated = false;
+	bFacingControlEnabled = false;
+	if (!PhysicsControl || !PhysicsMesh)
+	{
+		return;
+	}
+
+	const FBodyInstance* PelvisBody = PhysicsMesh->GetBodyInstance(PelvisBodyName);
+	if (!PelvisBody || !PhysicsMesh->IsSimulatingPhysics(PelvisBodyName))
+	{
+		return;
+	}
+
+	FPhysicsControlData ControlData;
+	ControlData.bEnabled = false;
+	ControlData.LinearStrength = 0.0f;
+	ControlData.LinearDampingRatio = 0.0f;
+	ControlData.LinearExtraDamping = 0.0f;
+	ControlData.MaxForce = 0.0f;
+	ControlData.AngularStrength = FacingAngularStrength;
+	ControlData.AngularDampingRatio = FacingAngularDampingRatio;
+	ControlData.MaxTorque = MaxFacingTorque;
+	ControlData.bUseSkeletalAnimation = false;
+	ControlData.bOnlyControlChildObject = true;
+
+	FPhysicsControlTarget ControlTarget;
+	ControlTarget.TargetOrientation = PelvisBody->GetUnrealWorldTransform().Rotator();
+	ControlTarget.bApplyControlPointToTarget = true;
+
+	bFacingControlCreated = PhysicsControl->CreateNamedControl(
+		FacingControlName,
+		nullptr,
+		NAME_None,
+		PhysicsMesh,
+		PelvisBodyName,
+		ControlData,
+		ControlTarget,
+		NAME_None);
+	ResetFacingControlTarget();
+}
+
+void UNPStablePhysicsMovementComponent::SetFacingControlEnabled(bool bEnabled)
+{
+	const bool bShouldEnable = bEnabled
+		&& bOrientRotationToMovement
+		&& bFacingControlCreated;
+	if (!PhysicsControl || bFacingControlEnabled == bShouldEnable)
+	{
+		return;
+	}
+
+	if (bShouldEnable)
+	{
+		ResetFacingControlTarget();
+	}
+	PhysicsControl->SetControlEnabled(
+		FacingControlName,
+		bShouldEnable,
+		true,
+		false);
+	bFacingControlEnabled = bShouldEnable;
 }
 
 FVector UNPStablePhysicsMovementComponent::GetCurrentFacingDirection() const
@@ -109,7 +196,7 @@ void UNPStablePhysicsMovementComponent::TickComponent(
 	}
 
 	const FNPStablePhysicsLocomotionInput Input = ConsumePendingInput();
-	SimulateLocomotion(Input);
+	SimulateLocomotion(DeltaTime, Input);
 }
 
 FNPStablePhysicsLocomotionInput UNPStablePhysicsMovementComponent::ConsumePendingInput()
@@ -120,6 +207,7 @@ FNPStablePhysicsLocomotionInput UNPStablePhysicsMovementComponent::ConsumePendin
 }
 
 void UNPStablePhysicsMovementComponent::SimulateLocomotion(
+	float DeltaTime,
 	const FNPStablePhysicsLocomotionInput& Input)
 {
 	UpdateMovementState();
@@ -131,7 +219,10 @@ void UNPStablePhysicsMovementComponent::SimulateLocomotion(
 
 	UpdateGroundSupportPhysics();
 	UpdateMovementPhysics(Input.MoveInput);
-	UpdateFacingPhysics(Input.FacingDirection, Input.bHasFacingDirection);
+	UpdateFacingPhysicsControl(
+		DeltaTime,
+		Input.FacingDirection,
+		Input.bHasFacingDirection);
 	UpdateBalancePhysics();
 	UpdateJumpPhysics(Input.bJumpRequested);
 }
@@ -244,40 +335,67 @@ void UNPStablePhysicsMovementComponent::UpdateMovementPhysics(const FVector& InM
 	CurrentAcceleration = MoveForce / TotalMass;
 }
 
-void UNPStablePhysicsMovementComponent::UpdateFacingPhysics(
+void UNPStablePhysicsMovementComponent::UpdateFacingPhysicsControl(
+	float DeltaTime,
 	const FVector& InFacingDirection,
 	bool bInHasFacingDirection)
 {
-	if (!bOrientRotationToMovement || !bInHasFacingDirection)
+	if (!bFacingControlEnabled
+		|| !bInHasFacingDirection
+		|| DeltaTime <= UE_SMALL_NUMBER)
 	{
 		return;
 	}
 
-	const FVector CurrentForward = GetCurrentFacingDirection();
-	if (CurrentForward.IsNearlyZero())
+	const float DesiredVisualYaw = InFacingDirection.Rotation().Yaw;
+	const float PreviousTargetYaw = FacingTargetVisualYaw;
+	FacingTargetVisualYaw = FMath::FixedTurn(
+		FacingTargetVisualYaw,
+		DesiredVisualYaw,
+		MaxFacingTargetSpeed * DeltaTime);
+	const float TargetYawDelta = FMath::FindDeltaAngleDegrees(
+		PreviousTargetYaw,
+		FacingTargetVisualYaw);
+	FacingTargetOrientation = FQuat(
+		FVector::UpVector,
+		FMath::DegreesToRadians(TargetYawDelta)) * FacingTargetOrientation;
+
+	PhysicsControl->SetControlTargetOrientation(
+		FacingControlName,
+		FacingTargetOrientation.Rotator(),
+		DeltaTime,
+		true,
+		true,
+		true,
+		false);
+}
+
+void UNPStablePhysicsMovementComponent::ResetFacingControlTarget()
+{
+	if (!PhysicsMesh)
 	{
 		return;
 	}
 
-	const float YawError = FMath::Atan2(
-		FVector::CrossProduct(CurrentForward, InFacingDirection).Z,
-		FVector::DotProduct(CurrentForward, InFacingDirection));
-	const float TargetAngularSpeed = FMath::Abs(FMath::RadiansToDegrees(YawError))
-		> FacingStopTolerance
-		? FMath::Clamp(
-			YawError * FacingResponse,
-			-MaxFacingAngularSpeed,
-			MaxFacingAngularSpeed)
-		: 0.0f;
+	const FBodyInstance* PelvisBody = PhysicsMesh->GetBodyInstance(PelvisBodyName);
+	if (!PelvisBody)
+	{
+		return;
+	}
 
-	FVector AngularVelocity = PhysicsMesh->GetPhysicsAngularVelocityInRadians(PelvisBodyName);
-
-	// 팔다리와 지면 접촉으로 생기는 회전 노이즈를 줄이기 위해 Yaw 각속도만 덮어씁니다.
-	AngularVelocity.Z = TargetAngularSpeed;
-	PhysicsMesh->SetPhysicsAngularVelocityInRadians(
-		AngularVelocity,
-		false,
-		PelvisBodyName);
+	FacingTargetOrientation = PelvisBody->GetUnrealWorldTransform().GetRotation();
+	FacingTargetVisualYaw = GetCurrentFacingDirection().Rotation().Yaw;
+	if (PhysicsControl && bFacingControlCreated)
+	{
+		PhysicsControl->SetControlTargetOrientation(
+			FacingControlName,
+			FacingTargetOrientation.Rotator(),
+			0.0f,
+			false,
+			true,
+			true,
+			false);
+	}
 }
 
 void UNPStablePhysicsMovementComponent::UpdateBalancePhysics()

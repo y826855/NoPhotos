@@ -5,6 +5,7 @@
 #include "NPStablePhysicsMovementComponent.generated.h"
 
 class USkeletalMeshComponent;
+class UPhysicsControlComponent;
 
 DECLARE_MULTICAST_DELEGATE(FOnStablePhysicsJumpApplied);
 
@@ -33,12 +34,19 @@ public:
 	void SetTargetPelvisHeight(float InTargetPelvisHeight);
 	void SetMaxMoveSpeed(float InMaxMoveSpeed);
 	void SetJumpVelocityChange(float InJumpVelocityChange);
+	void SetFacingControlSettings(
+		float InAngularStrength,
+		float InAngularDampingRatio,
+		float InMaxTorque,
+		float InMaxTargetSpeed);
 
 	/** 카메라 기준으로 계산된 월드 공간 이동 방향을 전달받습니다. */
 	void SetMoveInput(const FVector& InMoveInput);
 
 	/** 캐릭터가 따라볼 월드 공간의 수평 방향을 설정합니다. */
 	void SetFacingDirection(const FVector& InFacingDirection);
+	void InitializeFacingControl(UPhysicsControlComponent* InPhysicsControl);
+	void SetFacingControlEnabled(bool bEnabled);
 
 	/** false이면 상태 조회만 수행하고 실제 물리 Force와 회전은 적용하지 않습니다. */
 	void SetPhysicsUpdatesEnabled(bool bEnabled) { bPhysicsUpdatesEnabled = bEnabled; }
@@ -104,14 +112,14 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Turning")
 	bool bOrientRotationToMovement = true;
 
-	UPROPERTY(EditAnywhere, Category="Turning", meta=(ClampMin="0.0"))
-	float FacingResponse = 3.0f;
+	float FacingAngularStrength = 3.0f;
 
-	UPROPERTY(EditAnywhere, Category="Turning", meta=(ClampMin="0.0"))
-	float MaxFacingAngularSpeed = 2.0f;
+	float FacingAngularDampingRatio = 1.0f;
 
-	UPROPERTY(EditAnywhere, Category="Turning", meta=(ClampMin="0.0", ClampMax="10.0"))
-	float FacingStopTolerance = 1.5f;
+	float MaxFacingTorque = 750000.0f;
+
+	/** Physics Control 목표가 카메라 방향을 따라가는 최대 속도(도/초)입니다. */
+	float MaxFacingTargetSpeed = 180.0f;
 
 	UPROPERTY(EditAnywhere, Category="Balance", meta=(ClampMin="0.0"))
 	float BalanceStrength = 500000.0f;
@@ -143,25 +151,39 @@ protected:
 
 private:
 	FNPStablePhysicsLocomotionInput ConsumePendingInput();
-	void SimulateLocomotion(const FNPStablePhysicsLocomotionInput& Input);
+	void SimulateLocomotion(
+		float DeltaTime,
+		const FNPStablePhysicsLocomotionInput& Input);
 	void UpdateMovementState();
 	void UpdateGroundedState();
 	bool IsFootGrounded(FName FootBoneName) const;
 	bool FindPelvisGroundDistance(float& OutGroundDistance) const;
 	void UpdateGroundSupportPhysics();
 	void UpdateMovementPhysics(const FVector& InMoveInput);
-	void UpdateFacingPhysics(const FVector& InFacingDirection, bool bInHasFacingDirection);
+	void UpdateFacingPhysicsControl(
+		float DeltaTime,
+		const FVector& InFacingDirection,
+		bool bInHasFacingDirection);
+	void ResetFacingControlTarget();
 	void UpdateBalancePhysics();
 	void UpdateJumpPhysics(bool bInJumpRequested);
 
 	UPROPERTY(Transient)
 	USkeletalMeshComponent* PhysicsMesh = nullptr;
 
+	UPROPERTY(Transient)
+	UPhysicsControlComponent* PhysicsControl = nullptr;
+
 	FNPStablePhysicsLocomotionInput PendingInput;
+	FQuat FacingTargetOrientation = FQuat::Identity;
+	FName FacingControlName = TEXT("PelvisFacing");
+	float FacingTargetVisualYaw = 0.0f;
 	FVector Velocity = FVector::ZeroVector;
 	FVector CurrentAcceleration = FVector::ZeroVector;
 	float CharacterForwardYawOffset = 90.0f;
 	bool bPhysicsUpdatesEnabled = true;
+	bool bFacingControlCreated = false;
+	bool bFacingControlEnabled = false;
 	bool bGrounded = false;
 	bool bIsFalling = true;
 	bool bUseAnimationStateOverride = false;
