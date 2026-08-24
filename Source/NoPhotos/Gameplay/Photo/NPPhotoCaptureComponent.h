@@ -71,16 +71,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Photo|Rules", meta=(ClampMin="0.0"))
 	float PhotoCooldown = 5.0f;
 
-	/** 셔터를 누른 뒤 이동 입력을 잠그는 시간입니다. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Photo|Rules", meta=(ClampMin="0.0"))
-	float MovementLockDuration = 0.5f;
-
 private:
 	void InitializeLocalCapture();
 	bool IsPhotographerGrabbing() const;
 	void CancelPhotoAttempt();
-	void ApplyMovementLock();
-	void ReleaseMovementLock();
 
 	UFUNCTION(Server, Reliable)
 	void ServerRequestTakePhoto(
@@ -114,8 +108,5 @@ private:
 	bool bPhotoAttemptInProgress = false;
 	bool bPhotoModeActive = false;
 	bool bServerPhotoModeActive = false;
-	bool bMovementLockApplied = false;
 	TWeakObjectPtr<ANPStablePhysicsPawn> PhotoModePawn;
-	TWeakObjectPtr<ANPStablePhysicsPawn> MovementLockedPawn;
-	FTimerHandle MovementUnlockTimer;
 };

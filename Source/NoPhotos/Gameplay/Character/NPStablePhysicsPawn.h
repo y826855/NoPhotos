@@ -35,12 +35,6 @@ public:
 	/** 점프대처럼 외부 게임 규칙이 물리 캐릭터 전체에 즉시 속도 변화를 적용할 때 사용합니다. */
 	void AddExternalVelocityChange(const FVector& VelocityChange);
 
-	/** 사진 촬영으로 인한 이동 잠금만 변경합니다. Controller의 전역 입력 잠금과는 독립적입니다. */
-	void SetPhotoMovementLocked(bool bLocked);
-
-	UFUNCTION(BlueprintPure, Category="Photo")
-	bool IsPhotoMovementLocked() const { return bPhotoMovementLocked; }
-
 	/** 설정된 사진 촬영 Montage를 한 번 재생합니다. */
 	bool PlayPhotoShotMontage();
 
@@ -245,7 +239,6 @@ private:
 	float SpineBendStartViewPitch = -40.0f;
 	float SpineLeanBackStartViewPitch = 10.0f;
 	float SpinePitchInterpSpeed = 8.0f;
-	bool bPhotoMovementLocked = false;
 	bool bPhotoViewActive = false;
 	float DefaultCameraArmLength = 400.0f;
 	float DefaultCameraFOV = 90.0f;

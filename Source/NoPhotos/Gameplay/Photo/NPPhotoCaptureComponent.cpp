@@ -14,7 +14,6 @@
 #include "Gameplay/Photo/NPPhotoTransferComponent.h"
 #include "NoPhotosGameMode.h"
 #include "NoPhotosPlayerController.h"
-#include "TimerManager.h"
 
 UNPPhotoCaptureComponent::UNPPhotoCaptureComponent()
 {
@@ -37,7 +36,6 @@ void UNPPhotoCaptureComponent::BeginPlay()
 void UNPPhotoCaptureComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	ExitPhotoMode();
-	ReleaseMovementLock();
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -196,7 +194,6 @@ bool UNPPhotoCaptureComponent::TakePhoto()
 
 	LastLocalCaptureTime = CurrentTime;
 	bPhotoAttemptInProgress = false;
-	ApplyMovementLock();
 	const uint16 CaptureSequence = ++NextCaptureSequence;
 	if (ImageCodec)
 	{
@@ -223,74 +220,6 @@ bool UNPPhotoCaptureComponent::IsPhotographerGrabbing() const
 		? Pawn->FindComponentByClass<UNPStablePhysicsGrabComponent>()
 		: nullptr;
 	return GrabComponent && GrabComponent->IsHoldingObject();
-}
-
-void UNPPhotoCaptureComponent::ApplyMovementLock()
-{
-	APlayerController* PlayerController = Cast<APlayerController>(GetOwner());
-	UWorld* World = GetWorld();
-	if (!PlayerController || !World || MovementLockDuration <= 0.0f)
-	{
-		return;
-	}
-
-	if (ANPStablePhysicsPawn* StablePawn = Cast<ANPStablePhysicsPawn>(PlayerController->GetPawn()))
-	{
-		if (MovementLockedPawn.IsValid() && MovementLockedPawn.Get() != StablePawn)
-		{
-			MovementLockedPawn->SetPhotoMovementLocked(false);
-		}
-		MovementLockedPawn = StablePawn;
-		StablePawn->SetPhotoMovementLocked(true);
-		bMovementLockApplied = true;
-		UE_LOG(
-			LogNPPhoto,
-			Warning,
-			TEXT("[MovementLock] APPLY Pawn=%s Locked=%s WorldTime=%.3f Duration=%.2f"),
-			*GetNameSafe(StablePawn),
-			StablePawn->IsPhotoMovementLocked() ? TEXT("true") : TEXT("false"),
-			World->GetTimeSeconds(),
-			MovementLockDuration);
-	}
-	else
-	{
-		UE_LOG(
-			LogNPPhoto,
-			Error,
-			TEXT("[MovementLock] APPLY failed: controlled Pawn is not ANPStablePhysicsPawn. Pawn=%s"),
-			*GetNameSafe(PlayerController->GetPawn()));
-	}
-	World->GetTimerManager().SetTimer(
-		MovementUnlockTimer,
-		this,
-		&UNPPhotoCaptureComponent::ReleaseMovementLock,
-		MovementLockDuration,
-		false);
-}
-
-void UNPPhotoCaptureComponent::ReleaseMovementLock()
-{
-	if (!bMovementLockApplied)
-	{
-		return;
-	}
-
-	if (MovementLockedPawn.IsValid())
-	{
-		MovementLockedPawn->SetPhotoMovementLocked(false);
-	}
-	UE_LOG(
-		LogNPPhoto,
-		Warning,
-		TEXT("[MovementLock] RELEASE Pawn=%s Valid=%s LockedAfterRelease=%s WorldTime=%.3f"),
-		*GetNameSafe(MovementLockedPawn.Get()),
-		MovementLockedPawn.IsValid() ? TEXT("true") : TEXT("false"),
-		MovementLockedPawn.IsValid() && MovementLockedPawn->IsPhotoMovementLocked()
-			? TEXT("true")
-			: TEXT("false"),
-		GetWorld() ? GetWorld()->GetTimeSeconds() : -1.0);
-	MovementLockedPawn.Reset();
-	bMovementLockApplied = false;
 }
 
 void UNPPhotoCaptureComponent::InitializeLocalCapture()
@@ -387,7 +316,6 @@ void UNPPhotoCaptureComponent::ServerRequestTakePhoto_Implementation(
 		return;
 	}
 	LastServerCaptureTime = CurrentTime;
-	ApplyMovementLock();
 
 	if (ANPStablePhysicsPawn* PhotographerPawn = Cast<ANPStablePhysicsPawn>(Photographer->GetPawn()))
 	{

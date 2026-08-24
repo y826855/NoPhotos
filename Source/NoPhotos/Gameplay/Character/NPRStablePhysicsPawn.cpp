@@ -229,11 +229,6 @@ FRotator ANPRStablePhysicsPawn::GetTargetViewRotation() const
 void ANPRStablePhysicsPawn::ServerSetMoveInput_Implementation(
 	FVector_NetQuantizeNormal WorldMoveInput)
 {
-	if (IsPhotoMovementLocked())
-	{
-		Super::ApplyMoveInput(FVector::ZeroVector);
-		return;
-	}
 	Super::ApplyMoveInput(FVector(WorldMoveInput));
 }
 

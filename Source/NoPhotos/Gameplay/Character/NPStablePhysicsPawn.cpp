@@ -133,15 +133,6 @@ void ANPStablePhysicsPawn::AddExternalVelocityChange(const FVector& VelocityChan
 		true);
 }
 
-void ANPStablePhysicsPawn::SetPhotoMovementLocked(bool bLocked)
-{
-	bPhotoMovementLocked = bLocked;
-	if (bPhotoMovementLocked)
-	{
-		StopMovementInput();
-	}
-}
-
 bool ANPStablePhysicsPawn::PlayPhotoShotMontage()
 {
 	if (!PhysicsMesh)
@@ -551,12 +542,6 @@ void ANPStablePhysicsPawn::Move(const FInputActionValue& Value)
 		ApplyMoveInput(FVector::ZeroVector);
 		return;
 	}
-	if (bPhotoMovementLocked)
-	{
-		ApplyMoveInput(FVector::ZeroVector);
-		return;
-	}
-
 	const FRotator YawRotation(0.0f, Controller->GetControlRotation().Yaw, 0.0f);
 	const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
 	const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
