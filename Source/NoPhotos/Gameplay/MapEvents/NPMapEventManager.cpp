@@ -1,29 +1,29 @@
 #include "NPMapEventManager.h"
 
-#include "NPArtifactSpawnMapEvent.h"
-#include "NPBlackoutMapEvent.h"
-#include "NPMapEvent.h"
-#include "NPSpeedBoostMapEvent.h"
 #include "Engine/World.h"
+#include "Engine/LevelStreamingDynamic.h"
+#include "EngineUtils.h"
+#include "GameFramework/Actor.h"
+#include "NPMapEvent.h"
+#include "NPMapEventCatalog.h"
+#include "NPMapEventDefinition.h"
+#include "NPMapEventLocationCollector.h"
+#include "NPMapEventSpawnPoint.h"
+#include "NPMapEventSpawnVolume.h"
 #include "TimerManager.h"
 
-ANPMapEventManager::ANPMapEventManager()
+UNPMapEventManagerComponent::UNPMapEventManagerComponent()
 {
-	PrimaryActorTick.bCanEverTick = false;
-	bReplicates = true;
-	bAlwaysRelevant = true;
-	SetReplicateMovement(false);
-
-	EventClasses.Add(ANPBlackoutMapEvent::StaticClass());
-	EventClasses.Add(ANPArtifactSpawnMapEvent::StaticClass());
-	EventClasses.Add(ANPSpeedBoostMapEvent::StaticClass());
+	PrimaryComponentTick.bCanEverTick = false;
+	SetIsReplicatedByDefault(true);
 }
 
-void ANPMapEventManager::BeginPlay()
+void UNPMapEventManagerComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (!HasAuthority())
+	CollectExistingLocationCollectors();
+	if (!HasServerAuthority())
 	{
 		return;
 	}
@@ -35,39 +35,74 @@ void ANPMapEventManager::BeginPlay()
 	}
 }
 
-void ANPMapEventManager::StartEventScheduling()
+void UNPMapEventManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (!HasAuthority() || EventInstances.IsEmpty())
+	StopEventScheduling();
+	if (IsValid(PendingEvent))
+	{
+		PendingEvent->OnEventFinished.RemoveDynamic(
+			this,
+			&ThisClass::HandleEventWithLocationLevelFinished);
+	}
+	if (IsValid(ActiveLocationLevel))
+	{
+		ActiveLocationLevel->OnLevelShown.RemoveDynamic(
+			this,
+			&ThisClass::HandleLocationLevelShown);
+		ActiveLocationLevel->OnLevelUnloaded.RemoveDynamic(
+			this,
+			&ThisClass::HandleLocationLevelUnloaded);
+	}
+	PendingEvent = nullptr;
+	ActiveLocationLevel = nullptr;
+	bLocationLevelTransitionInProgress = false;
+	LocationCollectors.Reset();
+	EventLocationLevels.Reset();
+	EventLocationLevelTransforms.Reset();
+	EventInstances.Reset();
+	Super::EndPlay(EndPlayReason);
+}
+
+void UNPMapEventManagerComponent::StartEventScheduling()
+{
+	if (!HasServerAuthority() || EventInstances.IsEmpty())
 	{
 		return;
 	}
 
-	ScheduleNextEvent(InitialDelay);
+	StopEventScheduling();
+	ScheduleEvent(ENPMapEventType::TypeA, TypeAMinimumTimeMinutes, TypeAMaximumTimeMinutes);
+	ScheduleEvent(ENPMapEventType::TypeB, TypeBMinimumTimeMinutes, TypeBMaximumTimeMinutes);
 }
 
-void ANPMapEventManager::StopEventScheduling()
+void UNPMapEventManagerComponent::StopEventScheduling()
 {
-	if (HasAuthority())
+	if (HasServerAuthority())
 	{
-		GetWorldTimerManager().ClearTimer(EventTimer);
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(TypeAEventTimer);
+			World->GetTimerManager().ClearTimer(TypeBEventTimer);
+		}
 	}
 }
 
-bool ANPMapEventManager::TriggerRandomEvent()
+bool UNPMapEventManagerComponent::TriggerRandomEvent(const ENPMapEventType EventType)
 {
 	UWorld* World = GetWorld();
-	if (!HasAuthority() || !World || (!bAllowConcurrentEvents && HasActiveEvent()))
+	if (!HasServerAuthority() || !World || (!bAllowConcurrentEvents && HasActiveEvent()))
 	{
 		return false;
 	}
 
 	TArray<ANPMapEvent*> Candidates;
 	float TotalWeight = 0.0f;
-	const double ServerTimeSeconds = World->GetTimeSeconds();
-
 	for (ANPMapEvent* EventInstance : EventInstances)
 	{
-		if (IsValid(EventInstance) && EventInstance->CanStartEvent(ServerTimeSeconds))
+		if (IsValid(EventInstance)
+			&& EventInstance->CanRunAtEventTime(EventType)
+			&& !EventInstance->RequiresStandaloneExecution()
+			&& EventInstance->CanStartEvent())
 		{
 			Candidates.Add(EventInstance);
 			TotalWeight += EventInstance->GetSelectionWeight();
@@ -85,22 +120,210 @@ bool ANPMapEventManager::TriggerRandomEvent()
 		Selection -= Candidate->GetSelectionWeight();
 		if (Selection <= 0.0f)
 		{
-			return Candidate->StartEvent();
+			return RequestEventStart(Candidate);
 		}
 	}
 
-	return Candidates.Last()->StartEvent();
+	return RequestEventStart(Candidates.Last());
 }
 
-void ANPMapEventManager::CreateEventInstances()
+void UNPMapEventManagerComponent::RegisterLocationCollector(
+	ANPMapEventLocationCollector* Collector)
 {
-	UWorld* World = GetWorld();
-	if (!HasAuthority() || !World)
+	if (!IsValid(Collector))
 	{
 		return;
 	}
 
-	for (const TSubclassOf<ANPMapEvent>& EventClass : EventClasses)
+	LocationCollectors.AddUnique(Collector);
+}
+
+void UNPMapEventManagerComponent::UnregisterLocationCollector(
+	ANPMapEventLocationCollector* Collector)
+{
+	LocationCollectors.Remove(Collector);
+}
+
+ANPMapEventSpawnPoint* UNPMapEventManagerComponent::FindRandomSpawnPoint(
+	const FGameplayTag SpawnGroup) const
+{
+	if (!HasServerAuthority() || !SpawnGroup.IsValid())
+	{
+		return nullptr;
+	}
+
+	TArray<ANPMapEventSpawnPoint*> Candidates;
+	for (ANPMapEventLocationCollector* Collector : LocationCollectors)
+	{
+		if (!IsValid(Collector))
+		{
+			continue;
+		}
+
+		TArray<ANPMapEventSpawnPoint*> CollectorPoints;
+		Collector->GetSpawnPointsForGroup(SpawnGroup, CollectorPoints);
+		for (ANPMapEventSpawnPoint* Point : CollectorPoints)
+		{
+			Candidates.AddUnique(Point);
+		}
+	}
+
+	float TotalWeight = 0.0f;
+	for (const ANPMapEventSpawnPoint* Candidate : Candidates)
+	{
+		TotalWeight += Candidate->GetSelectionWeight();
+	}
+
+	if (Candidates.IsEmpty() || TotalWeight <= 0.0f)
+	{
+		return nullptr;
+	}
+
+	float Selection = FMath::FRandRange(0.0f, TotalWeight);
+	for (ANPMapEventSpawnPoint* Candidate : Candidates)
+	{
+		Selection -= Candidate->GetSelectionWeight();
+		if (Selection <= 0.0f)
+		{
+			return Candidate;
+		}
+	}
+
+	return Candidates.Last();
+}
+
+bool UNPMapEventManagerComponent::FindRandomSpawnTransform(
+	const FGameplayTag SpawnGroup,
+	const FVector RequiredHalfExtent,
+	FTransform& OutTransform) const
+{
+	OutTransform = FTransform::Identity;
+	if (!HasServerAuthority() || !SpawnGroup.IsValid())
+	{
+		return false;
+	}
+
+	TArray<ANPMapEventSpawnVolume*> Candidates;
+	for (ANPMapEventLocationCollector* Collector : LocationCollectors)
+	{
+		if (!IsValid(Collector))
+		{
+			continue;
+		}
+
+		TArray<ANPMapEventSpawnVolume*> CollectorVolumes;
+		Collector->GetSpawnVolumesForGroup(SpawnGroup, CollectorVolumes);
+		for (ANPMapEventSpawnVolume* Volume : CollectorVolumes)
+		{
+			Candidates.AddUnique(Volume);
+		}
+	}
+
+	float TotalWeight = 0.0f;
+	for (const ANPMapEventSpawnVolume* Candidate : Candidates)
+	{
+		TotalWeight += Candidate->GetSelectionWeight();
+	}
+
+	while (!Candidates.IsEmpty() && TotalWeight > 0.0f)
+	{
+		float Selection = FMath::FRandRange(0.0f, TotalWeight);
+		int32 SelectedIndex = Candidates.Num() - 1;
+		for (int32 Index = 0; Index < Candidates.Num(); ++Index)
+		{
+			Selection -= Candidates[Index]->GetSelectionWeight();
+			if (Selection <= 0.0f)
+			{
+				SelectedIndex = Index;
+				break;
+			}
+		}
+
+		ANPMapEventSpawnVolume* SelectedVolume = Candidates[SelectedIndex];
+		if (SelectedVolume->FindRandomGroundTransform(RequiredHalfExtent, OutTransform))
+		{
+			return true;
+		}
+
+		TotalWeight -= SelectedVolume->GetSelectionWeight();
+		Candidates.RemoveAtSwap(SelectedIndex, 1, EAllowShrinking::No);
+	}
+
+	return false;
+}
+
+bool UNPMapEventManagerComponent::HasServerAuthority() const
+{
+	const AActor* Owner = GetOwner();
+	return IsValid(Owner) && Owner->HasAuthority();
+}
+
+void UNPMapEventManagerComponent::CollectExistingLocationCollectors()
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	for (TActorIterator<ANPMapEventLocationCollector> Iterator(World); Iterator; ++Iterator)
+	{
+		ANPMapEventLocationCollector* Collector = *Iterator;
+		if (IsValid(Collector))
+		{
+			Collector->RefreshLocations();
+			RegisterLocationCollector(Collector);
+		}
+	}
+}
+
+void UNPMapEventManagerComponent::CreateEventInstances()
+{
+	UWorld* World = GetWorld();
+	AActor* Owner = GetOwner();
+	if (!HasServerAuthority() || !World || !Owner || !EventCatalog)
+	{
+		return;
+	}
+
+	const FTransform SpawnTransform = Owner->GetActorTransform();
+	for (const FNPMapEventCatalogEntry& Entry : EventCatalog->GetEventEntries())
+	{
+		UNPMapEventDefinition* Definition = Entry.EventDefinition;
+		const TSubclassOf<ANPMapEvent> EventClass = Definition
+			? Definition->GetEventClass()
+			: nullptr;
+		if (!EventClass)
+		{
+			continue;
+		}
+
+		ANPMapEvent* EventInstance = World->SpawnActorDeferred<ANPMapEvent>(
+			EventClass,
+			SpawnTransform,
+			Owner,
+			nullptr,
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (EventInstance)
+		{
+			EventInstance->InitializeEvent(Definition, Entry.SelectionWeight);
+			EventInstance->FinishSpawning(SpawnTransform);
+			EventInstances.Add(EventInstance);
+			if (!Entry.LocationLevelInstance.IsNull())
+			{
+				EventLocationLevels.Add(EventInstance, Entry.LocationLevelInstance);
+				EventLocationLevelTransforms.Add(EventInstance, Entry.LocationLevelTransform);
+			}
+		}
+	}
+
+	// 기존 카탈로그 에셋을 EventEntries로 옮기는 동안만 유지하는 호환 경로입니다.
+	if (!EventCatalog->GetEventEntries().IsEmpty())
+	{
+		return;
+	}
+
+	for (const TSubclassOf<ANPMapEvent>& EventClass : EventCatalog->GetEventClasses())
 	{
 		if (!EventClass)
 		{
@@ -108,37 +331,209 @@ void ANPMapEventManager::CreateEventInstances()
 		}
 
 		FActorSpawnParameters SpawnParameters;
-		SpawnParameters.Owner = this;
+		SpawnParameters.Owner = Owner;
 		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-		if (ANPMapEvent* EventInstance = World->SpawnActor<ANPMapEvent>(EventClass, GetActorTransform(), SpawnParameters))
+		if (ANPMapEvent* EventInstance = World->SpawnActor<ANPMapEvent>(EventClass, SpawnTransform, SpawnParameters))
 		{
 			EventInstances.Add(EventInstance);
 		}
 	}
 }
 
-void ANPMapEventManager::ScheduleNextEvent(const float Delay)
+bool UNPMapEventManagerComponent::RequestEventStart(ANPMapEvent* EventInstance)
 {
-	GetWorldTimerManager().SetTimer(
-		EventTimer,
+	if (!HasServerAuthority()
+		|| !IsValid(EventInstance)
+		|| bLocationLevelTransitionInProgress
+		|| IsValid(ActiveLocationLevel))
+	{
+		return false;
+	}
+
+	const TSoftObjectPtr<UWorld>* LocationLevelInstance = EventLocationLevels.Find(EventInstance);
+	if (!LocationLevelInstance || LocationLevelInstance->IsNull())
+	{
+		return EventInstance->StartEvent();
+	}
+
+	const FTransform* LocationLevelTransform = EventLocationLevelTransforms.Find(EventInstance);
+	return LoadEventLocationLevel(
+		EventInstance,
+		*LocationLevelInstance,
+		LocationLevelTransform ? *LocationLevelTransform : FTransform::Identity);
+}
+
+bool UNPMapEventManagerComponent::LoadEventLocationLevel(
+	ANPMapEvent* EventInstance,
+	const TSoftObjectPtr<UWorld>& LocationLevelInstance,
+	const FTransform& LocationLevelTransform)
+{
+	if (!HasServerAuthority()
+		|| !IsValid(EventInstance)
+		|| LocationLevelInstance.IsNull()
+		|| bLocationLevelTransitionInProgress
+		|| IsValid(ActiveLocationLevel))
+	{
+		return false;
+	}
+
+	bool bLoadSucceeded = false;
+	const FString InstanceName = FString::Printf(
+		TEXT("NP_MapEventLocation_%d"),
+		++LocationLevelInstanceSerial);
+	ULevelStreamingDynamic* LoadedLevel = ULevelStreamingDynamic::LoadLevelInstanceBySoftObjectPtr(
 		this,
-		&ANPMapEventManager::HandleEventTimer,
-		FMath::Max(Delay, 0.01f),
+		LocationLevelInstance,
+		LocationLevelTransform,
+		bLoadSucceeded,
+		InstanceName);
+	if (!bLoadSucceeded || !IsValid(LoadedLevel))
+	{
+		return false;
+	}
+
+	PendingEvent = EventInstance;
+	ActiveLocationLevel = LoadedLevel;
+	bLocationLevelTransitionInProgress = true;
+	LoadedLevel->OnLevelShown.AddUniqueDynamic(this, &ThisClass::HandleLocationLevelShown);
+	LoadedLevel->OnLevelUnloaded.AddUniqueDynamic(this, &ThisClass::HandleLocationLevelUnloaded);
+
+	// 이미 표시된 레벨 에셋이 재사용되는 특수한 경우에도 이벤트 시작을 놓치지 않습니다.
+	if (LoadedLevel->IsLevelVisible())
+	{
+		HandleLocationLevelShown();
+	}
+
+	return true;
+}
+
+void UNPMapEventManagerComponent::HandleLocationLevelShown()
+{
+	if (!HasServerAuthority()
+		|| !bLocationLevelTransitionInProgress
+		|| !IsValid(ActiveLocationLevel))
+	{
+		return;
+	}
+
+	ActiveLocationLevel->OnLevelShown.RemoveDynamic(this, &ThisClass::HandleLocationLevelShown);
+	bLocationLevelTransitionInProgress = false;
+
+	// 스트리밍된 Level Instance 내부 Collector의 BeginPlay 순서에만 의존하지 않습니다.
+	CollectExistingLocationCollectors();
+
+	ANPMapEvent* EventToStart = PendingEvent;
+	PendingEvent = nullptr;
+	if (!IsValid(EventToStart))
+	{
+		UnloadActiveLocationLevel();
+		return;
+	}
+
+	EventToStart->OnEventFinished.AddUniqueDynamic(
+		this,
+		&ThisClass::HandleEventWithLocationLevelFinished);
+	if (!EventToStart->StartEvent())
+	{
+		EventToStart->OnEventFinished.RemoveDynamic(
+			this,
+			&ThisClass::HandleEventWithLocationLevelFinished);
+		UnloadActiveLocationLevel();
+	}
+}
+
+void UNPMapEventManagerComponent::HandleEventWithLocationLevelFinished(ANPMapEvent* MapEvent)
+{
+	if (IsValid(MapEvent))
+	{
+		MapEvent->OnEventFinished.RemoveDynamic(
+			this,
+			&ThisClass::HandleEventWithLocationLevelFinished);
+	}
+
+	UnloadActiveLocationLevel();
+}
+
+void UNPMapEventManagerComponent::UnloadActiveLocationLevel()
+{
+	if (!IsValid(ActiveLocationLevel))
+	{
+		PendingEvent = nullptr;
+		bLocationLevelTransitionInProgress = false;
+		return;
+	}
+
+	bLocationLevelTransitionInProgress = true;
+	ActiveLocationLevel->SetShouldBeVisible(false);
+	ActiveLocationLevel->SetShouldBeLoaded(false);
+}
+
+void UNPMapEventManagerComponent::HandleLocationLevelUnloaded()
+{
+	if (IsValid(ActiveLocationLevel))
+	{
+		ActiveLocationLevel->OnLevelShown.RemoveDynamic(
+			this,
+			&ThisClass::HandleLocationLevelShown);
+		ActiveLocationLevel->OnLevelUnloaded.RemoveDynamic(
+			this,
+			&ThisClass::HandleLocationLevelUnloaded);
+	}
+
+	PendingEvent = nullptr;
+	ActiveLocationLevel = nullptr;
+	bLocationLevelTransitionInProgress = false;
+	LocationCollectors.RemoveAll(
+		[](const ANPMapEventLocationCollector* Collector)
+		{
+			return !IsValid(Collector);
+		});
+}
+
+void UNPMapEventManagerComponent::ScheduleEvent(
+	const ENPMapEventType EventType,
+	const float MinimumTimeMinutes,
+	const float MaximumTimeMinutes)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	const float LowerBoundMinutes = FMath::Max(0.0f, FMath::Min(MinimumTimeMinutes, MaximumTimeMinutes));
+	const float UpperBoundMinutes = FMath::Max(0.0f, FMath::Max(MinimumTimeMinutes, MaximumTimeMinutes));
+	const float DelaySeconds = FMath::FRandRange(LowerBoundMinutes, UpperBoundMinutes) * 60.0f;
+	FTimerHandle& TimerHandle = EventType == ENPMapEventType::TypeA
+		? TypeAEventTimer
+		: TypeBEventTimer;
+	void (UNPMapEventManagerComponent::*TimerCallback)() = EventType == ENPMapEventType::TypeA
+		? &UNPMapEventManagerComponent::HandleTypeAEventTimer
+		: &UNPMapEventManagerComponent::HandleTypeBEventTimer;
+
+	World->GetTimerManager().SetTimer(
+		TimerHandle,
+		this,
+		TimerCallback,
+		FMath::Max(DelaySeconds, 0.01f),
 		false);
 }
 
-void ANPMapEventManager::HandleEventTimer()
+void UNPMapEventManagerComponent::HandleTypeAEventTimer()
 {
-	TriggerRandomEvent();
-
-	const float LowerBound = FMath::Min(MinimumInterval, MaximumInterval);
-	const float UpperBound = FMath::Max(MinimumInterval, MaximumInterval);
-	ScheduleNextEvent(FMath::FRandRange(LowerBound, UpperBound));
+	TriggerRandomEvent(ENPMapEventType::TypeA);
 }
 
-bool ANPMapEventManager::HasActiveEvent() const
+void UNPMapEventManagerComponent::HandleTypeBEventTimer()
 {
-	return EventInstances.ContainsByPredicate(
+	TriggerRandomEvent(ENPMapEventType::TypeB);
+}
+
+bool UNPMapEventManagerComponent::HasActiveEvent() const
+{
+	return bLocationLevelTransitionInProgress
+		|| IsValid(ActiveLocationLevel)
+		|| EventInstances.ContainsByPredicate(
 		[](const ANPMapEvent* EventInstance)
 		{
 			return IsValid(EventInstance) && EventInstance->IsEventActive();

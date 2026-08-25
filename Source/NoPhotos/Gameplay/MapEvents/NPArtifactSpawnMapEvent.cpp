@@ -9,8 +9,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogNPArtifactEvent, Log, All);
 ANPArtifactSpawnMapEvent::ANPArtifactSpawnMapEvent()
 {
 	Duration = 1.0f;
-	Cooldown = 60.0f;
-	SelectionWeight = 1.0f;
 	ArtifactClass = AActor::StaticClass();
 }
 
