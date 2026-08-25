@@ -7,6 +7,7 @@
 #include "NPRStablePhysicsPawn.generated.h"
 
 class UPrimitiveComponent;
+class AController;
 class FLifetimeProperty;
 
 USTRUCT()
@@ -56,10 +57,12 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void PossessedBy(AController* NewController) override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void ApplyMoveInput(const FVector& WorldMoveInput) override;
 	virtual void ApplyJumpRequest() override;
 	virtual void ApplyRightHandState(bool bActive) override;
+	virtual void OnRep_PlayerState() override;
 	virtual FRotator GetTargetViewRotation() const override;
 
 private:
@@ -141,4 +144,6 @@ private:
 	bool bLocalRightHandActive = false;
 	float ClientPhysicsStateSendAccumulator = 0.0f;
 	float ViewRotationSendAccumulator = ViewRotationSendInterval;
+	
+	void InitializeNameplate();
 };
