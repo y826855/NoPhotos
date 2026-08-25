@@ -176,11 +176,17 @@ void ANPRelicCase::InitializeGeometryCollections()
 }
 
 void ANPRelicCase::HandleDurabilityDamaged(
-	const int32 Damage,
+	const int32,
 	const int32 CurrentHealth,
 	const int32 MaxHealth)
 {
-	OnCaseDamaged(Damage, CurrentHealth, MaxHealth);
+	const float RemainingHealthRatio = MaxHealth > 0
+		? FMath::Clamp(
+			static_cast<float>(CurrentHealth) / static_cast<float>(MaxHealth),
+			0.0f,
+			1.0f)
+		: 0.0f;
+	OnCaseDamaged(RemainingHealthRatio);
 }
 
 void ANPRelicCase::HandleDurabilityDepleted(
@@ -245,7 +251,7 @@ void ANPRelicCase::ApplyBrokenState()
 		GeometryCollection->Activate(true);
 		GeometryCollection->SetCollisionEnabled(
 			ECollisionEnabled::QueryAndPhysics);
-		GeometryCollection->SetCollisionObjectType(ECC_Destructible);
+		GeometryCollection->SetCollisionObjectType(ECC_WorldDynamic);
 		GeometryCollection->ObjectType =
 			EObjectStateTypeEnum::Chaos_Object_Dynamic;
 		GeometryCollection->SetEnableGravity(true);

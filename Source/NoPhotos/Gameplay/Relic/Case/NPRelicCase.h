@@ -57,7 +57,7 @@ protected:
 	void OnCaseUnlocked();
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Relic Case")
-	void OnCaseDamaged(int32 Damage, int32 CurrentHealth, int32 MaxHealth);
+	void OnCaseDamaged(float RemainingHealthRatio);
 
 	UFUNCTION(NetMulticast, Reliable)
 	void MulticastBreakCase(FVector_NetQuantize10 InBreakLocation);
