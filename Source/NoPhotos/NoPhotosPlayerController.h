@@ -11,7 +11,6 @@ class UInputAction;
 class UNPPhotoCaptureComponent;
 class UNPPhotoFlashWidget;
 class UNPPhotoTransferComponent;
-class UNPPhotoPreviewWidget;
 class UUserWidget;
 
 /**
@@ -67,10 +66,6 @@ protected:
 	/** Gameplay initialization */
 	virtual void BeginPlay() override;
 
-	/** 촬영 결과를 표시할 WBP 클래스입니다. UNPPhotoPreviewWidget을 부모로 만들어 지정합니다. */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Photo|UI")
-	TSubclassOf<UNPPhotoPreviewWidget> PhotoPreviewWidgetClass;
-
 	/** UNPPhotoFlashWidget을 부모로 만든 전체 화면 플래시 WBP 클래스입니다. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Photo|UI")
 	TSubclassOf<UNPPhotoFlashWidget> PhotoFlashWidgetClass;
@@ -90,9 +85,6 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Photo", meta=(AllowPrivateAccess="true"))
 	TObjectPtr<UNPPhotoTransferComponent> PhotoTransferComponent;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UNPPhotoPreviewWidget> PhotoPreviewWidget;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNPPhotoFlashWidget> PhotoFlashWidget;

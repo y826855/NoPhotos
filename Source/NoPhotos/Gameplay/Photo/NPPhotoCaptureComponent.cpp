@@ -239,6 +239,7 @@ void UNPPhotoCaptureComponent::InitializeLocalCapture()
 
 	PhotoRenderTarget = NewObject<UTextureRenderTarget2D>(this, TEXT("PhotoRenderTarget"));
 	PhotoRenderTarget->RenderTargetFormat = RTF_RGBA8;
+	PhotoRenderTarget->TargetGamma = 2.2f;
 	PhotoRenderTarget->ClearColor = FLinearColor::Black;
 	PhotoRenderTarget->InitAutoFormat(CaptureWidth, CaptureHeight);
 	PhotoRenderTarget->UpdateResourceImmediate(true);
@@ -250,6 +251,7 @@ void UNPPhotoCaptureComponent::InitializeLocalCapture()
 	SceneCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
 	SceneCapture->bCaptureEveryFrame = false;
 	SceneCapture->bCaptureOnMovement = false;
+	SceneCapture->bAlwaysPersistRenderingState = true;
 	SceneCapture->RegisterComponent();
 	UE_LOG(
 		LogNPPhoto,

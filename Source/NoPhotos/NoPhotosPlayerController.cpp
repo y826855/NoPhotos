@@ -11,7 +11,6 @@
 #include "Gameplay/Photo/NPPhotoCaptureComponent.h"
 #include "Gameplay/Photo/NPPhotoFlashWidget.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
-#include "Gameplay/Photo/NPPhotoPreviewWidget.h"
 #include "Gameplay/Photo/NPPhotoTransferComponent.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
@@ -27,21 +26,6 @@ void ANoPhotosPlayerController::BeginPlay()
 
 	if (IsLocalController())
 	{
-		if (PhotoPreviewWidgetClass)
-		{
-			PhotoPreviewWidget = CreateWidget<UNPPhotoPreviewWidget>(this, PhotoPreviewWidgetClass);
-			if (PhotoPreviewWidget)
-			{
-				PhotoPreviewWidget->AddToPlayerScreen();
-				PhotoPreviewWidget->HidePhoto();
-				UE_LOG(LogNPPhoto, Log, TEXT("[PhotoUI] Preview widget created. Widget=%s"), *GetNameSafe(PhotoPreviewWidget));
-			}
-		}
-		else
-		{
-			UE_LOG(LogNPPhoto, Warning, TEXT("[PhotoUI] PhotoPreviewWidgetClass is not assigned."));
-		}
-
 		if (PhotoFlashWidgetClass)
 		{
 			PhotoFlashWidget = CreateWidget<UNPPhotoFlashWidget>(this, PhotoFlashWidgetClass);
