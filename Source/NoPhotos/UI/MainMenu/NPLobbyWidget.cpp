@@ -4,8 +4,7 @@
 #include "Core/NPPlayerController.h"
 #include "Core/Room/NPRoomGameState.h"
 
-UNPLobbyWidget::UNPLobbyWidget(const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
+UNPLobbyWidget::UNPLobbyWidget(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {
 }
 
@@ -23,16 +22,12 @@ void UNPLobbyWidget::NativeConstruct()
 		LeaveButton->OnClicked.AddDynamic(this, &UNPLobbyWidget::OnLeaveClicked);
 	}
 
-	ANPRoomGameState* RoomGameState = GetWorld()
-		? GetWorld()->GetGameState<ANPRoomGameState>()
-		: nullptr;
+	ANPRoomGameState* RoomGameState = GetWorld() ? GetWorld()->GetGameState<ANPRoomGameState>()	: nullptr;
 
 	if (IsValid(RoomGameState))
 	{
 		BoundRoomGameState = RoomGameState;
-		RoomGameState->OnRoomStateChanged.AddDynamic(
-			this,
-			&UNPLobbyWidget::OnRoomStateChanged);
+		RoomGameState->OnRoomStateChanged.AddDynamic(this, &UNPLobbyWidget::OnRoomStateChanged);
 	}
 
 	RefreshStartButtonVisibility();
@@ -42,9 +37,7 @@ void UNPLobbyWidget::NativeDestruct()
 {
 	if (BoundRoomGameState.IsValid())
 	{
-		BoundRoomGameState->OnRoomStateChanged.RemoveDynamic(
-			this,
-			&UNPLobbyWidget::OnRoomStateChanged);
+		BoundRoomGameState->OnRoomStateChanged.RemoveDynamic(this, &UNPLobbyWidget::OnRoomStateChanged);
 	}
 
 	if (IsValid(StartButton))
@@ -71,9 +64,10 @@ void UNPLobbyWidget::RefreshStartButtonVisibility()
 
 	ANPPlayerController* NPPC = Cast<ANPPlayerController>(GetOwningPlayer());
 	const bool bIsRoomHost = IsValid(NPPC) && NPPC->IsRoomHost();
+	const bool bCanStartGame = BoundRoomGameState.IsValid()	&& BoundRoomGameState->CanHostStartGame();
 
-	StartButton->SetVisibility(
-		bIsRoomHost ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	StartButton->SetVisibility(bIsRoomHost ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+	StartButton->SetIsEnabled(bIsRoomHost && bCanStartGame);
 }
 
 void UNPLobbyWidget::OnRoomStateChanged()
@@ -84,7 +78,7 @@ void UNPLobbyWidget::OnRoomStateChanged()
 void UNPLobbyWidget::OnStartButtonClicked()
 {
 	ANPPlayerController* NPPC = Cast<ANPPlayerController>(GetOwningPlayer());
-	if (IsValid(NPPC) && NPPC->IsRoomHost())
+	if (IsValid(NPPC) && NPPC->IsRoomHost() && BoundRoomGameState.IsValid() && BoundRoomGameState->CanHostStartGame())
 	{
 		NPPC->RequestStartGame();
 	}
