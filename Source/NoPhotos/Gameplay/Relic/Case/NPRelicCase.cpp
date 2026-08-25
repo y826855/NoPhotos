@@ -2,9 +2,8 @@
 
 #include "Components/PrimitiveComponent.h"
 #include "Components/SceneComponent.h"
-#include "Engine/World.h"
 #include "Gameplay/Relic/Components/NPImpactReceiveComponent.h"
-#include "Gameplay/Relic/NPBaseRelic.h"
+#include "Gameplay/Relic/Components/NPRelicCaseSlotComponent.h"
 #include "GeometryCollection/GeometryCollectionComponent.h"
 #include "Net/UnrealNetwork.h"
 
@@ -24,9 +23,8 @@ ANPRelicCase::ANPRelicCase()
 	ImpactReceiveComponent = CreateDefaultSubobject<UNPImpactReceiveComponent>(
 		TEXT("ImpactReceiveComponent"));
 
-	RelicSpawnPoint = CreateDefaultSubobject<USceneComponent>(
-		TEXT("RelicSpawnPoint"));
-	RelicSpawnPoint->SetupAttachment(SceneRoot);
+	RelicScene = CreateDefaultSubobject<USceneComponent>(TEXT("RelicScene"));
+	RelicScene->SetupAttachment(SceneRoot);
 }
 
 void ANPRelicCase::PostInitializeComponents()
@@ -34,6 +32,7 @@ void ANPRelicCase::PostInitializeComponents()
 	Super::PostInitializeComponents();
 
 	CollectCaseGeometryCollections();
+	CollectRelicSlots();
 
 	TArray<UPrimitiveComponent*> ImpactTargets;
 	ImpactTargets.Reserve(CaseGeometryCollections.Num());
@@ -60,7 +59,7 @@ void ANPRelicCase::BeginPlay()
 
 	if (HasAuthority())
 	{
-		SpawnContainedRelic();
+		SpawnContainedRelics();
 	}
 }
 
@@ -72,7 +71,6 @@ void ANPRelicCase::GetLifetimeReplicatedProps(
 	DOREPLIFETIME(ANPRelicCase, bIsBroken);
 	DOREPLIFETIME(ANPRelicCase, bIsUnlocked);
 	DOREPLIFETIME(ANPRelicCase, BreakLocation);
-	DOREPLIFETIME(ANPRelicCase, ContainedRelic);
 }
 
 bool ANPRelicCase::UnlockCase()
@@ -84,7 +82,7 @@ bool ANPRelicCase::UnlockCase()
 
 	bIsUnlocked = true;
 	ApplyCaseState();
-	UnlockContainedRelic();
+	ReleaseContainedRelics();
 	ForceNetUpdate();
 	return true;
 }
@@ -97,11 +95,6 @@ void ANPRelicCase::OnRep_IsBroken()
 void ANPRelicCase::OnRep_IsUnlocked()
 {
 	ApplyCaseState();
-}
-
-void ANPRelicCase::OnRep_ContainedRelic()
-{
-	UpdateContainedRelicCollision();
 }
 
 void ANPRelicCase::MulticastBreakCase_Implementation(
@@ -175,6 +168,21 @@ void ANPRelicCase::InitializeGeometryCollections()
 	}
 }
 
+void ANPRelicCase::CollectRelicSlots()
+{
+	RelicSlots.Reset();
+
+	TArray<UNPRelicCaseSlotComponent*> FoundRelicSlots;
+	GetComponents(FoundRelicSlots);
+	for (UNPRelicCaseSlotComponent* RelicSlot : FoundRelicSlots)
+	{
+		if (IsValid(RelicSlot) && RelicSlot->IsAttachedTo(RelicScene))
+		{
+			RelicSlots.Add(RelicSlot);
+		}
+	}
+}
+
 void ANPRelicCase::HandleDurabilityDamaged(
 	const int32,
 	const int32 CurrentHealth,
@@ -205,7 +213,7 @@ void ANPRelicCase::BreakCase(const FVector& ImpactLocation)
 	BreakLocation = ImpactLocation;
 	bIsBroken = true;
 	MulticastBreakCase(BreakLocation);
-	UnlockContainedRelic();
+	ReleaseContainedRelics();
 	ForceNetUpdate();
 }
 
@@ -220,8 +228,6 @@ void ANPRelicCase::ApplyCaseState()
 		bUnlockedEventDispatched = true;
 		OnCaseUnlocked();
 	}
-
-	UpdateContainedRelicCollision();
 }
 
 void ANPRelicCase::ApplyBrokenState()
@@ -268,66 +274,34 @@ void ANPRelicCase::ApplyBrokenState()
 	}
 }
 
-void ANPRelicCase::SpawnContainedRelic()
+void ANPRelicCase::SpawnContainedRelics()
 {
-	if (!HasAuthority() || IsValid(ContainedRelic) || !RelicBlueprintClass ||
-		!RelicSpawnPoint)
+	if (!HasAuthority())
 	{
 		return;
 	}
 
-	UWorld* World = GetWorld();
-	if (!World)
+	for (UNPRelicCaseSlotComponent* RelicSlot : RelicSlots)
 	{
-		return;
+		if (IsValid(RelicSlot))
+		{
+			RelicSlot->SpawnRelic(IsAccessible());
+		}
 	}
-
-	FTransform SpawnTransform = RelicSpawnPoint->GetComponentTransform();
-	SpawnTransform.SetScale3D(FVector(
-		FMath::Max(0.01f, SpawnedRelicScale.X),
-		FMath::Max(0.01f, SpawnedRelicScale.Y),
-		FMath::Max(0.01f, SpawnedRelicScale.Z)));
-
-	FActorSpawnParameters SpawnParameters;
-	SpawnParameters.SpawnCollisionHandlingOverride =
-		ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-	ContainedRelic = World->SpawnActor<ANPBaseRelic>(
-		RelicBlueprintClass,
-		SpawnTransform,
-		SpawnParameters);
-	if (!IsValid(ContainedRelic))
-	{
-		return;
-	}
-
-	ContainedRelic->SetUnlocked(IsAccessible());
-	UpdateContainedRelicCollision();
-	ForceNetUpdate();
 }
 
-void ANPRelicCase::UnlockContainedRelic()
+void ANPRelicCase::ReleaseContainedRelics()
 {
-	if (HasAuthority() && IsValid(ContainedRelic))
-	{
-		ContainedRelic->SetUnlocked(true);
-	}
-	UpdateContainedRelicCollision();
-}
-
-void ANPRelicCase::UpdateContainedRelicCollision()
-{
-	if (!IsValid(ContainedRelic))
+	if (!HasAuthority())
 	{
 		return;
 	}
 
-	if (UPrimitiveComponent* RelicPrimitive =
-		Cast<UPrimitiveComponent>(ContainedRelic->GetRootComponent()))
+	for (UNPRelicCaseSlotComponent* RelicSlot : RelicSlots)
 	{
-		RelicPrimitive->SetCollisionResponseToChannel(
-			ECC_Destructible,
-			ECR_Ignore);
+		if (IsValid(RelicSlot))
+		{
+			RelicSlot->ReleaseRelic();
+		}
 	}
-	ContainedRelic->SetActorEnableCollision(IsAccessible());
 }
