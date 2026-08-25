@@ -70,6 +70,7 @@ void ANPRStablePhysicsPawn::Tick(float DeltaSeconds)
 {
 	UpdateViewRotationReplication(DeltaSeconds);
 	UpdateClientSimulationState();
+	UpdateReplicatedGrabVisualTarget();
 
 	Super::Tick(DeltaSeconds);
 	UpdateClientPhysicsStateReplication(DeltaSeconds);
@@ -298,12 +299,14 @@ void ANPRStablePhysicsPawn::OnRep_GrabState()
 	if (IsLocallyControlled() && !bLocalRightHandActive)
 	{
 		RightHandGrab->ClearReplicatedGrab();
+		ClearRightHandIKWorldTarget();
 		return;
 	}
 
 	if (!IsReplicatedGrabActive())
 	{
 		RightHandGrab->ClearReplicatedGrab();
+		ClearRightHandIKWorldTarget();
 		return;
 	}
 
@@ -311,19 +314,44 @@ void ANPRStablePhysicsPawn::OnRep_GrabState()
 	if (!GrabbedComponent)
 	{
 		RightHandGrab->ClearReplicatedGrab();
-		return;
-	}
-	if (IsLocallyControlled()
-		&& RightHandGrab->GetGrabbedComponent() == GrabbedComponent)
-	{
+		ClearRightHandIKWorldTarget();
 		return;
 	}
 
-	RightHandGrab->ApplyReplicatedGrab(
+	RightHandGrab->ApplyReplicatedGrabState(
 		GrabbedComponent,
-		ReplicatedGrabState.GrabbedBoneName,
-		ReplicatedGrabState.ConstraintFrame1,
-		ReplicatedGrabState.ConstraintFrame2);
+		ReplicatedGrabState.GrabbedBoneName);
+}
+
+void ANPRStablePhysicsPawn::UpdateReplicatedGrabVisualTarget()
+{
+	if (HasAuthority() || !IsReplicatedGrabActive())
+	{
+		ClearRightHandIKWorldTarget();
+		return;
+	}
+
+	UPrimitiveComponent* GrabbedComponent = ResolveReplicatedGrabbedComponent();
+	FBodyInstance* GrabbedBody = GrabbedComponent
+		? GrabbedComponent->GetBodyInstance(ReplicatedGrabState.GrabbedBoneName)
+		: nullptr;
+	FBodyInstance* HandBody = PhysicsMesh->GetBodyInstance(RightHandBoneName);
+	if (!GrabbedBody || !HandBody)
+	{
+		ClearRightHandIKWorldTarget();
+		return;
+	}
+
+	const FTransform GrabWorldFrame = ReplicatedGrabState.ConstraintFrame2
+		* GrabbedBody->GetUnrealWorldTransform();
+	const FTransform DesiredHandBodyWorld =
+		ReplicatedGrabState.ConstraintFrame1.Inverse() * GrabWorldFrame;
+	const FTransform HandSocketFrame = PhysicsMesh
+		->GetSocketTransform(RightHandBoneName)
+		.GetRelativeTransform(HandBody->GetUnrealWorldTransform());
+	const FTransform DesiredHandSocketWorld =
+		HandSocketFrame * DesiredHandBodyWorld;
+	SetRightHandIKWorldTarget(DesiredHandSocketWorld.GetLocation());
 }
 
 void ANPRStablePhysicsPawn::HandleGrabbedComponentChanged(

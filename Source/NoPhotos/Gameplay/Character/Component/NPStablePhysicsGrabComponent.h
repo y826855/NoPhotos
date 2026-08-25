@@ -50,6 +50,9 @@ public:
 		FName BoneName,
 		const FTransform& Frame1,
 		const FTransform& Frame2);
+	void ApplyReplicatedGrabState(
+		UPrimitiveComponent* PrimitiveComponent,
+		FName BoneName);
 	void ClearReplicatedGrab();
 
 protected:
@@ -98,7 +101,8 @@ private:
 	bool CommitGrab(
 		UPrimitiveComponent* PrimitiveComponent,
 		UGrabbableComponent* GrabbableComponent,
-		FName BoneName);
+		FName BoneName,
+		bool bRequireConstraint = true);
 	void UpdateGrabForce(float DeltaTime);
 	void UpdateReplicatedGrabFrameBlend(float DeltaTime);
 	void ReleaseGrab();

@@ -171,6 +171,32 @@ void UNPStablePhysicsGrabComponent::ApplyReplicatedGrab(
 	bReplicatedGrabFrameBlendActive = bShouldBlendFrame;
 }
 
+void UNPStablePhysicsGrabComponent::ApplyReplicatedGrabState(
+	UPrimitiveComponent* PrimitiveComponent,
+	FName BoneName)
+{
+	if (!IsValid(PrimitiveComponent))
+	{
+		ClearReplicatedGrab();
+		return;
+	}
+
+	if (GrabbedComponent == PrimitiveComponent && GrabbedBoneName == BoneName)
+	{
+		return;
+	}
+
+	if (IsHoldingObject())
+	{
+		ReleaseGrab();
+	}
+
+	UGrabbableComponent* GrabbableComponent = PrimitiveComponent->GetOwner()
+		? PrimitiveComponent->GetOwner()->FindComponentByClass<UGrabbableComponent>()
+		: nullptr;
+	CommitGrab(PrimitiveComponent, GrabbableComponent, BoneName, false);
+}
+
 void UNPStablePhysicsGrabComponent::ClearReplicatedGrab()
 {
 	bReplicatedGrabFrameBlendActive = false;
@@ -321,11 +347,13 @@ bool UNPStablePhysicsGrabComponent::Grab(
 bool UNPStablePhysicsGrabComponent::CommitGrab(
 	UPrimitiveComponent* PrimitiveComponent,
 	UGrabbableComponent* GrabbableComponent,
-	FName BoneName)
+	FName BoneName,
+	bool bRequireConstraint)
 {
 	if (!GrabbableComponent
 		|| !GrabbableComponent->CanBeGrabbed()
-		|| !ConstraintInstance.IsValidConstraintInstance())
+		|| (bRequireConstraint
+			&& !ConstraintInstance.IsValidConstraintInstance()))
 	{
 		BreakConstraint();
 		return false;

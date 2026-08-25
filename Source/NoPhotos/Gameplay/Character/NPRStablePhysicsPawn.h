@@ -97,6 +97,7 @@ private:
 	void HandleGrabbedComponentChanged(UPrimitiveComponent* NewGrabbedComponent);
 	UPrimitiveComponent* ResolveReplicatedGrabbedComponent() const;
 	void UpdateClientSimulationState();
+	void UpdateReplicatedGrabVisualTarget();
 	void UpdateServerReplicatedState();
 	void UpdateClientPhysicsStateReplication(float DeltaSeconds);
 	void UpdateViewRotationReplication(float DeltaSeconds);

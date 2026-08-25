@@ -462,12 +462,29 @@ void ANPStablePhysicsPawn::UpdateRightHandIK(float DeltaSeconds)
 	const FVector ShoulderLocation = PhysicsMesh->GetSocketLocation(RightShoulderBoneName);
 	FRotator HandTargetRotation = GetTargetViewRotation();
 	HandTargetRotation.Roll = 0.0f;
-	const FVector HandForward = HandTargetRotation.Vector();
-	const FVector HandRight = FRotationMatrix(HandTargetRotation).GetUnitAxis(EAxis::Y);
-	const FVector HandTargetLocation = ShoulderLocation + HandForward * RightHandReachDistance;
-	const FVector ElbowTargetLocation = ShoulderLocation
+	FVector HandForward = HandTargetRotation.Vector();
+	FVector HandRight = FRotationMatrix(HandTargetRotation).GetUnitAxis(EAxis::Y);
+	FVector HandTargetLocation = ShoulderLocation
+		+ HandForward * RightHandReachDistance;
+	FVector ElbowTargetLocation = ShoulderLocation
 		+ HandForward * (RightHandReachDistance * 0.5f)
 		+ HandRight * RightElbowOutwardDistance;
+
+	if (bHasRightHandIKWorldTarget)
+	{
+		HandTargetLocation = RightHandIKWorldTarget;
+		HandForward = (HandTargetLocation - ShoulderLocation).GetSafeNormal();
+		HandRight = FVector::CrossProduct(FVector::UpVector, HandForward)
+			.GetSafeNormal();
+		if (HandRight.IsNearlyZero())
+		{
+			HandRight = FRotationMatrix(HandTargetRotation).GetUnitAxis(EAxis::Y);
+		}
+		ElbowTargetLocation = FMath::Lerp(
+			ShoulderLocation,
+			HandTargetLocation,
+			0.5f) + HandRight * RightElbowOutwardDistance;
+	}
 
 	const FTransform& MeshTransform = PhysicsMesh->GetComponentTransform();
 	RightHandIKLocation = MeshTransform.InverseTransformPosition(HandTargetLocation);
@@ -603,4 +620,15 @@ void ANPStablePhysicsPawn::ApplyRightHandState(bool bActive)
 void ANPStablePhysicsPawn::SetRightHandVisualState(bool bActive)
 {
 	bRightHandActive = bActive;
+}
+
+void ANPStablePhysicsPawn::SetRightHandIKWorldTarget(const FVector& WorldTarget)
+{
+	bHasRightHandIKWorldTarget = true;
+	RightHandIKWorldTarget = WorldTarget;
+}
+
+void ANPStablePhysicsPawn::ClearRightHandIKWorldTarget()
+{
+	bHasRightHandIKWorldTarget = false;
 }

@@ -103,6 +103,8 @@ protected:
 
 	/** 그랩 판정과 관계없이 오른손 IK에 사용할 시각 상태만 변경합니다. */
 	void SetRightHandVisualState(bool bActive);
+	void SetRightHandIKWorldTarget(const FVector& WorldTarget);
+	void ClearRightHandIKWorldTarget();
 
 	/** 캐릭터 방향, 손 IK와 허리에 사용할 시점 회전을 반환합니다. */
 	virtual FRotator GetTargetViewRotation() const;
@@ -235,6 +237,8 @@ private:
 	void StopRightHand();
 
 	bool bRightHandActive = false;
+	bool bHasRightHandIKWorldTarget = false;
+	FVector RightHandIKWorldTarget = FVector::ZeroVector;
 	float RightHandReachDistance = 120.0f;
 	float RightElbowOutwardDistance = 40.0f;
 	float RightHandIKBlendSpeed = 10.0f;
