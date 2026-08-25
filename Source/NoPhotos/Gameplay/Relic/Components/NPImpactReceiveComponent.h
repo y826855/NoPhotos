@@ -27,6 +27,9 @@ public:
 	void IgnoreGrabImpact();
 	/** 루트가 아닌 Primitive에서 충격을 받을 오브젝트가 지정할 수 있습니다. */
 	void SetImpactTargetComponent(UPrimitiveComponent* InTargetComponent);
+	/** 여러 Primitive가 하나의 내구도를 공유할 때 사용합니다. */
+	void SetImpactTargetComponents(
+		const TArray<UPrimitiveComponent*>& InTargetComponents);
 
 	FOnDurabilityDamaged OnDamaged;
 	FOnDurabilityDepleted OnDepleted;
@@ -68,7 +71,7 @@ protected:
 
 private:
 	UPROPERTY(Transient)
-	TObjectPtr<UPrimitiveComponent> ImpactTargetComponent;
+	TArray<TObjectPtr<UPrimitiveComponent>> ImpactTargetComponents;
 
 	double IgnoreDamageUntilTime = 0.0;
 	double NextDamageAllowedTime = 0.0;
