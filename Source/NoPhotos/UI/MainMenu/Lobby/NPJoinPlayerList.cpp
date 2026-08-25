@@ -1,7 +1,8 @@
 #include "UI/MainMenu/Lobby/NPJoinPlayerList.h"
 
 #include "NPJoinPlayer.h"
-#include "Components/VerticalBox.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Core/NPPlayerState.h"
 #include "Core/Room/NPRoomGameState.h"
 #include "GameFramework/PlayerController.h"
@@ -48,10 +49,7 @@ void UNPJoinPlayerList::RefreshPlayerList()
         return;
     }
 
-    ANPRoomGameState* RoomGameState =
-        World->GetGameState<ANPRoomGameState>();
-
-    // 게스트는 UI가 먼저 열리고 GameState가 나중에 복제될 수 있다.
+    ANPRoomGameState* RoomGameState = World->GetGameState<ANPRoomGameState>();
     if (!IsValid(RoomGameState))
     {
         World->GetTimerManager().SetTimer(
@@ -75,10 +73,9 @@ void UNPJoinPlayerList::RefreshPlayerList()
 		RoomGameState->OnRoomStateChanged.AddUniqueDynamic(this, &UNPJoinPlayerList::OnRoomStateChanged);
 	}
 
-    PlayerList->ClearChildren();
-
     const TArray<FNPPlayerRoomInfo> PlayerMemberList = RoomGameState->GetRoomMembers();
     bool bNeedRefreshAgain = PlayerMemberList.IsEmpty();
+	TSet<TObjectPtr<APlayerState>> CurrentPlayerStates;
 	
     APlayerState* LocalPlayerState = GetOwningPlayer() ? GetOwningPlayer()->PlayerState : nullptr;
     bool bLocalPlayerInMemberList = false;
@@ -109,7 +106,17 @@ void UNPJoinPlayerList::RefreshPlayerList()
         else
         {
             bNeedRefreshAgain = true;
+			continue;
         }
+
+		APlayerState* PlayerState = RoomMember.PlayerState;
+		CurrentPlayerStates.Add(PlayerState);
+
+		if (UNPJoinPlayer* ExistingPlayerWidget = PlayerWidgets.FindRef(PlayerState))
+		{
+			ExistingPlayerWidget->SetupResult(PlayerName);
+			continue;
+		}
 
         UNPJoinPlayer* JoinPlayerWidget = CreateWidget<UNPJoinPlayer>(GetOwningPlayer(), JoinPlayerWidgetClass);
         if (!IsValid(JoinPlayerWidget))
@@ -117,8 +124,17 @@ void UNPJoinPlayerList::RefreshPlayerList()
             continue;
         }
 
-        JoinPlayerWidget->SetupResult(PlayerIndex + 1, PlayerName);
-        PlayerList->AddChild(JoinPlayerWidget);
+        JoinPlayerWidget->SetupResult(PlayerName);
+
+        UHorizontalBoxSlot* PlayerSlot = PlayerList->AddChildToHorizontalBox(JoinPlayerWidget);
+        if (IsValid(PlayerSlot))
+        {
+            PlayerSlot->SetPadding(FMargin(0.0f, 0.0f, -40.0f, -30.0f));
+        }
+
+		PlayerWidgets.Add(PlayerState, JoinPlayerWidget);
+		const float JoinAnimationDelay = bInitialPlayerPopulationComplete ? 0.0f : InitialJoinAnimationIndex++ * InitialJoinAnimationInterval;
+		JoinPlayerWidget->PlayJoinAnimation(JoinAnimationDelay);
     }
 
     if (IsValid(LocalPlayerState) && !bLocalPlayerInMemberList)
@@ -137,5 +153,39 @@ void UNPJoinPlayerList::RefreshPlayerList()
         return;
     }
 
+	bInitialPlayerPopulationComplete = true;
+    for (auto PlayerWidgetIterator = PlayerWidgets.CreateIterator(); PlayerWidgetIterator; ++PlayerWidgetIterator)
+    {
+    	if (CurrentPlayerStates.Contains(PlayerWidgetIterator.Key()))
+    	{
+    		continue;
+    	}
+    
+    	if (UNPJoinPlayer* PlayerWidget = PlayerWidgetIterator.Value())
+		{
+			if (!PlayerWidget->IsLeaving())
+			{
+				LeavingPlayerWidgets.Add(PlayerWidget);
+				PlayerWidget->OnLeaveAnimationFinished.AddUObject(
+					this,
+					&UNPJoinPlayerList::OnPlayerLeaveAnimationFinished);
+				PlayerWidget->PlayLeaveAnimation();
+			}
+		}
+		PlayerWidgetIterator.RemoveCurrent();
+	}
+
     World->GetTimerManager().ClearTimer(PlayerNameRefreshTimer);
+}
+
+void UNPJoinPlayerList::OnPlayerLeaveAnimationFinished(UNPJoinPlayer* PlayerWidget)
+{
+	if (!IsValid(PlayerWidget) || !LeavingPlayerWidgets.Contains(PlayerWidget))
+	{
+		return;
+	}
+
+	PlayerWidget->OnLeaveAnimationFinished.RemoveAll(this);
+	PlayerWidget->RemoveFromParent();
+	LeavingPlayerWidgets.Remove(PlayerWidget);
 }
