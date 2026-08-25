@@ -281,12 +281,17 @@ void UNPStablePhysicsDebugComponent::DrawGrabDebug(
 
 	const FVector HandLocation = GrabComponent.PhysicsMesh->GetSocketLocation(
 		GrabComponent.HandBoneName);
+	const FColor GrabSphereColor = GrabComponent.IsHoldingObject()
+		? FColor::Green
+		: GrabComponent.bGrabRequested
+			? FColor::Blue
+			: FColor::Yellow;
 	DrawDebugSphere(
 		GrabComponent.GetWorld(),
 		HandLocation,
 		GrabComponent.GrabRadius,
 		16,
-		GrabComponent.IsHoldingObject() ? FColor::Green : FColor::Yellow,
+		GrabSphereColor,
 		false,
 		0.0f,
 		0,

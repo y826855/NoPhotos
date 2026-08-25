@@ -5,6 +5,7 @@
 #include "Net/UnrealNetwork.h"
 #include "PhysicsEngine/BodyInstance.h"
 #include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
+#include "Gameplay/Character/Component/NPStablePhysicsNetworkPredictionComponent.h"
 #include "Gameplay/Relic/NPBaseRelic.h"
 #include "Core/NPPlayerState.h"
 #include "Gameplay/Character/Component/NPStablePhysicsMovementComponent.h"
@@ -15,8 +16,11 @@ ANPRStablePhysicsPawn::ANPRStablePhysicsPawn()
 	SetReplicateMovement(true);
 	SetNetUpdateFrequency(30.0f);
 
-	// 소유 클라이언트가 골반 Root Body 상태를 결정합니다.
+	// 소유 클라이언트는 로컬 예측을 유지하고 서버 Root 상태를 별도로 보정받습니다.
 	PhysicsMesh->bReplicatePhysicsToAutonomousProxy = false;
+
+	NetworkPrediction = CreateDefaultSubobject<
+		UNPStablePhysicsNetworkPredictionComponent>(TEXT("NetworkPrediction"));
 }
 
 void ANPRStablePhysicsPawn::BeginPlay()
@@ -26,7 +30,13 @@ void ANPRStablePhysicsPawn::BeginPlay()
 	const bool bServerAuthority = HasAuthority();
 	const bool bRunsMovementPhysics = bServerAuthority || IsLocallyControlled();
 	PhysicsMovement->SetPhysicsUpdatesEnabled(bRunsMovementPhysics);
-	RightHandGrab->SetGrabSimulationEnabled(bServerAuthority);
+	RightHandGrab->SetGrabSimulationEnabled(
+		bServerAuthority || IsLocallyControlled());
+	NetworkPrediction->Initialize(
+		PhysicsMesh,
+		PhysicsMovement,
+		RightHandGrab,
+		FullBodyRootName);
 	if (!bRunsMovementPhysics)
 	{
 		PhysicsMovement->SetAnimationStateOverride(
@@ -71,9 +81,13 @@ void ANPRStablePhysicsPawn::Tick(float DeltaSeconds)
 	UpdateViewRotationReplication(DeltaSeconds);
 	UpdateClientSimulationState();
 	UpdateReplicatedGrabVisualTarget();
+	UpdateLocalPredictedGrab(DeltaSeconds);
 
 	Super::Tick(DeltaSeconds);
-	UpdateClientPhysicsStateReplication(DeltaSeconds);
+	if (HasAuthority())
+	{
+		PhysicsMovement->SetFacingControlEnabled(true);
+	}
 
 	if (HasAuthority())
 	{
@@ -173,14 +187,14 @@ void ANPRStablePhysicsPawn::ApplyMoveInput(const FVector& WorldMoveInput)
 	{
 		if (bClientWasMoving)
 		{
-			ServerStopMove();
+			NetworkPrediction->SendStopMove();
 			bClientWasMoving = false;
 		}
 		return;
 	}
 
 	bClientWasMoving = true;
-	ServerSetMoveInput(ClampedMoveInput);
+	NetworkPrediction->SendMoveInput(ClampedMoveInput);
 }
 
 void ANPRStablePhysicsPawn::ApplyJumpRequest()
@@ -192,7 +206,7 @@ void ANPRStablePhysicsPawn::ApplyJumpRequest()
 	else if (IsLocallyControlled())
 	{
 		Super::ApplyJumpRequest();
-		ServerRequestJump();
+		NetworkPrediction->SendJumpRequest();
 	}
 }
 
@@ -207,11 +221,19 @@ void ANPRStablePhysicsPawn::ApplyRightHandState(bool bActive)
 	if (IsLocallyControlled())
 	{
 		bLocalRightHandActive = bActive;
-		// Grab 판정은 서버에 맡기고 손 표현만 로컬에서 즉시 갱신합니다.
+		// 손과 Constraint는 즉시 예측하고, 실제 소유와 제출 판정은 서버 상태로 확정합니다.
 		SetRightHandVisualState(bActive);
+		RightHandGrab->SetGameplayNotificationsEnabled(!bActive);
+		RightHandGrab->SetGrabSimulationEnabled(true);
+		RightHandGrab->SetGrabRequested(bActive);
+		bAwaitingServerGrabConfirmation = bActive;
+		LocalGrabPredictionTimeRemaining = bActive
+			? LocalGrabPredictionTimeout
+			: 0.0f;
 		if (!bActive)
 		{
-			RightHandGrab->ClearReplicatedGrab();
+			bAwaitingServerGrabConfirmation = false;
+			RightHandGrab->SetGameplayNotificationsEnabled(true);
 		}
 		ServerSetRightHandActive(bActive);
 	}
@@ -227,12 +249,6 @@ FRotator ANPRStablePhysicsPawn::GetTargetViewRotation() const
 	return ReplicatedViewRotation;
 }
 
-void ANPRStablePhysicsPawn::ServerSetMoveInput_Implementation(
-	FVector_NetQuantizeNormal WorldMoveInput)
-{
-	Super::ApplyMoveInput(FVector(WorldMoveInput));
-}
-
 void ANPRStablePhysicsPawn::ServerSetViewRotation_Implementation(
 	uint16 CompressedYaw,
 	uint16 CompressedPitch)
@@ -241,43 +257,6 @@ void ANPRStablePhysicsPawn::ServerSetViewRotation_Implementation(
 		FRotator::DecompressAxisFromShort(CompressedPitch),
 		FRotator::DecompressAxisFromShort(CompressedYaw),
 		0.0f));
-}
-
-void ANPRStablePhysicsPawn::ServerStopMove_Implementation()
-{
-	Super::ApplyMoveInput(FVector::ZeroVector);
-}
-
-void ANPRStablePhysicsPawn::ServerRequestJump_Implementation()
-{
-	Super::ApplyJumpRequest();
-}
-
-void ANPRStablePhysicsPawn::ServerSetClientPhysicsState_Implementation(
-	const FRigidBodyState& ClientState)
-{
-	if (ClientState.Position.ContainsNaN()
-		|| ClientState.Quaternion.ContainsNaN()
-		|| !ClientState.Quaternion.IsNormalized()
-		|| ClientState.LinVel.ContainsNaN()
-		|| ClientState.AngVel.ContainsNaN())
-	{
-		return;
-	}
-
-	FBodyInstance* PelvisBody = PhysicsMesh->GetBodyInstance(FullBodyRootName);
-	if (!PelvisBody)
-	{
-		return;
-	}
-
-	PelvisBody->SetBodyTransform(
-		FTransform(ClientState.Quaternion, FVector(ClientState.Position)),
-		ETeleportType::TeleportPhysics);
-	PelvisBody->SetLinearVelocity(FVector(ClientState.LinVel), false);
-	PelvisBody->SetAngularVelocityInRadians(
-		FMath::DegreesToRadians(FVector(ClientState.AngVel)),
-		false);
 }
 
 void ANPRStablePhysicsPawn::ServerSetRightHandActive_Implementation(
@@ -310,11 +289,26 @@ void ANPRStablePhysicsPawn::OnRep_GrabState()
 		return;
 	}
 
+	bAwaitingServerGrabConfirmation = false;
+	LocalGrabPredictionTimeRemaining = 0.0f;
+
 	UPrimitiveComponent* GrabbedComponent = ResolveReplicatedGrabbedComponent();
 	if (!GrabbedComponent)
 	{
 		RightHandGrab->ClearReplicatedGrab();
 		ClearRightHandIKWorldTarget();
+		return;
+	}
+
+	if (IsLocallyControlled())
+	{
+		RightHandGrab->SetGameplayNotificationsEnabled(true);
+		RightHandGrab->SetGrabSimulationEnabled(true);
+		RightHandGrab->ApplyReplicatedGrab(
+			GrabbedComponent,
+			ReplicatedGrabState.GrabbedBoneName,
+			ReplicatedGrabState.ConstraintFrame1,
+			ReplicatedGrabState.ConstraintFrame2);
 		return;
 	}
 
@@ -352,6 +346,29 @@ void ANPRStablePhysicsPawn::UpdateReplicatedGrabVisualTarget()
 	const FTransform DesiredHandSocketWorld =
 		HandSocketFrame * DesiredHandBodyWorld;
 	SetRightHandIKWorldTarget(DesiredHandSocketWorld.GetLocation());
+}
+
+void ANPRStablePhysicsPawn::UpdateLocalPredictedGrab(float DeltaSeconds)
+{
+	if (HasAuthority()
+		|| !IsLocallyControlled()
+		|| !bAwaitingServerGrabConfirmation
+		|| IsReplicatedGrabActive())
+	{
+		return;
+	}
+
+	LocalGrabPredictionTimeRemaining = FMath::Max(
+		LocalGrabPredictionTimeRemaining - DeltaSeconds,
+		0.0f);
+	if (LocalGrabPredictionTimeRemaining > 0.0f)
+	{
+		return;
+	}
+
+	bAwaitingServerGrabConfirmation = false;
+	RightHandGrab->SetGrabSimulationEnabled(false);
+	RightHandGrab->SetGameplayNotificationsEnabled(true);
 }
 
 void ANPRStablePhysicsPawn::HandleGrabbedComponentChanged(
@@ -407,27 +424,6 @@ UPrimitiveComponent* ANPRStablePhysicsPawn::ResolveReplicatedGrabbedComponent() 
 	}
 
 	return nullptr;
-}
-
-void ANPRStablePhysicsPawn::UpdateClientPhysicsStateReplication(float DeltaSeconds)
-{
-	if (HasAuthority() || !IsLocallyControlled())
-	{
-		return;
-	}
-
-	ClientPhysicsStateSendAccumulator += DeltaSeconds;
-	if (ClientPhysicsStateSendAccumulator < PhysicsStateSendInterval)
-	{
-		return;
-	}
-
-	ClientPhysicsStateSendAccumulator -= PhysicsStateSendInterval;
-	FRigidBodyState ClientState;
-	if (PhysicsMesh->GetRigidBodyState(ClientState, FullBodyRootName))
-	{
-		ServerSetClientPhysicsState(ClientState);
-	}
 }
 
 void ANPRStablePhysicsPawn::UpdateViewRotationReplication(float DeltaSeconds)

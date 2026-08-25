@@ -76,6 +76,12 @@ void UNPStablePhysicsGrabComponent::SetGrabSimulationEnabled(bool bEnabled)
 	}
 }
 
+void UNPStablePhysicsGrabComponent::SetGameplayNotificationsEnabled(
+	bool bEnabled)
+{
+	bGameplayNotificationsEnabled = bEnabled;
+}
+
 void UNPStablePhysicsGrabComponent::SetLinearBreakThreshold(
 	float InLinearBreakThreshold)
 {
@@ -208,7 +214,7 @@ void UNPStablePhysicsGrabComponent::ClearReplicatedGrab()
 
 	UGrabbableComponent* ReleasedGrabbableComponent =
 		GrabbedGrabbableComponent;
-	if (ReleasedGrabbableComponent)
+	if (bCurrentGrabNotified && ReleasedGrabbableComponent)
 	{
 		ReleasedGrabbableComponent->OnForceReleaseAllGrabs.RemoveAll(this);
 	}
@@ -216,7 +222,9 @@ void UNPStablePhysicsGrabComponent::ClearReplicatedGrab()
 	GrabbedComponent = nullptr;
 	GrabbedGrabbableComponent = nullptr;
 	GrabbedBoneName = NAME_None;
-	if (ReleasedGrabbableComponent)
+	const bool bShouldNotifyGrabEnded = bCurrentGrabNotified;
+	bCurrentGrabNotified = false;
+	if (bShouldNotifyGrabEnded && ReleasedGrabbableComponent)
 	{
 		ReleasedGrabbableComponent->NotifyGrabEnded();
 	}
@@ -362,14 +370,18 @@ bool UNPStablePhysicsGrabComponent::CommitGrab(
 	GrabbedComponent = PrimitiveComponent;
 	GrabbedGrabbableComponent = GrabbableComponent;
 	GrabbedBoneName = BoneName;
-	GrabbedGrabbableComponent->OnForceReleaseAllGrabs.AddUObject(
-		this,
-		&UNPStablePhysicsGrabComponent::HandleForceReleaseAllGrabs);
+	bCurrentGrabNotified = bGameplayNotificationsEnabled;
+	if (bCurrentGrabNotified)
+	{
+		GrabbedGrabbableComponent->OnForceReleaseAllGrabs.AddUObject(
+			this,
+			&UNPStablePhysicsGrabComponent::HandleForceReleaseAllGrabs);
+	}
 	if (PhysicsDebug)
 	{
 		PhysicsDebug->ResetGrabDebug();
 	}
-	if (GrabbedGrabbableComponent)
+	if (bCurrentGrabNotified && GrabbedGrabbableComponent)
 	{
 		GrabbedGrabbableComponent->NotifyGrabStarted(GrabbedComponent);
 	}
@@ -424,10 +436,13 @@ void UNPStablePhysicsGrabComponent::UpdateGrabForce(float DeltaTime)
 	}
 
 	// Chaos 출력은 Constraint impulse이므로 DeltaTime으로 나눠 force로 변환합니다.
-	GrabbedGrabbableComponent->NotifyGrabForce(
-		IntentAlignedForce,
-		-AngularImpulse / DeltaTime,
-		IntentForceAlignment);
+	if (bCurrentGrabNotified)
+	{
+		GrabbedGrabbableComponent->NotifyGrabForce(
+			IntentAlignedForce,
+			-AngularImpulse / DeltaTime,
+			IntentForceAlignment);
+	}
 }
 
 void UNPStablePhysicsGrabComponent::UpdateReplicatedGrabFrameBlend(
@@ -462,7 +477,7 @@ void UNPStablePhysicsGrabComponent::ReleaseGrab()
 
 	UGrabbableComponent* ReleasedGrabbableComponent =
 		GrabbedGrabbableComponent;
-	if (ReleasedGrabbableComponent)
+	if (bCurrentGrabNotified && ReleasedGrabbableComponent)
 	{
 		ReleasedGrabbableComponent->OnForceReleaseAllGrabs.RemoveAll(this);
 	}
@@ -470,7 +485,9 @@ void UNPStablePhysicsGrabComponent::ReleaseGrab()
 	GrabbedGrabbableComponent = nullptr;
 	GrabbedBoneName = NAME_None;
 	BreakConstraint();
-	if (ReleasedGrabbableComponent)
+	const bool bShouldNotifyGrabEnded = bCurrentGrabNotified;
+	bCurrentGrabNotified = false;
+	if (bShouldNotifyGrabEnded && ReleasedGrabbableComponent)
 	{
 		ReleasedGrabbableComponent->NotifyGrabEnded();
 	}

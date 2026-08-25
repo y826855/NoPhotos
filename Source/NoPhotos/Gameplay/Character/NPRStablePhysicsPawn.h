@@ -8,6 +8,7 @@
 
 class UPrimitiveComponent;
 class FLifetimeProperty;
+class UNPStablePhysicsNetworkPredictionComponent;
 
 USTRUCT()
 struct FReplicatedStableGrabState
@@ -30,7 +31,7 @@ struct FReplicatedStableGrabState
 	FTransform ConstraintFrame2 = FTransform::Identity;
 };
 
-/** 소유 클라이언트가 이동 물리 상태를 전송하고, Grab 판정과 Constraint는 서버가 처리합니다. */
+/** 소유 클라이언트가 입력을 예측하고, 이동 정답과 Grab 판정은 서버가 결정합니다. */
 UCLASS()
 class NOPHOTOS_API ANPRStablePhysicsPawn : public ANPStablePhysicsPawn, public INPRelicHolderInterface
 {
@@ -63,27 +64,11 @@ protected:
 	virtual FRotator GetTargetViewRotation() const override;
 
 private:
-	static constexpr float PhysicsStateSendInterval = 1.0f / 30.0f;
 	static constexpr float ViewRotationSendInterval = 0.05f;
-
-	/** 자주 변경되는 이동 입력은 유실을 허용하는 RPC로 전달합니다. */
-	UFUNCTION(Server, Unreliable)
-	void ServerSetMoveInput(FVector_NetQuantizeNormal WorldMoveInput);
 
 	/** 현재 카메라 회전을 서버 권한 캐릭터 제어에 전달합니다. */
 	UFUNCTION(Server, Unreliable)
 	void ServerSetViewRotation(uint16 CompressedYaw, uint16 CompressedPitch);
-
-	/** 정지 입력이 유실되어 서버에서 계속 움직이지 않도록 Reliable로 전달합니다. */
-	UFUNCTION(Server, Reliable)
-	void ServerStopMove();
-
-	UFUNCTION(Server, Reliable)
-	void ServerRequestJump();
-
-	/** 소유 클라이언트의 골반 Root Body 상태를 서버 물리에 적용합니다. */
-	UFUNCTION(Server, Unreliable)
-	void ServerSetClientPhysicsState(const FRigidBodyState& ClientState);
 
 	UFUNCTION(Server, Reliable)
 	void ServerSetRightHandActive(bool bActive);
@@ -98,8 +83,8 @@ private:
 	UPrimitiveComponent* ResolveReplicatedGrabbedComponent() const;
 	void UpdateClientSimulationState();
 	void UpdateReplicatedGrabVisualTarget();
+	void UpdateLocalPredictedGrab(float DeltaSeconds);
 	void UpdateServerReplicatedState();
-	void UpdateClientPhysicsStateReplication(float DeltaSeconds);
 	void UpdateViewRotationReplication(float DeltaSeconds);
 	void SetReplicatedViewRotation(const FRotator& NewViewRotation);
 	void SetServerRightHandState(bool bActive);
@@ -138,8 +123,15 @@ private:
 	UPROPERTY(Replicated)
 	FRotator ReplicatedViewRotation = FRotator::ZeroRotator;
 
+	UPROPERTY(VisibleAnywhere, Category="Network")
+	TObjectPtr<UNPStablePhysicsNetworkPredictionComponent> NetworkPrediction;
+
+	UPROPERTY(EditAnywhere, Category="Network|Grab Prediction", meta=(ClampMin="0.0"))
+	float LocalGrabPredictionTimeout = 0.35f;
+
 	bool bClientWasMoving = false;
 	bool bLocalRightHandActive = false;
-	float ClientPhysicsStateSendAccumulator = 0.0f;
+	bool bAwaitingServerGrabConfirmation = false;
+	float LocalGrabPredictionTimeRemaining = 0.0f;
 	float ViewRotationSendAccumulator = ViewRotationSendInterval;
 };

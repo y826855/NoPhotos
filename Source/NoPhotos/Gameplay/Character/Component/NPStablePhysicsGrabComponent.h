@@ -29,6 +29,8 @@ public:
 
 	/** false이면 탐색과 Constraint 생성을 수행하지 않습니다. */
 	void SetGrabSimulationEnabled(bool bEnabled);
+	/** 로컬 예측 Constraint가 게임플레이 Grab 델리게이트를 실행하지 않도록 분리합니다. */
+	void SetGameplayNotificationsEnabled(bool bEnabled);
 	void SetLinearBreakThreshold(float InLinearBreakThreshold);
 	void SetReplicatedGrabFrameBlendDuration(float InBlendDuration);
 	void SetGrabRetryCooldown(float InRetryCooldown);
@@ -122,6 +124,8 @@ private:
 	FName HandBoneName = NAME_None;
 	FName GrabbedBoneName = NAME_None;
 	bool bGrabSimulationEnabled = true;
+	bool bGameplayNotificationsEnabled = true;
+	bool bCurrentGrabNotified = false;
 	bool bGrabRequested = false;
 	bool bGrabRetryCoolingDown = false;
 	bool bReplicatedGrabFrameBlendActive = false;
