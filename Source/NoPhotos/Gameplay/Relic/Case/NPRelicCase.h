@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Data/Interfaces/NPLockable.h"
 #include "GameFramework/Actor.h"
 #include "NPRelicCase.generated.h"
 
@@ -11,7 +12,9 @@ class UNPRelicCaseSlotComponent;
 class USceneComponent;
 
 UCLASS(Blueprintable)
-class NOPHOTOS_API ANPRelicCase : public AActor
+class NOPHOTOS_API ANPRelicCase
+	: public AActor,
+	  public INPLockable
 {
 	GENERATED_BODY()
 
@@ -34,6 +37,13 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Relic Case")
 	bool UnlockCase();
 
+	/** 외부 기믹이 서버에서 케이스를 다시 잠글 때 호출합니다. */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Relic Case")
+	bool LockCase();
+
+	virtual bool TrySetLocked_Implementation(bool bLocked) override;
+	virtual bool IsLocked_Implementation() const override;
+
 protected:
 	virtual void PostInitializeComponents() override;
 	virtual void BeginPlay() override;
@@ -49,6 +59,9 @@ protected:
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Relic Case")
 	void OnCaseUnlocked();
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Relic Case")
+	void OnCaseLocked();
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "Relic Case")
 	void OnCaseDamaged(float RemainingHealthRatio);
@@ -105,4 +118,5 @@ private:
 	bool bBrokenStateApplied = false;
 	bool bBrokenEventDispatched = false;
 	bool bUnlockedEventDispatched = false;
+	bool bLockedEventDispatched = true;
 };
