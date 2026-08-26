@@ -2,17 +2,14 @@
 
 #include "NPRoomLog.h"
 #include "Core/Component/NPRoomPlayerComponent.h"
-#include "Core/NPPlayerController.h"
+#include "GameFramework/PlayerController.h"
 
 void UNPRoomCheatManager::Create()
 {
-	if (ANPPlayerController* NPPlayerController = Cast<ANPPlayerController>(GetPlayerController()))
+	if (UNPRoomPlayerComponent* RoomComponent = GetRoomComponent())
 	{
-		if (UNPRoomPlayerComponent* RoomComponent = NPPlayerController->GetRoomComponent())
-		{
-			RoomComponent->HostRoom();
-			return;
-		}
+		RoomComponent->HostRoom();
+		return;
 	}
 
 	NPRoomLog::Warning(this, TEXT("create 실패: RoomComponent를 찾지 못했습니다."));
@@ -20,13 +17,10 @@ void UNPRoomCheatManager::Create()
 
 void UNPRoomCheatManager::List()
 {
-	if (ANPPlayerController* NPPlayerController = Cast<ANPPlayerController>(GetPlayerController()))
+	if (UNPRoomPlayerComponent* RoomComponent = GetRoomComponent())
 	{
-		if (UNPRoomPlayerComponent* RoomComponent = NPPlayerController->GetRoomComponent())
-		{
-			RoomComponent->FindRooms();
-			return;
-		}
+		RoomComponent->FindRooms();
+		return;
 	}
 
 	NPRoomLog::Warning(this, TEXT("list 실패: RoomComponent를 찾지 못했습니다."));
@@ -34,13 +28,10 @@ void UNPRoomCheatManager::List()
 
 void UNPRoomCheatManager::Join(const int32 RoomNumber)
 {
-	if (ANPPlayerController* NPPlayerController = Cast<ANPPlayerController>(GetPlayerController()))
+	if (UNPRoomPlayerComponent* RoomComponent = GetRoomComponent())
 	{
-		if (UNPRoomPlayerComponent* RoomComponent = NPPlayerController->GetRoomComponent())
-		{
-			RoomComponent->JoinRoom(RoomNumber);
-			return;
-		}
+		RoomComponent->JoinRoom(RoomNumber);
+		return;
 	}
 
 	NPRoomLog::Warning(this, TEXT("join 실패: RoomComponent를 찾지 못했습니다."));
@@ -48,13 +39,10 @@ void UNPRoomCheatManager::Join(const int32 RoomNumber)
 
 void UNPRoomCheatManager::User()
 {
-	if (ANPPlayerController* NPPlayerController = Cast<ANPPlayerController>(GetPlayerController()))
+	if (UNPRoomPlayerComponent* RoomComponent = GetRoomComponent())
 	{
-		if (UNPRoomPlayerComponent* RoomComponent = NPPlayerController->GetRoomComponent())
-		{
-			RoomComponent->ShowRoomUsers();
-			return;
-		}
+		RoomComponent->ShowRoomUsers();
+		return;
 	}
 
 	NPRoomLog::Warning(this, TEXT("user 실패: RoomComponent를 찾지 못했습니다."));
@@ -62,8 +50,8 @@ void UNPRoomCheatManager::User()
 
 void UNPRoomCheatManager::Start()
 {
-	ANPPlayerController* NPPlayerController = Cast<ANPPlayerController>(GetPlayerController());
-	UNPRoomPlayerComponent* RoomComponent = NPPlayerController ? NPPlayerController->GetRoomComponent() : nullptr;
+	APlayerController* PlayerController = GetPlayerController();
+	UNPRoomPlayerComponent* RoomComponent = GetRoomComponent();
 	if (!RoomComponent)
 	{
 		NPRoomLog::Warning(this, TEXT("start 실패: RoomComponent를 찾지 못했습니다."));
@@ -72,7 +60,7 @@ void UNPRoomCheatManager::Start()
 
 	if (!RoomComponent->IsRoomHost())
 	{
-		NPRoomLog::Warning(NPPlayerController, TEXT("게스트는 start 명령어를 사용할 수 없습니다."));
+		NPRoomLog::Warning(PlayerController, TEXT("게스트는 start 명령어를 사용할 수 없습니다."));
 		return;
 	}
 
@@ -81,8 +69,8 @@ void UNPRoomCheatManager::Start()
 
 void UNPRoomCheatManager::Rehost()
 {
-	ANPPlayerController* NPPlayerController = Cast<ANPPlayerController>(GetPlayerController());
-	UNPRoomPlayerComponent* RoomComponent = NPPlayerController ? NPPlayerController->GetRoomComponent() : nullptr;
+	APlayerController* PlayerController = GetPlayerController();
+	UNPRoomPlayerComponent* RoomComponent = GetRoomComponent();
 	if (!RoomComponent)
 	{
 		NPRoomLog::Warning(this, TEXT("rehost 실패: RoomComponent를 찾지 못했습니다."));
@@ -91,7 +79,7 @@ void UNPRoomCheatManager::Rehost()
 
 	if (!RoomComponent->IsRoomHost())
 	{
-		NPRoomLog::Warning(NPPlayerController, TEXT("게스트는 rehost 명령어를 사용할 수 없습니다."));
+		NPRoomLog::Warning(PlayerController, TEXT("게스트는 rehost 명령어를 사용할 수 없습니다."));
 		return;
 	}
 
@@ -106,14 +94,19 @@ void UNPRoomCheatManager::Out(const FString& Command)
 		return;
 	}
 
-	if (ANPPlayerController* NPPlayerController = Cast<ANPPlayerController>(GetPlayerController()))
+	if (UNPRoomPlayerComponent* RoomComponent = GetRoomComponent())
 	{
-		if (UNPRoomPlayerComponent* RoomComponent = NPPlayerController->GetRoomComponent())
-		{
-			RoomComponent->ExitRoom();
-			return;
-		}
+		RoomComponent->ExitRoom();
+		return;
 	}
 
 	NPRoomLog::Warning(this, TEXT("out game 실패: RoomComponent를 찾지 못했습니다."));
+}
+
+UNPRoomPlayerComponent* UNPRoomCheatManager::GetRoomComponent() const
+{
+	APlayerController* PlayerController = GetPlayerController();
+	return PlayerController
+		? PlayerController->FindComponentByClass<UNPRoomPlayerComponent>()
+		: nullptr;
 }

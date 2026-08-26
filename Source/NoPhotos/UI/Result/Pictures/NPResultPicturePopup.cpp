@@ -7,7 +7,7 @@
 #include "Engine/Texture2D.h"
 #include "GameFramework/PlayerState.h"
 #include "Gameplay/Photo/NPPhotoTransferComponent.h"
-#include "NoPhotosGameState.h"
+#include "Core/Main/NPMainGameState.h"
 #include "UI/Result/Pictures/NPResultPicturePreviewPopup.h"
 
 void UNPResultPicturePopup::NativeConstruct()
@@ -94,8 +94,8 @@ void UNPResultPicturePopup::OpenForPlayer(APlayerState* InPlayerState)
 		TEXT("%s 님이 고른 사진"),
 		*ViewedPlayerState->GetPlayerName()));
 
-	ANoPhotosGameState* GameState = GetWorld()
-		? GetWorld()->GetGameState<ANoPhotosGameState>()
+	ANPMainGameState* GameState = GetWorld()
+		? GetWorld()->GetGameState<ANPMainGameState>()
 		: nullptr;
 
 	ANPMainPlayerController* PlayerController =

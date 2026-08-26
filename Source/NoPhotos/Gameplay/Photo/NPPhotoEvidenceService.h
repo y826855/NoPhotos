@@ -6,7 +6,7 @@
 #include "NPPhotoEvidenceService.generated.h"
 
 class AActor;
-class ANoPhotosGameMode;
+class ANPMainGameMode;
 class APawn;
 
 /** 서버 월드 상태를 이용해 사진 속 도둑과 Relic의 유효성을 판정합니다. */
@@ -16,7 +16,7 @@ class NOPHOTOS_API UNPPhotoEvidenceService : public UObject
 	GENERATED_BODY()
 
 public:
-	void Initialize(ANoPhotosGameMode* InOwningGameMode);
+	void Initialize(ANPMainGameMode* InOwningGameMode);
 	FNPPhotoEvidenceResult EvaluatePhoto(const FNPPhotoCaptureRequest& Request);
 	virtual UWorld* GetWorld() const override;
 
@@ -65,6 +65,6 @@ private:
 		APawn* PhotographerPawn) const;
 	void BuildActorSamplePoints(AActor* TargetActor, TArray<FVector>& OutPoints) const;
 
-	TWeakObjectPtr<ANoPhotosGameMode> OwningGameMode;
+	TWeakObjectPtr<ANPMainGameMode> OwningGameMode;
 	TMap<TWeakObjectPtr<APlayerController>, double> LastCaptureTimes;
 };

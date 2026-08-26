@@ -1,8 +1,8 @@
 #include "UI/MainMenu/NPLobbyWidget.h"
 
 #include "Components/Button.h"
-#include "Core/NPPlayerController.h"
 #include "Core/Room/NPRoomGameState.h"
+#include "Core/Room/NPRoomPlayerController.h"
 
 UNPLobbyWidget::UNPLobbyWidget(const FObjectInitializer& ObjectInitializer) : Super(ObjectInitializer)
 {
@@ -62,8 +62,8 @@ void UNPLobbyWidget::RefreshStartButtonVisibility()
 		return;
 	}
 
-	ANPPlayerController* NPPC = Cast<ANPPlayerController>(GetOwningPlayer());
-	const bool bIsRoomHost = IsValid(NPPC) && NPPC->IsRoomHost();
+	ANPRoomPlayerController* RoomPlayerController = Cast<ANPRoomPlayerController>(GetOwningPlayer());
+	const bool bIsRoomHost = IsValid(RoomPlayerController) && RoomPlayerController->IsRoomHost();
 	const bool bCanStartGame = BoundRoomGameState.IsValid()	&& BoundRoomGameState->CanHostStartGame();
 
 	StartButton->SetVisibility(bIsRoomHost ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
@@ -77,17 +77,18 @@ void UNPLobbyWidget::OnRoomStateChanged()
 
 void UNPLobbyWidget::OnStartButtonClicked()
 {
-	ANPPlayerController* NPPC = Cast<ANPPlayerController>(GetOwningPlayer());
-	if (IsValid(NPPC) && NPPC->IsRoomHost() && BoundRoomGameState.IsValid() && BoundRoomGameState->CanHostStartGame())
+	ANPRoomPlayerController* RoomPlayerController = Cast<ANPRoomPlayerController>(GetOwningPlayer());
+	if (IsValid(RoomPlayerController) && RoomPlayerController->IsRoomHost()
+		&& BoundRoomGameState.IsValid() && BoundRoomGameState->CanHostStartGame())
 	{
-		NPPC->RequestStartGame();
+		RoomPlayerController->RequestStartGame();
 	}
 }
 
 void UNPLobbyWidget::OnLeaveClicked()
 {
-	if (ANPPlayerController* NPPC = Cast<ANPPlayerController>(GetOwningPlayer()))
+	if (ANPRoomPlayerController* RoomPlayerController = Cast<ANPRoomPlayerController>(GetOwningPlayer()))
 	{
-		NPPC->ExitRoom();
+		RoomPlayerController->ExitRoom();
 	}
 }

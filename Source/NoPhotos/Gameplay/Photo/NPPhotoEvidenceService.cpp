@@ -7,16 +7,15 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
-#include "Data/Interface/NPPhotoReactiveTarget.h"
-#include "Gameplay/Character/NPRStablePhysicsPawn.h"
+#include "Gameplay/Character/NPReplicatedStablePhysicsPawn.h"
 #include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Photo/NPRelicHolderInterface.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
 #include "Gameplay/Relic/NPBaseRelic.h"
 #include "Gameplay/Relic/NPBreakableRelic.h"
-#include "NoPhotosGameMode.h"
+#include "Core/Main/NPMainGameMode.h"
 
-void UNPPhotoEvidenceService::Initialize(ANoPhotosGameMode* InOwningGameMode)
+void UNPPhotoEvidenceService::Initialize(ANPMainGameMode* InOwningGameMode)
 {
 	OwningGameMode = InOwningGameMode;
 }
@@ -132,76 +131,19 @@ FNPPhotoEvidenceResult UNPPhotoEvidenceService::EvaluatePhoto(
 			RelicVisibility);
 	}
 
-	AActor* BestReactiveTarget = nullptr;
-	float BestReactiveVisibility = -1.0f;
-	const float MaximumDistanceSquared = FMath::Square(MaximumCaptureDistance);
-	for (TActorIterator<AActor> Iterator(GetWorld()); Iterator; ++Iterator)
-	{
-		AActor* CandidateTarget = *Iterator;
-		if (!IsValid(CandidateTarget)
-			|| CandidateTarget == PhotographerPawn
-			|| !CandidateTarget->GetClass()->ImplementsInterface(
-				UNPPhotoReactiveTarget::StaticClass())
-			|| FVector::DistSquared(
-				Request.CameraLocation,
-				CandidateTarget->GetActorLocation()) > MaximumDistanceSquared
-			|| !INPPhotoReactiveTarget::Execute_CanBePhotographed(
-				CandidateTarget,
-				Result.Photographer))
-		{
-			continue;
-		}
-
-		const float Visibility = CalculateActorVisibility(
-			Request,
-			CandidateTarget,
-			PhotographerPawn);
-		if (Visibility < MinimumReactiveTargetVisibility
-			|| Visibility <= BestReactiveVisibility)
-		{
-			continue;
-		}
-
-		BestReactiveTarget = CandidateTarget;
-		BestReactiveVisibility = Visibility;
-	}
-
-	if (IsValid(BestReactiveTarget))
-	{
-		Result.bReactiveTargetSuccess = true;
-		Result.ReactiveTarget = BestReactiveTarget;
-		Result.ReactiveTargetVisibility = BestReactiveVisibility;
-		Result.ServerCaptureTime = GetWorld()->GetTimeSeconds();
-		INPPhotoReactiveTarget::Execute_OnPhotographed(
-			BestReactiveTarget,
-			Result.Photographer,
-			BestReactiveVisibility,
-			Result.CaptureSequence);
-		UE_LOG(
-			LogNPPhoto,
-			Log,
-			TEXT("[Evidence] Reactive target success. Target=%s Visibility=%.2f Photographer=%s"),
-			*GetNameSafe(BestReactiveTarget),
-			BestReactiveVisibility,
-			*GetNameSafe(Result.Photographer.Get()));
-	}
-
-	if (!Result.bSuccess && !Result.bReactiveTargetSuccess)
+	if (!Result.bSuccess)
 	{
 		Result.FailureReason = ENPPhotoEvidenceFailureReason::NoValidEvidence;
-		UE_LOG(LogNPPhoto, Warning, TEXT("[Evidence] Failed: no valid evidence or reactive target."));
+		UE_LOG(LogNPPhoto, Warning, TEXT("[Evidence] Failed: no valid thief/relic pair."));
 	}
 	else
 	{
-		Result.FailureReason = ENPPhotoEvidenceFailureReason::None;
 		UE_LOG(
 			LogNPPhoto,
 			Log,
-			TEXT("[Evidence] Success. RelicEvidence=%s Thief=%s Relic=%s ReactiveTarget=%s"),
-			Result.bSuccess ? TEXT("true") : TEXT("false"),
-			*GetNameSafe(Result.Thief.Get()),
-			*GetNameSafe(Result.Relic.Get()),
-			*GetNameSafe(Result.ReactiveTarget.Get()));
+			TEXT("[Evidence] Success. Thief=%s Relic=%s"),
+			*GetNameSafe(Result.Thief),
+			*GetNameSafe(Result.Relic));
 	}
 	return Result;
 }
@@ -241,8 +183,8 @@ bool UNPPhotoEvidenceService::ValidateRequest(
 	}
 
 	APawn* PhotographerPawn = Photographer->GetPawn();
-	const ANPRStablePhysicsPawn* StablePhysicsPawn =
-		Cast<ANPRStablePhysicsPawn>(PhotographerPawn);
+	const ANPReplicatedStablePhysicsPawn* StablePhysicsPawn =
+		Cast<ANPReplicatedStablePhysicsPawn>(PhotographerPawn);
 	const FRotator ServerViewRotation = StablePhysicsPawn
 		? StablePhysicsPawn->GetServerViewRotation()
 		: PhotographerPawn->GetViewRotation();

@@ -6,30 +6,69 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputMappingContext.h"
+#include "Blueprint/UserWidget.h"
+#include "Core/Component/NPRoomPlayerComponent.h"
+#include "Core/Room/NPRoomCheatManager.h"
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
 #include "SubSystem/NPUIManagerSubsystem.h"
 #include "UI/NPUserWidget.h"
+#include "Widgets/Input/SVirtualJoystick.h"
 
 ANPRoomPlayerController::ANPRoomPlayerController()
-	: ChangeInputAction(nullptr) {}
-
-void ANPRoomPlayerController::ShowMainMenuUI()
+	: ChangeInputAction(nullptr)
 {
-	bIsMouseInput = false;
-	SetLobbyInputMappingEnabled(false);
-	ShowSingleScreen(MainMenuWidgetClass);
+	RoomComponent = CreateDefaultSubobject<UNPRoomPlayerComponent>(TEXT("RoomComponent"));
+	CheatClass = UNPRoomCheatManager::StaticClass();
 }
 
-void ANPRoomPlayerController::ClientShowMainMenuUI_Implementation()
+void ANPRoomPlayerController::RequestStartGame()
 {
-	ShowMainMenuUI();
+	if (RoomComponent)
+	{
+		RoomComponent->RequestStartGame();
+	}
+}
+
+void ANPRoomPlayerController::RequestRestartRoom()
+{
+	if (RoomComponent)
+	{
+		RoomComponent->RequestRestartRoom();
+	}
+}
+
+void ANPRoomPlayerController::ExitRoom()
+{
+	if (RoomComponent)
+	{
+		RoomComponent->ExitRoom();
+	}
+}
+
+void ANPRoomPlayerController::ShowRoomUsers() const
+{
+	if (RoomComponent)
+	{
+		RoomComponent->ShowRoomUsers();
+	}
+}
+
+bool ANPRoomPlayerController::IsRoomHost() const
+{
+	return RoomComponent && RoomComponent->IsRoomHost();
+}
+
+bool ANPRoomPlayerController::CanStartGame() const
+{
+	return RoomComponent && RoomComponent->CanStartGame();
 }
 
 void ANPRoomPlayerController::ShowLobbyUI()
 {
 	ShowSingleScreen(LobbyWidgetClass);
 	bIsMouseInput = false;
+	SetCharacterInputMappingEnabled(true);
 	SetLobbyInputMappingEnabled(true);
 	ApplyLobbyInputMode();
 }
@@ -39,9 +78,32 @@ void ANPRoomPlayerController::ClientShowLobbyUI_Implementation()
 	ShowLobbyUI();
 }
 
+void ANPRoomPlayerController::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (!ShouldUseTouchControls() || !IsLocalPlayerController() || !MobileControlsWidgetClass)
+	{
+		return;
+	}
+
+	MobileControlsWidget = CreateWidget<UUserWidget>(this, MobileControlsWidgetClass);
+	if (MobileControlsWidget)
+	{
+		MobileControlsWidget->AddToPlayerScreen(0);
+	}
+}
+
 void ANPRoomPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
+
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	SetCharacterInputMappingEnabled(true);
 
 	if (UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(InputComponent))
 	{
@@ -52,6 +114,11 @@ void ANPRoomPlayerController::SetupInputComponent()
 	}
 }
 
+bool ANPRoomPlayerController::ShouldUseTouchControls() const
+{
+	return SVirtualJoystick::ShouldDisplayTouchInterface() || bForceTouchControls;
+}
+
 void ANPRoomPlayerController::ChangeInputMode()
 {
 	if (!IsLocalController())
@@ -60,7 +127,58 @@ void ANPRoomPlayerController::ChangeInputMode()
 	}
 
 	bIsMouseInput = !bIsMouseInput;
+	SetCharacterInputMappingEnabled(!bIsMouseInput);
 	ApplyLobbyInputMode();
+}
+
+void ANPRoomPlayerController::SetCharacterInputMappingEnabled(const bool bEnabled)
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	UEnhancedInputLocalPlayerSubsystem* InputSubsystem =
+		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
+	if (!IsValid(InputSubsystem))
+	{
+		return;
+	}
+
+	for (UInputMappingContext* MappingContext : DefaultMappingContexts)
+	{
+		if (IsValid(MappingContext) && MappingContext != InputMappingContext)
+		{
+			if (bEnabled)
+			{
+				InputSubsystem->AddMappingContext(MappingContext, 0);
+			}
+			else
+			{
+				InputSubsystem->RemoveMappingContext(MappingContext);
+			}
+		}
+	}
+
+	if (ShouldUseTouchControls())
+	{
+		return;
+	}
+
+	for (UInputMappingContext* MappingContext : MobileExcludedMappingContexts)
+	{
+		if (IsValid(MappingContext) && MappingContext != InputMappingContext)
+		{
+			if (bEnabled)
+			{
+				InputSubsystem->AddMappingContext(MappingContext, 0);
+			}
+			else
+			{
+				InputSubsystem->RemoveMappingContext(MappingContext);
+			}
+		}
+	}
 }
 
 // 로비 진입이나 퇴장에 맞춰 입력모드 변경

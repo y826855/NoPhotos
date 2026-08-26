@@ -17,12 +17,14 @@ public class NoPhotos : ModuleRules
 			"EnhancedInput",
 			"AIModule",
 			"ChaosSolverEngine",
+			"PhysicsControl",
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"CableComponent",
 			"Niagara",
 			"UMG",
 			"Slate",
+			"SlateCore",
 			"OnlineSubsystem"
 		});
 

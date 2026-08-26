@@ -5,8 +5,8 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/TextBlock.h"
-#include "Core/NPPlayerController.h"
 #include "Core/Room/NPRoomSubsystem.h"
+#include "Core/Title/NPTitlePlayerController.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -78,9 +78,9 @@ void UNPMainMenuWidget::NativeDestruct()
 
 void UNPMainMenuWidget::OnHostGameClicked()
 {
-	if (ANPPlayerController* NPPC = Cast<ANPPlayerController>(GetOwningPlayer()))
+	if (ANPTitlePlayerController* TitlePlayerController = Cast<ANPTitlePlayerController>(GetOwningPlayer()))
 	{
-		NPPC->HostRoom();
+		TitlePlayerController->HostRoom();
 	}
 }
 

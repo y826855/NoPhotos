@@ -3,19 +3,31 @@
 #include "Core/Main/NPMainGameMode.h"
 #include "Core/Main/NPMainGameState.h"
 #include "Core/Room/NPRoomSubsystem.h"
+#include "Blueprint/UserWidget.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
 #include "Engine/GameInstance.h"
+#include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerState.h"
-#include "NoPhotosGameState.h"
+#include "Gameplay/Photo/NPPhotoCaptureComponent.h"
+#include "Gameplay/Photo/NPPhotoFlashWidget.h"
+#include "Gameplay/Photo/NPPhotoLog.h"
+#include "Gameplay/Photo/NPPhotoTransferComponent.h"
+#include "NoPhotos.h"
 #include "SubSystem/NPUIManagerSubsystem.h"
 #include "UI/NPUserWidget.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Widgets/Input/SVirtualJoystick.h"
 #include "InputAction.h"
 #include "InputMappingContext.h"
 #include "UObject/ConstructorHelpers.h"
 
 ANPMainPlayerController::ANPMainPlayerController()
 {
+	PhotoCaptureComponent = CreateDefaultSubobject<UNPPhotoCaptureComponent>(TEXT("PhotoCaptureComponent"));
+	PhotoTransferComponent = CreateDefaultSubobject<UNPPhotoTransferComponent>(TEXT("PhotoTransferComponent"));
+
 	static ConstructorHelpers::FObjectFinder<UInputMappingContext>
 	DefaultMapping(TEXT("/Game/Input/IMC_Default.IMC_Default"));
 
@@ -47,6 +59,140 @@ ANPMainPlayerController::ANPMainPlayerController()
 	{
 		TakePhotoAction = PhotoShotAction.Object;
 	}
+}
+
+void ANPMainPlayerController::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (IsLocalController())
+	{
+		if (PhotoFlashWidgetClass)
+		{
+			PhotoFlashWidget = CreateWidget<UNPPhotoFlashWidget>(this, PhotoFlashWidgetClass);
+			if (PhotoFlashWidget)
+			{
+				PhotoFlashWidget->AddToPlayerScreen(100);
+				PhotoFlashWidget->SetVisibility(ESlateVisibility::Collapsed);
+				UE_LOG(LogNPPhoto, Log, TEXT("[PhotoUI] Flash widget created. Widget=%s"), *GetNameSafe(PhotoFlashWidget));
+			}
+		}
+		else
+		{
+			UE_LOG(LogNPPhoto, Warning, TEXT("[PhotoUI] PhotoFlashWidgetClass is not assigned."));
+		}
+	}
+
+	if (ShouldUseTouchControls() && IsLocalPlayerController())
+	{
+		MobileControlsWidget = CreateWidget<UUserWidget>(this, MobileControlsWidgetClass);
+		if (MobileControlsWidget)
+		{
+			MobileControlsWidget->AddToPlayerScreen(0);
+		}
+		else
+		{
+			UE_LOG(LogNoPhotos, Error, TEXT("Could not spawn mobile controls widget."));
+		}
+	}
+}
+
+void ANPMainPlayerController::PlayPhotoFlash()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+	if (!PhotoFlashWidget)
+	{
+		UE_LOG(LogNPPhoto, Warning, TEXT("[PhotoUI] Flash skipped: PhotoFlashWidget is null."));
+		return;
+	}
+	PhotoFlashWidget->PlayFlash();
+	UE_LOG(LogNPPhoto, Log, TEXT("[PhotoUI] Flash animation requested."));
+}
+
+void ANPMainPlayerController::SetupInputComponent()
+{
+	Super::SetupInputComponent();
+
+	if (IsLocalPlayerController())
+	{
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
+			ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
+		{
+			for (UInputMappingContext* CurrentContext : DefaultMappingContexts)
+			{
+				Subsystem->AddMappingContext(CurrentContext, 0);
+			}
+			if (!ShouldUseTouchControls())
+			{
+				for (UInputMappingContext* CurrentContext : MobileExcludedMappingContexts)
+				{
+					Subsystem->AddMappingContext(CurrentContext, 0);
+				}
+			}
+		}
+	}
+
+	UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(InputComponent);
+	if (!EnhancedInputComponent)
+	{
+		UE_LOG(LogNPPhoto, Error, TEXT("[Input] Photo bindings skipped: Enhanced Input Component is missing."));
+		return;
+	}
+
+	if (TogglePhotoModeAction)
+	{
+		EnhancedInputComponent->BindAction(TogglePhotoModeAction, ETriggerEvent::Started,
+			this, &ANPMainPlayerController::HandleTogglePhotoModeInput);
+		UE_LOG(LogNPPhoto, Log, TEXT("[Input] Photo mode action bound. Action=%s"), *GetNameSafe(TogglePhotoModeAction));
+	}
+	else
+	{
+		UE_LOG(LogNPPhoto, Warning, TEXT("[Input] TogglePhotoModeAction is not assigned."));
+	}
+
+	if (TakePhotoAction)
+	{
+		EnhancedInputComponent->BindAction(TakePhotoAction, ETriggerEvent::Started,
+			this, &ANPMainPlayerController::HandleTakePhotoInput);
+		UE_LOG(LogNPPhoto, Log, TEXT("[Input] Photo shot action bound. Action=%s"), *GetNameSafe(TakePhotoAction));
+	}
+	else
+	{
+		UE_LOG(LogNPPhoto, Warning, TEXT("[Input] TakePhotoAction is not assigned."));
+	}
+}
+
+void ANPMainPlayerController::HandleTogglePhotoModeInput()
+{
+	if (!PhotoCaptureComponent)
+	{
+		UE_LOG(LogNPPhoto, Error, TEXT("[Input] PhotoCaptureComponent is null."));
+		return;
+	}
+	PhotoCaptureComponent->TogglePhotoMode();
+	UE_LOG(LogNPPhoto, Log, TEXT("[Input] Photo mode toggled. Active=%s"),
+		PhotoCaptureComponent->IsPhotoModeActive() ? TEXT("true") : TEXT("false"));
+}
+
+void ANPMainPlayerController::HandleTakePhotoInput()
+{
+	UE_LOG(LogNPPhoto, Log, TEXT("[Input] Photo input received. Controller=%s Local=%s"),
+		*GetNameSafe(this), IsLocalController() ? TEXT("true") : TEXT("false"));
+	if (!PhotoCaptureComponent)
+	{
+		UE_LOG(LogNPPhoto, Error, TEXT("[Input] PhotoCaptureComponent is null."));
+		return;
+	}
+	const bool bStarted = PhotoCaptureComponent->TakePhoto();
+	UE_LOG(LogNPPhoto, Log, TEXT("[Input] TakePhoto result=%s"), bStarted ? TEXT("success") : TEXT("failed"));
+}
+
+bool ANPMainPlayerController::ShouldUseTouchControls() const
+{
+	return SVirtualJoystick::ShouldDisplayTouchInterface() || bForceTouchControls;
 }
 
 bool ANPMainPlayerController::IsListenServerHost() const
@@ -130,11 +276,7 @@ void ANPMainPlayerController::ServerConfirmPictureSelection_Implementation(
 		? GetWorld()->GetGameState<ANPMainGameState>()
 		: nullptr;
 
-	ANoPhotosGameState* PhotoGameState = GetWorld()
-		? GetWorld()->GetGameState<ANoPhotosGameState>()
-		: nullptr;
-
-	if (!IsValid(MainGameState)	|| !IsValid(PhotoGameState)	|| !IsValid(PlayerState))
+	if (!IsValid(MainGameState) || !IsValid(PlayerState))
 	{
 		return;
 	}
@@ -153,7 +295,7 @@ void ANPMainPlayerController::ServerConfirmPictureSelection_Implementation(
 		bool bIsOwnedSuccessPhoto = false;
 
 		for (const FNPReplicatedPhotoEvidence& Evidence :
-			PhotoGameState->GetPhotoEvidence())
+			MainGameState->GetPhotoEvidence())
 		{
 			if (Evidence.PhotoId == PhotoId
 				&& Evidence.Photographer == PlayerState)
@@ -171,7 +313,7 @@ void ANPMainPlayerController::ServerConfirmPictureSelection_Implementation(
 		VerifiedPhotoIds.Add(PhotoId);
 	}
 
-	PhotoGameState->SetSelectedPhotoIds(PlayerState, SelectedPhotoIds);
+	MainGameState->SetSelectedPhotoIds(PlayerState, SelectedPhotoIds);
 	MainGameState->ConfirmPictureSelection(this);
 }
 

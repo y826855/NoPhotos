@@ -2,15 +2,17 @@
 
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
+#include "Core/Main/NPMainGameState.h"
 #include "Core/Main/NPMainPlayerController.h"
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "Gameplay/Photo/NPPhotoTransferComponent.h"
-#include "NoPhotosGameState.h"
-#include "NoPhotosPlayerController.h"
+#include "Core/Main/NPMainGameState.h"
+#include "Core/Main/NPMainPlayerController.h"
 #include "UI/Result/Pictures/NPPictureList.h"
+#include "UI/Result/Pictures/NPSelectedPictureListWidget.h"
 #include "UI/Result/Pictures/NPShowPicture.h"
 
 void UNPSelectPictureWidget::NativeConstruct()
@@ -22,6 +24,16 @@ void UNPSelectPictureWidget::NativeConstruct()
 		PictureListWidget->OnPictureClicked.AddUniqueDynamic(
 			this,
 			&UNPSelectPictureWidget::HandlePictureClicked);
+	}
+
+	if (IsValid(SelectedPictureListWidget))
+	{
+		SelectedPictureListWidget->OnPictureClicked.AddUniqueDynamic(
+			this,
+			&UNPSelectPictureWidget::HandleSelectedPictureClicked);
+		SelectedPictureListWidget->OnPictureRemoveRequested.AddUniqueDynamic(
+			this,
+			&UNPSelectPictureWidget::HandleSelectedPictureRemoveRequested);
 	}
 
 	if (IsValid(ShowPictureWidget))
@@ -38,8 +50,8 @@ void UNPSelectPictureWidget::NativeConstruct()
 			&UNPSelectPictureWidget::HandleNextButtonClicked);
 	}
 
-	if (ANoPhotosPlayerController* Controller =
-		Cast<ANoPhotosPlayerController>(GetOwningPlayer()))
+	if (ANPMainPlayerController* Controller =
+		Cast<ANPMainPlayerController>(GetOwningPlayer()))
 	{
 		TransferComponent = Controller->GetPhotoTransferComponent();
 		if (IsValid(TransferComponent))
@@ -51,7 +63,7 @@ void UNPSelectPictureWidget::NativeConstruct()
 	}
 
 	ObservedGameState = GetWorld()
-		? GetWorld()->GetGameState<ANoPhotosGameState>()
+		? GetWorld()->GetGameState<ANPMainGameState>()
 		: nullptr;
 
 	if (IsValid(ObservedGameState))
@@ -61,7 +73,19 @@ void UNPSelectPictureWidget::NativeConstruct()
 			&UNPSelectPictureWidget::HandlePhotoEvidenceChanged);
 	}
 
+	ObservedMainGameState = GetWorld()
+		? GetWorld()->GetGameState<ANPMainGameState>()
+		: nullptr;
+
+	if (IsValid(ObservedMainGameState))
+	{
+		ObservedMainGameState->OnPictureSelectionStateChanged.AddUniqueDynamic(
+			this,
+			&UNPSelectPictureWidget::HandlePictureSelectionStateChanged);
+	}
+
 	UpdateSelectedPictureCountText();
+	UpdateNextPlayerText();
 	RequestOwnedPictures();
 }
 
@@ -81,6 +105,13 @@ void UNPSelectPictureWidget::NativeDestruct()
 			&UNPSelectPictureWidget::HandlePhotoEvidenceChanged);
 	}
 
+	if (IsValid(ObservedMainGameState))
+	{
+		ObservedMainGameState->OnPictureSelectionStateChanged.RemoveDynamic(
+			this,
+			&UNPSelectPictureWidget::HandlePictureSelectionStateChanged);
+	}
+
 	Super::NativeDestruct();
 }
 
@@ -93,6 +124,11 @@ void UNPSelectPictureWidget::InitializePictures(
 	}
 
 	PictureListWidget->ClearPictures();
+
+	if (IsValid(SelectedPictureListWidget))
+	{
+		SelectedPictureListWidget->ClearSelectedPictures();
+	}
 
 	PictureTextures.Empty();
 	PicturePhotoIds.Empty();
@@ -155,6 +191,10 @@ void UNPSelectPictureWidget::HandleSelectRequested(
 	if (bWasSelected)
 	{
 		PictureListWidget->SetPictureSelected(PictureIndex, false);
+		if (IsValid(SelectedPictureListWidget))
+		{
+			SelectedPictureListWidget->RemoveSelectedPicture(PictureIndex);
+		}
 		ShowPictureWidget->SetSelected(false);
 		UpdateSelectedPictureCountText();
 		return;
@@ -167,7 +207,44 @@ void UNPSelectPictureWidget::HandleSelectRequested(
 	}
 
 	PictureListWidget->SetPictureSelected(PictureIndex, true);
+	if (IsValid(SelectedPictureListWidget))
+	{
+		SelectedPictureListWidget->AddSelectedPicture(
+			PictureTextures[PictureIndex],
+			PictureIndex);
+	}
 	ShowPictureWidget->SetSelected(true);
+	UpdateSelectedPictureCountText();
+}
+
+void UNPSelectPictureWidget::HandleSelectedPictureClicked(
+	const int32 PictureIndex)
+{
+	ShowPicture(PictureIndex);
+}
+
+void UNPSelectPictureWidget::HandleSelectedPictureRemoveRequested(
+	const int32 PictureIndex)
+{
+	if (!IsValid(PictureListWidget)
+		|| !PictureTextures.IsValidIndex(PictureIndex)
+		|| !PictureListWidget->IsPictureSelected(PictureIndex))
+	{
+		return;
+	}
+
+	PictureListWidget->SetPictureSelected(PictureIndex, false);
+
+	if (IsValid(SelectedPictureListWidget))
+	{
+		SelectedPictureListWidget->RemoveSelectedPicture(PictureIndex);
+	}
+
+	if (CurrentPictureIndex == PictureIndex && IsValid(ShowPictureWidget))
+	{
+		ShowPictureWidget->SetSelected(false);
+	}
+
 	UpdateSelectedPictureCountText();
 }
 
@@ -195,7 +272,7 @@ void UNPSelectPictureWidget::HandleNextButtonClicked()
 
 	if (IsValid(SelectedPictureCountText))
 	{
-		SelectedPictureCountText->SetText(FText::FromString(TEXT("다른 유저를 기다리는 중...")));
+		SelectedPictureCountText->SetText(FText::FromString(TEXT("대기 중...")));
 	}
 
 	BP_OnSelectionConfirmed(GetSelectedPictureIndices());
@@ -207,12 +284,17 @@ void UNPSelectPictureWidget::HandlePhotoEvidenceChanged()
 	RequestOwnedPictures();
 }
 
+void UNPSelectPictureWidget::HandlePictureSelectionStateChanged()
+{
+	UpdateNextPlayerText();
+}
+
 void UNPSelectPictureWidget::RequestOwnedPictures()
 {
 	if (!IsValid(ObservedGameState))
 	{
 		ObservedGameState = GetWorld()
-			? GetWorld()->GetGameState<ANoPhotosGameState>()
+			? GetWorld()->GetGameState<ANPMainGameState>()
 			: nullptr;
 
 		if (IsValid(ObservedGameState))
@@ -273,9 +355,7 @@ void UNPSelectPictureWidget::RequestNextPicture()
 		if (UTexture2D* CachedTexture =
 			TransferComponent->FindReceivedPhoto(DownloadingPhotoId))
 		{
-			HandlePhotoTextureReceived(
-				DownloadingPhotoId,
-				CachedTexture);
+			HandlePhotoTextureReceived(DownloadingPhotoId, CachedTexture);
 			return;
 		}
 
@@ -315,22 +395,18 @@ void UNPSelectPictureWidget::HandlePhotoTextureReceived(
 void UNPSelectPictureWidget::ShowPicture(
 	const int32 PictureIndex)
 {
-	if (!PictureTextures.IsValidIndex(PictureIndex)
-		|| !IsValid(ShowPictureWidget))
+	if (!PictureTextures.IsValidIndex(PictureIndex)	|| !IsValid(ShowPictureWidget))
 	{
 		return;
 	}
 
 	CurrentPictureIndex = PictureIndex;
 
-	ShowPictureWidget->SetPicture(
-		PictureTextures[PictureIndex],
-		PictureIndex);
+	ShowPictureWidget->SetPicture(PictureTextures[PictureIndex],	PictureIndex);
 
 	if (IsValid(PictureListWidget))
 	{
-		ShowPictureWidget->SetSelected(
-			PictureListWidget->IsPictureSelected(PictureIndex));
+		ShowPictureWidget->SetSelected(PictureListWidget->IsPictureSelected(PictureIndex));
 	}
 }
 
@@ -342,14 +418,48 @@ void UNPSelectPictureWidget::UpdateSelectedPictureCountText()
 		return;
 	}
 
-	const int32 SelectedCount =
-		PictureListWidget->GetSelectedPictureCount();
+	const int32 SelectedCount =	PictureListWidget->GetSelectedPictureCount();
 
 	SelectedPictureCountText->SetText(
-		FText::FromString(FString::Printf(
-			TEXT("고른 사진 수: %d / %d"),
-			SelectedCount,
-			MaxSelectedPictureCount)));
+		FText::FromString(FString::Printf(TEXT("%d / %d"), SelectedCount, MaxSelectedPictureCount)));
+}
+
+void UNPSelectPictureWidget::UpdateNextPlayerText()
+{
+	if (!IsValid(IsNextPlayer))
+	{
+		return;
+	}
+
+	if (!IsValid(ObservedMainGameState))
+	{
+		ObservedMainGameState = GetWorld() ? GetWorld()->GetGameState<ANPMainGameState>() : nullptr;
+
+		if (IsValid(ObservedMainGameState))
+		{
+			ObservedMainGameState->OnPictureSelectionStateChanged.AddUniqueDynamic(
+				this,
+				&UNPSelectPictureWidget::HandlePictureSelectionStateChanged);
+		}
+	}
+
+	if (!IsValid(ObservedMainGameState))
+	{
+		return;
+	}
+
+	const int32 TotalPlayerCount = ObservedMainGameState->PlayerArray.Num();
+	int32 CompletedPlayerCount = 0;
+
+	for (APlayerState* PlayerState : ObservedMainGameState->PlayerArray)
+	{
+		if (ObservedMainGameState->IsPlayerPictureSelectionComplete(PlayerState))
+		{
+			++CompletedPlayerCount;
+		}
+	}
+
+	IsNextPlayer->SetText(FText::FromString(FString::Printf(TEXT("%d/%d명 완료"), CompletedPlayerCount, TotalPlayerCount)));
 }
 
 TArray<int32> UNPSelectPictureWidget::GetSelectedPictureIndices() const
@@ -361,9 +471,7 @@ TArray<int32> UNPSelectPictureWidget::GetSelectedPictureIndices() const
 		return SelectedIndices;
 	}
 
-	for (int32 PictureIndex = 0;
-		PictureIndex < PictureTextures.Num();
-		++PictureIndex)
+	for (int32 PictureIndex = 0; PictureIndex < PictureTextures.Num(); ++PictureIndex)
 	{
 		if (PictureListWidget->IsPictureSelected(PictureIndex))
 		{

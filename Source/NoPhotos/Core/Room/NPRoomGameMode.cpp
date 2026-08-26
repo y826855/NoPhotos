@@ -52,7 +52,6 @@ void ANPRoomGameMode::PostLogin(APlayerController* NewPlayer)
 
 	if (!bRoomActive)
 	{
-		NPPC->ClientShowMainMenuUI();
 		return;
 	}
 
@@ -219,8 +218,9 @@ void ANPRoomGameMode::TryStartGame(APlayerController* RequestingPlayer)
 	GetWorld()->ServerTravel(GameLevelPath);
 }
 
-void ANPRoomGameMode::RequestExitRoom(ANPPlayerController* RequestingPlayer)
+void ANPRoomGameMode::RequestExitRoom(APlayerController* RequestingController)
 {
+	ANPRoomPlayerController* RequestingPlayer = Cast<ANPRoomPlayerController>(RequestingController);
 	if (!IsValid(RequestingPlayer) || !IsValid(RequestingPlayer->PlayerState))
 	{
 		NPRoomLog::Warning(this, TEXT("호스트 방 나가기 실패: 요청 플레이어가 유효하지 않습니다."));
@@ -260,12 +260,12 @@ void ANPRoomGameMode::RequestExitRoom(ANPPlayerController* RequestingPlayer)
 		}
 	}
 
-	ANPPlayerController* NextHostController = nullptr;
+	ANPRoomPlayerController* NextHostController = nullptr;
 	if (NextHostPlayerState)
 	{
 		for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator; ++Iterator)
 		{
-			ANPPlayerController* PlayerController = Cast<ANPPlayerController>(Iterator->Get());
+			ANPRoomPlayerController* PlayerController = Cast<ANPRoomPlayerController>(Iterator->Get());
 			if (PlayerController && PlayerController->PlayerState == NextHostPlayerState)
 			{
 				NextHostController = PlayerController;
@@ -290,7 +290,7 @@ void ANPRoomGameMode::RequestExitRoom(ANPPlayerController* RequestingPlayer)
 	const FString MigrationId = FGuid::NewGuid().ToString(EGuidFormats::Digits);
 	for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator; ++Iterator)
 	{
-		ANPPlayerController* PlayerController = Cast<ANPPlayerController>(Iterator->Get());
+		ANPRoomPlayerController* PlayerController = Cast<ANPRoomPlayerController>(Iterator->Get());
 		if (!PlayerController || PlayerController == RequestingPlayer)
 		{
 			continue;

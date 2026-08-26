@@ -12,8 +12,8 @@
 #include "Gameplay/Photo/NPPhotoLog.h"
 #include "Gameplay/Photo/NPPhotoImageCodec.h"
 #include "Gameplay/Photo/NPPhotoTransferComponent.h"
-#include "NoPhotosGameMode.h"
-#include "NoPhotosPlayerController.h"
+#include "Core/Main/NPMainGameMode.h"
+#include "Core/Main/NPMainPlayerController.h"
 
 UNPPhotoCaptureComponent::UNPPhotoCaptureComponent()
 {
@@ -179,16 +179,16 @@ bool UNPPhotoCaptureComponent::TakePhoto()
 	SceneCapture->CaptureScene();
 	UE_LOG(LogNPPhoto, Log, TEXT("[Capture] CaptureScene requested successfully."));
 	OnPhotoCaptured.Broadcast(PhotoRenderTarget);
-	if (ANoPhotosPlayerController* NoPhotosPlayerController = Cast<ANoPhotosPlayerController>(PlayerController))
+	if (ANPMainPlayerController* MainPlayerController = Cast<ANPMainPlayerController>(PlayerController))
 	{
-		NoPhotosPlayerController->PlayPhotoFlash();
+		MainPlayerController->PlayPhotoFlash();
 	}
 	else
 	{
 		UE_LOG(
 			LogNPPhoto,
 			Warning,
-			TEXT("[PhotoUI] Flash skipped: Controller is not ANoPhotosPlayerController. Controller=%s"),
+			TEXT("[PhotoUI] Flash skipped: Controller is not ANPMainPlayerController. Controller=%s"),
 			*GetNameSafe(PlayerController));
 	}
 
@@ -275,8 +275,8 @@ void UNPPhotoCaptureComponent::ServerRequestTakePhoto_Implementation(
 		CaptureSequence);
 
 	APlayerController* Photographer = Cast<APlayerController>(GetOwner());
-	ANoPhotosGameMode* GameMode = GetWorld()
-		? GetWorld()->GetAuthGameMode<ANoPhotosGameMode>()
+	ANPMainGameMode* GameMode = GetWorld()
+		? GetWorld()->GetAuthGameMode<ANPMainGameMode>()
 		: nullptr;
 	if (!Photographer || !GameMode || !bServerPhotoModeActive)
 	{

@@ -3,9 +3,9 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
-#include "NoPhotosGameMode.h"
+#include "Core/Main/NPMainGameMode.h"
 
-void UNPPhotoRepository::Initialize(ANoPhotosGameMode* InGameMode)
+void UNPPhotoRepository::Initialize(ANPMainGameMode* InGameMode)
 {
 	OwningGameMode = InGameMode;
 }
