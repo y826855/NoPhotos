@@ -29,6 +29,8 @@ public:
 	UFUNCTION(BlueprintPure, Category="Interaction")
 	bool IsGrabbed() const { return bIsGrabbed; }
 
+	int32 GetActiveGrabCount() const { return ActiveGrabCount; }
+
 	UFUNCTION(BlueprintPure, Category="Interaction")
 	FVector GetCurrentLinearGrabForce() const { return CurrentLinearGrabForce; }
 

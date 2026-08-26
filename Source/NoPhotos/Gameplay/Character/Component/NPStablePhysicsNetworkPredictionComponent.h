@@ -52,6 +52,8 @@ public:
 	void SendMoveInput(const FVector& WorldMoveInput);
 	void SendStopMove();
 	void SendJumpRequest();
+	void SetExternalGrabActive(bool bActive) { bExternalGrabActive = bActive; }
+	void SetServerAuthoritativeInteraction(bool bActive);
 
 	virtual void GetLifetimeReplicatedProps(
 		TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -74,13 +76,44 @@ private:
 	UFUNCTION(Server, Reliable)
 	void ServerRequestJump();
 
+	UFUNCTION(Server, Unreliable)
+	void ServerSetClientRootState(
+		uint16 StateSequence,
+		FNPStablePhysicsRootState NewRootState);
+
 	UFUNCTION()
 	void OnRep_ServerRootState();
 
+	UFUNCTION()
+	void OnRep_ServerAuthoritativeInteraction();
+
 	void CaptureServerRootState();
 	void ApplyOwnerCorrection(float DeltaTime);
+	void ApplyServerCorrection(float DeltaTime);
+	void ApplyCorrection(
+		const FNPStablePhysicsRootState& TargetRootState,
+		float DeltaTime,
+		bool bUseFullBodyCorrection,
+		bool bShowOwnerDebug);
 	void SendPendingMoveInput(float DeltaTime);
+	void SendClientRootState(float DeltaTime);
 	bool IsNearUnheldDynamicBody(const FVector& RootPosition) const;
+	bool FindBlockingCorrectionNormal(
+		const FVector& Start,
+		const FVector& End,
+		FVector& OutBlockingNormal) const;
+	bool IsFullBodyCorrectionBlocked(const FVector& CorrectionDelta) const;
+	bool IsRecoveryTargetClear(const FVector& TargetPosition) const;
+	bool ShouldRecoverFromBlockedCorrection(
+		float PositionErrorSize,
+		const FVector& PositionError,
+		const FVector& CurrentVelocity,
+		const FVector& TargetVelocity,
+		float DeltaTime);
+	void RecoverFullBody(
+		const FVector& TargetPosition,
+		const FNPStablePhysicsRootState& TargetRootState);
+	void ResetBlockedCorrectionTracking();
 	bool AcceptInputSequence(uint16 InputSequence);
 	float GetEstimatedServerWorldTime() const;
 
@@ -95,6 +128,11 @@ private:
 
 	UPROPERTY(ReplicatedUsing=OnRep_ServerRootState)
 	FNPStablePhysicsRootState ServerRootState;
+
+	UPROPERTY(ReplicatedUsing=OnRep_ServerAuthoritativeInteraction)
+	bool bServerAuthoritativeInteraction = false;
+
+	FNPStablePhysicsRootState ClientRootState;
 
 	UPROPERTY(EditAnywhere, Category="Network Prediction", meta=(ClampMin="0.0"))
 	float PositionErrorTolerance = 2.0f;
@@ -123,6 +161,31 @@ private:
 	UPROPERTY(EditAnywhere, Category="Network Prediction|Dynamic Contact", meta=(ClampMin="0.0", ClampMax="1.0"))
 	float DynamicBodyCorrectionScale = 0.2f;
 
+	UPROPERTY(EditAnywhere, Category="Network Prediction|Blocked Correction", meta=(ClampMin="0.0"))
+	float CorrectionSweepRadius = 25.0f;
+
+	/** 이보다 작은 수직 오차에서는 바닥과 천장 Hit를 막힘 판정에서 제외합니다. */
+	UPROPERTY(EditAnywhere, Category="Network Prediction|Blocked Correction", meta=(ClampMin="0.0"))
+	float VerticalLayerSeparationDistance = 50.0f;
+
+	UPROPERTY(EditAnywhere, Category="Network Prediction|Blocked Correction", meta=(ClampMin="0.0"))
+	float BlockedCorrectionDistance = 30.0f;
+
+	UPROPERTY(EditAnywhere, Category="Network Prediction|Blocked Correction", meta=(ClampMin="0.0"))
+	float BlockedCorrectionDelay = 0.35f;
+
+	UPROPERTY(EditAnywhere, Category="Network Prediction|Blocked Correction", meta=(ClampMin="0.0"))
+	float MinimumCorrectionProgressSpeed = 3.0f;
+
+	UPROPERTY(EditAnywhere, Category="Network Prediction|Blocked Correction", meta=(ClampMin="0.0"))
+	float MinimumCorrectionClosingSpeed = 1.0f;
+
+	UPROPERTY(EditAnywhere, Category="Network Prediction|Blocked Correction", meta=(ClampMin="-1.0", ClampMax="1.0"))
+	float MinimumBlockedErrorDirectionDot = 0.9f;
+
+	UPROPERTY(EditAnywhere, Category="Network Prediction|Blocked Correction", meta=(ClampMin="0.0"))
+	float RecoveryCooldown = 0.15f;
+
 	UPROPERTY(EditAnywhere, Category="Network Prediction", meta=(ClampMin="0.01"))
 	float InputSendInterval = 1.0f / 30.0f;
 
@@ -130,7 +193,16 @@ private:
 	FVector PendingMoveInput = FVector::ZeroVector;
 	uint16 LocalInputSequence = 0;
 	uint16 LastServerInputSequence = 0;
+	uint16 LocalRootStateSequence = 0;
+	uint16 LastServerRootStateSequence = 0;
 	float InputSendAccumulator = 1.0f / 30.0f;
+	float RootStateSendAccumulator = 1.0f / 30.0f;
+	float PreviousCorrectionErrorSize = 0.0f;
+	FVector PreviousCorrectionErrorDirection = FVector::ZeroVector;
+	float BlockedCorrectionTime = 0.0f;
+	float RecoveryCooldownRemaining = 0.0f;
 	bool bHasReceivedInput = false;
 	bool bHasServerRootState = false;
+	bool bHasReceivedClientRootState = false;
+	bool bExternalGrabActive = false;
 };

@@ -1,6 +1,8 @@
 #include "Gameplay/Character/Component/NPStablePhysicsNetworkPredictionComponent.h"
 
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/Engine.h"
+#include "Engine/HitResult.h"
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
@@ -36,6 +38,25 @@ void UNPStablePhysicsNetworkPredictionComponent::Initialize(
 	{
 		AddTickPrerequisiteComponent(Grab);
 	}
+}
+
+void UNPStablePhysicsNetworkPredictionComponent::SetServerAuthoritativeInteraction(
+	bool bActive)
+{
+	if (!GetOwner()
+		|| !GetOwner()->HasAuthority()
+		|| bServerAuthoritativeInteraction == bActive)
+	{
+		return;
+	}
+
+	bServerAuthoritativeInteraction = bActive;
+	if (!bServerAuthoritativeInteraction)
+	{
+		bHasReceivedClientRootState = false;
+	}
+	ResetBlockedCorrectionTracking();
+	GetOwner()->ForceNetUpdate();
 }
 
 void UNPStablePhysicsNetworkPredictionComponent::SendMoveInput(
@@ -81,6 +102,10 @@ void UNPStablePhysicsNetworkPredictionComponent::GetLifetimeReplicatedProps(
 		UNPStablePhysicsNetworkPredictionComponent,
 		ServerRootState,
 		COND_OwnerOnly);
+	DOREPLIFETIME_CONDITION(
+		UNPStablePhysicsNetworkPredictionComponent,
+		bServerAuthoritativeInteraction,
+		COND_OwnerOnly);
 }
 
 void UNPStablePhysicsNetworkPredictionComponent::TickComponent(
@@ -97,6 +122,10 @@ void UNPStablePhysicsNetworkPredictionComponent::TickComponent(
 
 	if (GetOwner()->HasAuthority())
 	{
+		if (!bServerAuthoritativeInteraction)
+		{
+			ApplyServerCorrection(DeltaTime);
+		}
 		CaptureServerRootState();
 		return;
 	}
@@ -104,7 +133,14 @@ void UNPStablePhysicsNetworkPredictionComponent::TickComponent(
 	if (GetOwner()->GetLocalRole() == ROLE_AutonomousProxy)
 	{
 		SendPendingMoveInput(DeltaTime);
-		ApplyOwnerCorrection(DeltaTime);
+		if (bServerAuthoritativeInteraction)
+		{
+			ApplyOwnerCorrection(DeltaTime);
+		}
+		else
+		{
+			SendClientRootState(DeltaTime);
+		}
 	}
 }
 
@@ -156,9 +192,58 @@ void UNPStablePhysicsNetworkPredictionComponent::ServerRequestJump_Implementatio
 	Movement->RequestJump();
 }
 
+void UNPStablePhysicsNetworkPredictionComponent::ServerSetClientRootState_Implementation(
+	uint16 StateSequence,
+	FNPStablePhysicsRootState NewRootState)
+{
+	if (bServerAuthoritativeInteraction
+		|| FVector(NewRootState.Position).ContainsNaN()
+		|| NewRootState.Rotation.ContainsNaN()
+		|| FVector(NewRootState.LinearVelocity).ContainsNaN()
+		|| FVector(NewRootState.AngularVelocity).ContainsNaN()
+		|| (bHasReceivedClientRootState
+			&& static_cast<int16>(StateSequence - LastServerRootStateSequence) <= 0))
+	{
+		return;
+	}
+
+	bHasReceivedClientRootState = true;
+	LastServerRootStateSequence = StateSequence;
+	ClientRootState = NewRootState;
+
+#if !UE_BUILD_SHIPPING
+	if (GEngine)
+	{
+		const float ServerReceiveTime = GetEstimatedServerWorldTime();
+		const float ClientStateAge =
+			ServerReceiveTime - NewRootState.ServerWorldTime;
+		GEngine->AddOnScreenDebugMessage(
+			reinterpret_cast<uint64>(this),
+			0.25f,
+			FColor::Yellow,
+			FString::Printf(
+				TEXT("Client Root RX | Seq %u | Sent %.3f | Server %.3f | Age %.3fs / Max %.3fs | Stale %s"),
+				StateSequence,
+				NewRootState.ServerWorldTime,
+				ServerReceiveTime,
+				ClientStateAge,
+				MaximumServerStateAge,
+				ClientStateAge > MaximumServerStateAge
+					? TEXT("Y")
+					: TEXT("N")));
+	}
+#endif
+}
+
 void UNPStablePhysicsNetworkPredictionComponent::OnRep_ServerRootState()
 {
 	bHasServerRootState = true;
+}
+
+void UNPStablePhysicsNetworkPredictionComponent::OnRep_ServerAuthoritativeInteraction()
+{
+	RecoveryCooldownRemaining = 0.0f;
+	ResetBlockedCorrectionTracking();
 }
 
 void UNPStablePhysicsNetworkPredictionComponent::CaptureServerRootState()
@@ -181,7 +266,36 @@ void UNPStablePhysicsNetworkPredictionComponent::CaptureServerRootState()
 void UNPStablePhysicsNetworkPredictionComponent::ApplyOwnerCorrection(
 	float DeltaTime)
 {
-	if (!bHasServerRootState || DeltaTime <= UE_SMALL_NUMBER)
+	if (!bHasServerRootState)
+	{
+		return;
+	}
+
+	ApplyCorrection(
+		ServerRootState,
+		DeltaTime,
+		bExternalGrabActive,
+		true);
+}
+
+void UNPStablePhysicsNetworkPredictionComponent::ApplyServerCorrection(
+	float DeltaTime)
+{
+	if (!bHasReceivedClientRootState)
+	{
+		return;
+	}
+
+	ApplyCorrection(ClientRootState, DeltaTime, false, false);
+}
+
+void UNPStablePhysicsNetworkPredictionComponent::ApplyCorrection(
+	const FNPStablePhysicsRootState& TargetRootState,
+	float DeltaTime,
+	bool bUseFullBodyCorrection,
+	bool bShowOwnerDebug)
+{
+	if (DeltaTime <= UE_SMALL_NUMBER)
 	{
 		return;
 	}
@@ -192,10 +306,15 @@ void UNPStablePhysicsNetworkPredictionComponent::ApplyOwnerCorrection(
 		return;
 	}
 
+	RecoveryCooldownRemaining = FMath::Max(
+		RecoveryCooldownRemaining - DeltaTime,
+		0.0f);
+
 	const float ServerStateAge =
-		GetEstimatedServerWorldTime() - ServerRootState.ServerWorldTime;
+		GetEstimatedServerWorldTime() - TargetRootState.ServerWorldTime;
 	if (ServerStateAge > MaximumServerStateAge)
 	{
+		ResetBlockedCorrectionTracking();
 		return;
 	}
 
@@ -203,49 +322,154 @@ void UNPStablePhysicsNetworkPredictionComponent::ApplyOwnerCorrection(
 		ServerStateAge,
 		0.0f,
 		MaximumExtrapolationTime);
-	const FVector ExpectedServerPosition = FVector(ServerRootState.Position)
-		+ FVector(ServerRootState.LinearVelocity) * ExtrapolationTime;
+	const FVector ExpectedServerPosition = FVector(TargetRootState.Position)
+		+ FVector(TargetRootState.LinearVelocity) * ExtrapolationTime;
 	const FVector CurrentRootPosition =
 		RootBody->GetUnrealWorldTransform().GetLocation();
 	const FVector PositionError =
 		ExpectedServerPosition - CurrentRootPosition;
+	const float PositionErrorSize = PositionError.Size();
 	const bool bNearUnheldDynamicBody =
 		IsNearUnheldDynamicBody(CurrentRootPosition);
 
 	if (!bNearUnheldDynamicBody
-		&& PositionError.SizeSquared() > FMath::Square(HardSnapDistance))
+		&& PositionErrorSize > HardSnapDistance
+		&& IsRecoveryTargetClear(ExpectedServerPosition))
 	{
-		RootBody->SetBodyTransform(
-			FTransform(ServerRootState.Rotation, ExpectedServerPosition),
-			ETeleportType::TeleportPhysics);
-		RootBody->SetLinearVelocity(FVector(ServerRootState.LinearVelocity), false);
-		RootBody->SetAngularVelocityInRadians(
-			FMath::DegreesToRadians(FVector(ServerRootState.AngularVelocity)),
-			false);
+		RecoverFullBody(ExpectedServerPosition, TargetRootState);
 		return;
 	}
 
-	if (PositionError.SizeSquared() <= FMath::Square(PositionErrorTolerance))
+	if (PositionErrorSize <= PositionErrorTolerance)
+	{
+		ResetBlockedCorrectionTracking();
+		return;
+	}
+
+	if (RecoveryCooldownRemaining > 0.0f)
 	{
 		return;
+	}
+
+	if (!bNearUnheldDynamicBody
+		&& ShouldRecoverFromBlockedCorrection(
+			PositionErrorSize,
+			PositionError,
+			RootBody->GetUnrealWorldVelocity(),
+			FVector(TargetRootState.LinearVelocity),
+			DeltaTime)
+		&& IsRecoveryTargetClear(ExpectedServerPosition))
+	{
+		RecoverFullBody(ExpectedServerPosition, TargetRootState);
+		return;
+	}
+	if (bNearUnheldDynamicBody)
+	{
+		ResetBlockedCorrectionTracking();
 	}
 
 	const float SafeCorrectionTime = FMath::Max(PositionCorrectionTime, 0.01f);
 	const FVector CorrectionVelocity = (PositionError / SafeCorrectionTime)
 		.GetClampedToMaxSize(MaximumCorrectionSpeed);
 	const FVector DesiredVelocity =
-		FVector(ServerRootState.LinearVelocity) + CorrectionVelocity;
+		FVector(TargetRootState.LinearVelocity) + CorrectionVelocity;
 	FVector CorrectionAcceleration =
 		(DesiredVelocity - RootBody->GetUnrealWorldVelocity())
 		/ SafeCorrectionTime;
 	CorrectionAcceleration = CorrectionAcceleration.GetClampedToMaxSize(
 		MaximumCorrectionAcceleration);
+	const FVector CorrectionAccelerationBeforeScale = CorrectionAcceleration;
 	if (bNearUnheldDynamicBody)
 	{
 		CorrectionAcceleration *= DynamicBodyCorrectionScale;
 	}
+	const FVector CorrectionAccelerationAfterScale = CorrectionAcceleration;
 
-	PhysicsMesh->AddForce(CorrectionAcceleration, RootBodyName, true);
+	FVector BlockingNormal = FVector::ZeroVector;
+	const bool bBlockedByCorrectionSweep = FindBlockingCorrectionNormal(
+		CurrentRootPosition,
+		ExpectedServerPosition,
+		BlockingNormal);
+	if (bBlockedByCorrectionSweep)
+	{
+		const float IntoSurfaceAcceleration = FVector::DotProduct(
+			CorrectionAcceleration,
+			BlockingNormal);
+		if (IntoSurfaceAcceleration < 0.0f)
+		{
+			CorrectionAcceleration -=
+				BlockingNormal * IntoSurfaceAcceleration;
+		}
+	}
+
+#if !UE_BUILD_SHIPPING
+	if (bShowOwnerDebug && GEngine)
+	{
+		const FVector CurrentRootVelocity =
+			RootBody->GetUnrealWorldVelocity();
+		const FVector ServerVelocity = FVector(TargetRootState.LinearVelocity);
+		const float RootBodyMass = RootBody->GetBodyMass();
+		const float TotalMeshMass = PhysicsMesh->GetMass();
+		const float AppliedMass = bUseFullBodyCorrection
+			? TotalMeshMass
+			: RootBodyMass;
+		const FVector AppliedForceEquivalent =
+			CorrectionAcceleration * AppliedMass;
+		GEngine->AddOnScreenDebugMessage(
+			reinterpret_cast<uint64>(this),
+			0.25f,
+			FColor::Cyan,
+			FString::Printf(
+				TEXT("Soft Correction | Error %.1fcm (%.1f, %.1f, %.1f) | StateAge %.3fs\n")
+				TEXT("Velocity Root(%.1f, %.1f, %.1f) Server(%.1f, %.1f, %.1f) Desired(%.1f, %.1f, %.1f)\n")
+				TEXT("Accel %.1f -> %.1f -> %.1f | Final(%.1f, %.1f, %.1f) | ForceEq(%.1f, %.1f, %.1f)\n")
+				TEXT("Body %s | Sim %s Awake %s | Mass Root %.1f / Total %.1f | ExternalGrab %s | NearDynamic %s | Sweep %s"),
+				PositionErrorSize,
+				PositionError.X,
+				PositionError.Y,
+				PositionError.Z,
+				ServerStateAge,
+				CurrentRootVelocity.X,
+				CurrentRootVelocity.Y,
+				CurrentRootVelocity.Z,
+				ServerVelocity.X,
+				ServerVelocity.Y,
+				ServerVelocity.Z,
+				DesiredVelocity.X,
+				DesiredVelocity.Y,
+				DesiredVelocity.Z,
+				CorrectionAccelerationBeforeScale.Size(),
+				CorrectionAccelerationAfterScale.Size(),
+				CorrectionAcceleration.Size(),
+				CorrectionAcceleration.X,
+				CorrectionAcceleration.Y,
+				CorrectionAcceleration.Z,
+				AppliedForceEquivalent.X,
+				AppliedForceEquivalent.Y,
+				AppliedForceEquivalent.Z,
+				*RootBodyName.ToString(),
+				PhysicsMesh->IsSimulatingPhysics(RootBodyName) ? TEXT("Y") : TEXT("N"),
+				RootBody->IsInstanceAwake() ? TEXT("Y") : TEXT("N"),
+				RootBodyMass,
+				TotalMeshMass,
+				bUseFullBodyCorrection ? TEXT("Y") : TEXT("N"),
+				bNearUnheldDynamicBody ? TEXT("Y") : TEXT("N"),
+				bBlockedByCorrectionSweep ? TEXT("Y") : TEXT("N")));
+	}
+#endif
+
+	if (bUseFullBodyCorrection)
+	{
+		PhysicsMesh->AddForceToAllBodiesBelow(
+			CorrectionAcceleration,
+			RootBodyName,
+			true,
+			true);
+	}
+	else
+	{
+		PhysicsMesh->AddForce(CorrectionAcceleration, RootBodyName, true);
+	}
 }
 
 bool UNPStablePhysicsNetworkPredictionComponent::IsNearUnheldDynamicBody(
@@ -287,6 +511,196 @@ bool UNPStablePhysicsNetworkPredictionComponent::IsNearUnheldDynamicBody(
 	return false;
 }
 
+bool UNPStablePhysicsNetworkPredictionComponent::FindBlockingCorrectionNormal(
+	const FVector& Start,
+	const FVector& End,
+	FVector& OutBlockingNormal) const
+{
+	OutBlockingNormal = FVector::ZeroVector;
+	if (!GetWorld()
+		|| CorrectionSweepRadius <= UE_SMALL_NUMBER
+		|| Start.Equals(End))
+	{
+		return false;
+	}
+
+	FCollisionObjectQueryParams ObjectQueryParams;
+	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
+	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+	FCollisionQueryParams QueryParams(
+		SCENE_QUERY_STAT(StablePhysicsBlockedCorrection),
+		false,
+		GetOwner());
+	FHitResult Hit;
+	if (!GetWorld()->SweepSingleByObjectType(
+		Hit,
+		Start,
+		End,
+		FQuat::Identity,
+		ObjectQueryParams,
+		FCollisionShape::MakeSphere(CorrectionSweepRadius),
+		QueryParams))
+	{
+		return false;
+	}
+
+	OutBlockingNormal = Hit.ImpactNormal.GetSafeNormal();
+	return !OutBlockingNormal.IsNearlyZero();
+}
+
+bool UNPStablePhysicsNetworkPredictionComponent::IsFullBodyCorrectionBlocked(
+	const FVector& CorrectionDelta) const
+{
+	if (!GetWorld() || !PhysicsMesh || CorrectionDelta.IsNearlyZero())
+	{
+		return false;
+	}
+
+	FComponentQueryParams QueryParams(
+		SCENE_QUERY_STAT(StablePhysicsFullBodyBlockedCorrection),
+		GetOwner());
+	if (Grab && Grab->GetGrabbedComponent())
+	{
+		QueryParams.AddIgnoredComponent(Grab->GetGrabbedComponent());
+	}
+
+	const FVector Start = PhysicsMesh->GetComponentLocation();
+	TArray<FHitResult> Hits;
+	GetWorld()->ComponentSweepMulti(
+		Hits,
+		PhysicsMesh,
+		Start,
+		Start + CorrectionDelta,
+		PhysicsMesh->GetComponentQuat(),
+		QueryParams);
+
+	const FVector CorrectionDirection = CorrectionDelta.GetSafeNormal();
+	const bool bDifferentVerticalLayer =
+		FMath::Abs(CorrectionDelta.Z) >= VerticalLayerSeparationDistance;
+	for (const FHitResult& Hit : Hits)
+	{
+		const UPrimitiveComponent* HitComponent = Hit.GetComponent();
+		if (!Hit.bBlockingHit || Hit.bStartPenetrating || !HitComponent)
+		{
+			continue;
+		}
+
+		const ECollisionChannel ObjectType =
+			HitComponent->GetCollisionObjectType();
+		if (ObjectType != ECC_WorldStatic
+			&& ObjectType != ECC_WorldDynamic)
+		{
+			continue;
+		}
+
+		const FVector BlockingNormal = Hit.ImpactNormal.GetSafeNormal();
+		const bool bFloorOrCeiling = FMath::Abs(BlockingNormal.Z) >= 0.5f;
+		if (bFloorOrCeiling && !bDifferentVerticalLayer)
+		{
+			continue;
+		}
+
+		if (FVector::DotProduct(CorrectionDirection, BlockingNormal) < -0.25f)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool UNPStablePhysicsNetworkPredictionComponent::IsRecoveryTargetClear(
+	const FVector& TargetPosition) const
+{
+	if (!GetWorld() || CorrectionSweepRadius <= UE_SMALL_NUMBER)
+	{
+		return true;
+	}
+
+	FCollisionObjectQueryParams ObjectQueryParams;
+	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldStatic);
+	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+	FCollisionQueryParams QueryParams(
+		SCENE_QUERY_STAT(StablePhysicsRecoveryTarget),
+		false,
+		GetOwner());
+	return !GetWorld()->OverlapAnyTestByObjectType(
+		TargetPosition,
+		FQuat::Identity,
+		ObjectQueryParams,
+		FCollisionShape::MakeSphere(CorrectionSweepRadius),
+		QueryParams);
+}
+
+bool UNPStablePhysicsNetworkPredictionComponent::ShouldRecoverFromBlockedCorrection(
+	float PositionErrorSize,
+	const FVector& PositionError,
+	const FVector& CurrentVelocity,
+	const FVector& TargetVelocity,
+	float DeltaTime)
+{
+	const bool bHadPreviousError =
+		PreviousCorrectionErrorSize > UE_SMALL_NUMBER;
+	const float RequiredProgress =
+		MinimumCorrectionProgressSpeed * DeltaTime;
+	const bool bMadeProgress = !bHadPreviousError
+		|| PreviousCorrectionErrorSize - PositionErrorSize >= RequiredProgress;
+	const FVector ErrorDirection = PositionError.GetSafeNormal();
+	const FVector RelativeVelocity =
+		CurrentVelocity - TargetVelocity;
+	const float ClosingSpeed = FVector::DotProduct(
+		RelativeVelocity,
+		ErrorDirection);
+	const bool bClosingPositionError =
+		ClosingSpeed >= MinimumCorrectionClosingSpeed;
+	const bool bStableErrorDirection =
+		PreviousCorrectionErrorDirection.IsNearlyZero()
+		|| FVector::DotProduct(
+			PreviousCorrectionErrorDirection,
+			ErrorDirection) >= MinimumBlockedErrorDirectionDot;
+	const bool bBlockedByWorld = PositionErrorSize >= BlockedCorrectionDistance
+		&& !bMadeProgress
+		&& !bClosingPositionError
+		&& bStableErrorDirection
+		&& IsFullBodyCorrectionBlocked(PositionError);
+
+	if (bBlockedByWorld)
+	{
+		BlockedCorrectionTime += DeltaTime;
+	}
+	else
+	{
+		BlockedCorrectionTime = 0.0f;
+	}
+
+	PreviousCorrectionErrorSize = PositionErrorSize;
+	PreviousCorrectionErrorDirection = ErrorDirection;
+	return BlockedCorrectionTime >= BlockedCorrectionDelay;
+}
+
+void UNPStablePhysicsNetworkPredictionComponent::RecoverFullBody(
+	const FVector& TargetPosition,
+	const FNPStablePhysicsRootState& TargetRootState)
+{
+	PhysicsMesh->SetAllPhysicsPosition(TargetPosition);
+	PhysicsMesh->SetAllPhysicsLinearVelocity(
+		FVector(TargetRootState.LinearVelocity),
+		false);
+	PhysicsMesh->SetAllPhysicsAngularVelocityInRadians(
+		FMath::DegreesToRadians(FVector(TargetRootState.AngularVelocity)),
+		false);
+	PhysicsMesh->WakeAllRigidBodies();
+	RecoveryCooldownRemaining = RecoveryCooldown;
+	ResetBlockedCorrectionTracking();
+}
+
+void UNPStablePhysicsNetworkPredictionComponent::ResetBlockedCorrectionTracking()
+{
+	PreviousCorrectionErrorSize = 0.0f;
+	PreviousCorrectionErrorDirection = FVector::ZeroVector;
+	BlockedCorrectionTime = 0.0f;
+}
+
 void UNPStablePhysicsNetworkPredictionComponent::SendPendingMoveInput(
 	float DeltaTime)
 {
@@ -305,6 +719,36 @@ void UNPStablePhysicsNetworkPredictionComponent::SendPendingMoveInput(
 	InputSendAccumulator = FMath::Fmod(InputSendAccumulator, SafeSendInterval);
 	++LocalInputSequence;
 	ServerSetMoveInput(LocalInputSequence, PendingMoveInput);
+}
+
+void UNPStablePhysicsNetworkPredictionComponent::SendClientRootState(
+	float DeltaTime)
+{
+	RootStateSendAccumulator += DeltaTime;
+	const float SafeSendInterval = FMath::Max(InputSendInterval, 0.01f);
+	if (RootStateSendAccumulator < SafeSendInterval)
+	{
+		return;
+	}
+
+	FBodyInstance* RootBody = PhysicsMesh->GetBodyInstance(RootBodyName);
+	if (!RootBody)
+	{
+		return;
+	}
+
+	RootStateSendAccumulator = FMath::Fmod(
+		RootStateSendAccumulator,
+		SafeSendInterval);
+	const FTransform RootTransform = RootBody->GetUnrealWorldTransform();
+	FNPStablePhysicsRootState NewRootState;
+	NewRootState.Position = RootTransform.GetLocation();
+	NewRootState.Rotation = RootTransform.GetRotation();
+	NewRootState.LinearVelocity = RootBody->GetUnrealWorldVelocity();
+	NewRootState.AngularVelocity = FMath::RadiansToDegrees(
+		RootBody->GetUnrealWorldAngularVelocityInRadians());
+	NewRootState.ServerWorldTime = GetEstimatedServerWorldTime();
+	ServerSetClientRootState(++LocalRootStateSequence, NewRootState);
 }
 
 bool UNPStablePhysicsNetworkPredictionComponent::AcceptInputSequence(

@@ -6,6 +6,7 @@
 #include "PhysicsEngine/BodyInstance.h"
 #include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Character/Component/NPStablePhysicsNetworkPredictionComponent.h"
+#include "Gameplay/Interaction/Components/GrabbableComponent.h"
 #include "Gameplay/Relic/NPBaseRelic.h"
 #include "Core/NPPlayerState.h"
 #include "Gameplay/Character/Component/NPStablePhysicsMovementComponent.h"
@@ -37,6 +38,7 @@ void ANPRStablePhysicsPawn::BeginPlay()
 		PhysicsMovement,
 		RightHandGrab,
 		FullBodyRootName);
+	NetworkPrediction->SetExternalGrabActive(bExternallyGrabbed);
 	if (!bRunsMovementPhysics)
 	{
 		PhysicsMovement->SetAnimationStateOverride(
@@ -58,6 +60,18 @@ void ANPRStablePhysicsPawn::BeginPlay()
 	}
 }
 
+void ANPRStablePhysicsPawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (HasAuthority() && IsValid(ExternallyGrabbedTargetPawn))
+	{
+		ANPRStablePhysicsPawn* TargetPawn = ExternallyGrabbedTargetPawn;
+		ExternallyGrabbedTargetPawn = nullptr;
+		TargetPawn->RemoveExternalGrabber();
+	}
+
+	Super::EndPlay(EndPlayReason);
+}
+
 void ANPRStablePhysicsPawn::GetLifetimeReplicatedProps(
 	TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
@@ -65,6 +79,10 @@ void ANPRStablePhysicsPawn::GetLifetimeReplicatedProps(
 
 	DOREPLIFETIME(ANPRStablePhysicsPawn, bReplicatedRightHandActive);
 	DOREPLIFETIME(ANPRStablePhysicsPawn, ReplicatedGrabState);
+	DOREPLIFETIME_CONDITION(
+		ANPRStablePhysicsPawn,
+		bExternallyGrabbed,
+		COND_OwnerOnly);
 	DOREPLIFETIME(ANPRStablePhysicsPawn, ReplicatedServerHandWorldLocation);
 	DOREPLIFETIME(ANPRStablePhysicsPawn, ReplicatedAnimationVelocity);
 	DOREPLIFETIME(ANPRStablePhysicsPawn, ReplicatedAnimationAcceleration);
@@ -164,6 +182,22 @@ void ANPRStablePhysicsPawn::UpdateServerReplicatedState()
 		ReplicatedServerHandWorldLocation =
 			PhysicsMesh->GetSocketLocation(RightHandBoneName);
 	}
+
+	bool bSharedRelicGrab = false;
+	if (const ANPBaseRelic* HeldRelic =
+		Cast<ANPBaseRelic>(ReplicatedGrabState.GrabbedActor))
+	{
+		if (const UGrabbableComponent* Grabbable =
+			HeldRelic->FindComponentByClass<UGrabbableComponent>())
+		{
+			bSharedRelicGrab = Grabbable->GetActiveGrabCount() > 1;
+		}
+	}
+
+	NetworkPrediction->SetServerAuthoritativeInteraction(
+		bExternallyGrabbed
+		|| IsValid(ExternallyGrabbedTargetPawn)
+		|| bSharedRelicGrab);
 }
 
 void ANPRStablePhysicsPawn::ApplyMoveInput(const FVector& WorldMoveInput)
@@ -317,6 +351,11 @@ void ANPRStablePhysicsPawn::OnRep_GrabState()
 		ReplicatedGrabState.GrabbedBoneName);
 }
 
+void ANPRStablePhysicsPawn::OnRep_ExternallyGrabbed()
+{
+	NetworkPrediction->SetExternalGrabActive(bExternallyGrabbed);
+}
+
 void ANPRStablePhysicsPawn::UpdateReplicatedGrabVisualTarget()
 {
 	if (HasAuthority() || !IsReplicatedGrabActive())
@@ -374,6 +413,28 @@ void ANPRStablePhysicsPawn::UpdateLocalPredictedGrab(float DeltaSeconds)
 void ANPRStablePhysicsPawn::HandleGrabbedComponentChanged(
 	UPrimitiveComponent* NewGrabbedComponent)
 {
+	ANPRStablePhysicsPawn* NewGrabbedPawn = IsValid(NewGrabbedComponent)
+		? Cast<ANPRStablePhysicsPawn>(NewGrabbedComponent->GetOwner())
+		: nullptr;
+	if (NewGrabbedPawn == this)
+	{
+		NewGrabbedPawn = nullptr;
+	}
+
+	if (ExternallyGrabbedTargetPawn != NewGrabbedPawn)
+	{
+		if (IsValid(ExternallyGrabbedTargetPawn))
+		{
+			ExternallyGrabbedTargetPawn->RemoveExternalGrabber();
+		}
+
+		ExternallyGrabbedTargetPawn = NewGrabbedPawn;
+		if (IsValid(ExternallyGrabbedTargetPawn))
+		{
+			ExternallyGrabbedTargetPawn->AddExternalGrabber();
+		}
+	}
+
 	if (IsValid(NewGrabbedComponent))
 	{
 		ReplicatedGrabState.GrabbedActor = NewGrabbedComponent->GetOwner();
@@ -395,6 +456,32 @@ void ANPRStablePhysicsPawn::HandleGrabbedComponentChanged(
 	{
 		ReplicatedGrabState = FReplicatedStableGrabState();
 	}
+	ForceNetUpdate();
+}
+
+void ANPRStablePhysicsPawn::AddExternalGrabber()
+{
+	++ExternalGrabberCount;
+	if (bExternallyGrabbed)
+	{
+		return;
+	}
+
+	bExternallyGrabbed = true;
+	NetworkPrediction->SetExternalGrabActive(true);
+	ForceNetUpdate();
+}
+
+void ANPRStablePhysicsPawn::RemoveExternalGrabber()
+{
+	ExternalGrabberCount = FMath::Max(ExternalGrabberCount - 1, 0);
+	if (ExternalGrabberCount > 0 || !bExternallyGrabbed)
+	{
+		return;
+	}
+
+	bExternallyGrabbed = false;
+	NetworkPrediction->SetExternalGrabActive(false);
 	ForceNetUpdate();
 }
 

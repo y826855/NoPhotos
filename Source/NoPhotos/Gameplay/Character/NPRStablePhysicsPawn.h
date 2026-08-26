@@ -57,6 +57,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void ApplyMoveInput(const FVector& WorldMoveInput) override;
 	virtual void ApplyJumpRequest() override;
@@ -79,7 +80,12 @@ private:
 	UFUNCTION()
 	void OnRep_GrabState();
 
+	UFUNCTION()
+	void OnRep_ExternallyGrabbed();
+
 	void HandleGrabbedComponentChanged(UPrimitiveComponent* NewGrabbedComponent);
+	void AddExternalGrabber();
+	void RemoveExternalGrabber();
 	UPrimitiveComponent* ResolveReplicatedGrabbedComponent() const;
 	void UpdateClientSimulationState();
 	void UpdateReplicatedGrabVisualTarget();
@@ -95,6 +101,10 @@ private:
 
 	UPROPERTY(ReplicatedUsing=OnRep_GrabState)
 	FReplicatedStableGrabState ReplicatedGrabState;
+
+	/** 다른 캐릭터에게 잡힌 동안에만 소유 클라이언트의 전신 보정을 활성화합니다. */
+	UPROPERTY(ReplicatedUsing=OnRep_ExternallyGrabbed)
+	bool bExternallyGrabbed = false;
 
 	/** 서버와 클라이언트 손 위치 차이를 확인하기 위한 디버그 값입니다. */
 	UPROPERTY(Replicated)
@@ -126,6 +136,10 @@ private:
 	UPROPERTY(VisibleAnywhere, Category="Network")
 	TObjectPtr<UNPStablePhysicsNetworkPredictionComponent> NetworkPrediction;
 
+	/** 서버에서 이 캐릭터가 현재 잡고 있는 다른 캐릭터를 추적합니다. */
+	UPROPERTY(Transient)
+	TObjectPtr<ANPRStablePhysicsPawn> ExternallyGrabbedTargetPawn = nullptr;
+
 	UPROPERTY(EditAnywhere, Category="Network|Grab Prediction", meta=(ClampMin="0.0"))
 	float LocalGrabPredictionTimeout = 0.35f;
 
@@ -134,4 +148,5 @@ private:
 	bool bAwaitingServerGrabConfirmation = false;
 	float LocalGrabPredictionTimeRemaining = 0.0f;
 	float ViewRotationSendAccumulator = ViewRotationSendInterval;
+	int32 ExternalGrabberCount = 0;
 };
