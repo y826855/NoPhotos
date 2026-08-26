@@ -1,3 +1,5 @@
+//사진 선택창 최종 HUD
+
 #pragma once
 
 #include "CoreMinimal.h"
@@ -10,6 +12,7 @@ class UTextBlock;
 class UTexture2D;
 class UNPPhotoTransferComponent;
 class UNPPictureList;
+class UNPSelectedPictureListWidget;
 class UNPShowPicture;
 
 UCLASS()
@@ -39,6 +42,10 @@ private:
 	UFUNCTION()
 	void HandleSelectRequested(int32 PictureIndex);
 	UFUNCTION()
+	void HandleSelectedPictureClicked(int32 PictureIndex);
+	UFUNCTION()
+	void HandleSelectedPictureRemoveRequested(int32 PictureIndex);
+	UFUNCTION()
 	void HandleNextButtonClicked();
 	UFUNCTION()
 	void HandlePhotoEvidenceChanged();
@@ -58,6 +65,8 @@ private:
 	TObjectPtr<UNPShowPicture> ShowPictureWidget;
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UNPPictureList> PictureListWidget;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UNPSelectedPictureListWidget> SelectedPictureListWidget;
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> SelectedPictureCountText;
 	UPROPERTY(meta = (BindWidget))

@@ -11,6 +11,7 @@
 #include "NoPhotosGameState.h"
 #include "NoPhotosPlayerController.h"
 #include "UI/Result/Pictures/NPPictureList.h"
+#include "UI/Result/Pictures/NPSelectedPictureListWidget.h"
 #include "UI/Result/Pictures/NPShowPicture.h"
 
 void UNPSelectPictureWidget::NativeConstruct()
@@ -22,6 +23,16 @@ void UNPSelectPictureWidget::NativeConstruct()
 		PictureListWidget->OnPictureClicked.AddUniqueDynamic(
 			this,
 			&UNPSelectPictureWidget::HandlePictureClicked);
+	}
+
+	if (IsValid(SelectedPictureListWidget))
+	{
+		SelectedPictureListWidget->OnPictureClicked.AddUniqueDynamic(
+			this,
+			&UNPSelectPictureWidget::HandleSelectedPictureClicked);
+		SelectedPictureListWidget->OnPictureRemoveRequested.AddUniqueDynamic(
+			this,
+			&UNPSelectPictureWidget::HandleSelectedPictureRemoveRequested);
 	}
 
 	if (IsValid(ShowPictureWidget))
@@ -94,6 +105,11 @@ void UNPSelectPictureWidget::InitializePictures(
 
 	PictureListWidget->ClearPictures();
 
+	if (IsValid(SelectedPictureListWidget))
+	{
+		SelectedPictureListWidget->ClearSelectedPictures();
+	}
+
 	PictureTextures.Empty();
 	PicturePhotoIds.Empty();
 	CurrentPictureIndex = INDEX_NONE;
@@ -155,6 +171,10 @@ void UNPSelectPictureWidget::HandleSelectRequested(
 	if (bWasSelected)
 	{
 		PictureListWidget->SetPictureSelected(PictureIndex, false);
+		if (IsValid(SelectedPictureListWidget))
+		{
+			SelectedPictureListWidget->RemoveSelectedPicture(PictureIndex);
+		}
 		ShowPictureWidget->SetSelected(false);
 		UpdateSelectedPictureCountText();
 		return;
@@ -167,7 +187,44 @@ void UNPSelectPictureWidget::HandleSelectRequested(
 	}
 
 	PictureListWidget->SetPictureSelected(PictureIndex, true);
+	if (IsValid(SelectedPictureListWidget))
+	{
+		SelectedPictureListWidget->AddSelectedPicture(
+			PictureTextures[PictureIndex],
+			PictureIndex);
+	}
 	ShowPictureWidget->SetSelected(true);
+	UpdateSelectedPictureCountText();
+}
+
+void UNPSelectPictureWidget::HandleSelectedPictureClicked(
+	const int32 PictureIndex)
+{
+	ShowPicture(PictureIndex);
+}
+
+void UNPSelectPictureWidget::HandleSelectedPictureRemoveRequested(
+	const int32 PictureIndex)
+{
+	if (!IsValid(PictureListWidget)
+		|| !PictureTextures.IsValidIndex(PictureIndex)
+		|| !PictureListWidget->IsPictureSelected(PictureIndex))
+	{
+		return;
+	}
+
+	PictureListWidget->SetPictureSelected(PictureIndex, false);
+
+	if (IsValid(SelectedPictureListWidget))
+	{
+		SelectedPictureListWidget->RemoveSelectedPicture(PictureIndex);
+	}
+
+	if (CurrentPictureIndex == PictureIndex && IsValid(ShowPictureWidget))
+	{
+		ShowPictureWidget->SetSelected(false);
+	}
+
 	UpdateSelectedPictureCountText();
 }
 
@@ -195,7 +252,7 @@ void UNPSelectPictureWidget::HandleNextButtonClicked()
 
 	if (IsValid(SelectedPictureCountText))
 	{
-		SelectedPictureCountText->SetText(FText::FromString(TEXT("다른 유저를 기다리는 중...")));
+		SelectedPictureCountText->SetText(FText::FromString(TEXT("대기 중...")));
 	}
 
 	BP_OnSelectionConfirmed(GetSelectedPictureIndices());
@@ -273,9 +330,7 @@ void UNPSelectPictureWidget::RequestNextPicture()
 		if (UTexture2D* CachedTexture =
 			TransferComponent->FindReceivedPhoto(DownloadingPhotoId))
 		{
-			HandlePhotoTextureReceived(
-				DownloadingPhotoId,
-				CachedTexture);
+			HandlePhotoTextureReceived(DownloadingPhotoId, CachedTexture);
 			return;
 		}
 
@@ -315,22 +370,18 @@ void UNPSelectPictureWidget::HandlePhotoTextureReceived(
 void UNPSelectPictureWidget::ShowPicture(
 	const int32 PictureIndex)
 {
-	if (!PictureTextures.IsValidIndex(PictureIndex)
-		|| !IsValid(ShowPictureWidget))
+	if (!PictureTextures.IsValidIndex(PictureIndex)	|| !IsValid(ShowPictureWidget))
 	{
 		return;
 	}
 
 	CurrentPictureIndex = PictureIndex;
 
-	ShowPictureWidget->SetPicture(
-		PictureTextures[PictureIndex],
-		PictureIndex);
+	ShowPictureWidget->SetPicture(PictureTextures[PictureIndex],	PictureIndex);
 
 	if (IsValid(PictureListWidget))
 	{
-		ShowPictureWidget->SetSelected(
-			PictureListWidget->IsPictureSelected(PictureIndex));
+		ShowPictureWidget->SetSelected(PictureListWidget->IsPictureSelected(PictureIndex));
 	}
 }
 
@@ -342,14 +393,10 @@ void UNPSelectPictureWidget::UpdateSelectedPictureCountText()
 		return;
 	}
 
-	const int32 SelectedCount =
-		PictureListWidget->GetSelectedPictureCount();
+	const int32 SelectedCount =	PictureListWidget->GetSelectedPictureCount();
 
 	SelectedPictureCountText->SetText(
-		FText::FromString(FString::Printf(
-			TEXT("고른 사진 수: %d / %d"),
-			SelectedCount,
-			MaxSelectedPictureCount)));
+		FText::FromString(FString::Printf(TEXT("%d / %d"), SelectedCount, MaxSelectedPictureCount)));
 }
 
 TArray<int32> UNPSelectPictureWidget::GetSelectedPictureIndices() const
@@ -361,9 +408,7 @@ TArray<int32> UNPSelectPictureWidget::GetSelectedPictureIndices() const
 		return SelectedIndices;
 	}
 
-	for (int32 PictureIndex = 0;
-		PictureIndex < PictureTextures.Num();
-		++PictureIndex)
+	for (int32 PictureIndex = 0; PictureIndex < PictureTextures.Num(); ++PictureIndex)
 	{
 		if (PictureListWidget->IsPictureSelected(PictureIndex))
 		{
