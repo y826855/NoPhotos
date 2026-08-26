@@ -1,18 +1,32 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "NoPhotosPlayerController.h"
+#include "GameFramework/PlayerController.h"
 #include "NPMainPlayerController.generated.h"
 
+class UInputAction;
+class UInputMappingContext;
+class UNPPhotoCaptureComponent;
+class UNPPhotoFlashWidget;
+class UNPPhotoTransferComponent;
 class UNPUserWidget;
+class UUserWidget;
 
 UCLASS()
-class NOPHOTOS_API ANPMainPlayerController	: public ANoPhotosPlayerController
+class NOPHOTOS_API ANPMainPlayerController : public APlayerController
 {
 	GENERATED_BODY()
 
 public:
 	ANPMainPlayerController();
+
+	UFUNCTION(BlueprintPure, Category = "Photo")
+	UNPPhotoCaptureComponent* GetPhotoCaptureComponent() const { return PhotoCaptureComponent; }
+
+	UFUNCTION(BlueprintPure, Category = "Photo")
+	UNPPhotoTransferComponent* GetPhotoTransferComponent() const { return PhotoTransferComponent; }
+
+	void PlayPhotoFlash();
 	
 	UFUNCTION(BlueprintPure, Category = "Room")
 	bool IsListenServerHost() const;
@@ -39,6 +53,33 @@ public:
 	void ServerConfirmPictureSelection(const TArray<FGuid>& SelectedPhotoIds);
 
 protected:
+	virtual void BeginPlay() override;
+	virtual void SetupInputComponent() override;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Photo")
+	TObjectPtr<UInputAction> TogglePhotoModeAction;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Input|Photo")
+	TObjectPtr<UInputAction> TakePhotoAction;
+
+	UPROPERTY(EditAnywhere, Category = "Input|Input Mappings")
+	TArray<TObjectPtr<UInputMappingContext>> DefaultMappingContexts;
+
+	UPROPERTY(EditAnywhere, Category = "Input|Input Mappings")
+	TArray<TObjectPtr<UInputMappingContext>> MobileExcludedMappingContexts;
+
+	UPROPERTY(EditAnywhere, Category = "Input|Touch Controls")
+	TSubclassOf<UUserWidget> MobileControlsWidgetClass;
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> MobileControlsWidget;
+
+	UPROPERTY(EditAnywhere, Config, Category = "Input|Touch Controls")
+	bool bForceTouchControls = false;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Photo|UI")
+	TSubclassOf<UNPPhotoFlashWidget> PhotoFlashWidgetClass;
+
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UNPUserWidget> GameScreenWidgetClass;
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
@@ -50,6 +91,19 @@ protected:
 	TSoftObjectPtr<UWorld> MainMenuLevel;
 
 private:
+	void HandleTogglePhotoModeInput();
+	void HandleTakePhotoInput();
+	bool ShouldUseTouchControls() const;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Photo", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UNPPhotoCaptureComponent> PhotoCaptureComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Photo", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UNPPhotoTransferComponent> PhotoTransferComponent;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNPPhotoFlashWidget> PhotoFlashWidget;
+
 	UFUNCTION(Server, Reliable)
 	void ServerRequestRestartRoom();
 

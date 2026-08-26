@@ -2,9 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameMode.h"
+#include "Gameplay/Photo/NPPhotoEvidenceTypes.h"
 #include "NPMainGameMode.generated.h"
 
 class UWorld;
+class UNPPhotoEvidenceService;
+class UNPPhotoRepository;
+class UNPRelicDeliveryService;
 
 UCLASS()
 class NOPHOTOS_API ANPMainGameMode : public AGameMode
@@ -21,6 +25,15 @@ public:
 	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
 
 	void RequestRestartRoom(APlayerController* RequestingPlayer);
+	FNPPhotoEvidenceResult HandlePhotoCaptureRequest(const FNPPhotoCaptureRequest& Request);
+	UNPPhotoRepository* GetPhotoRepository() const { return PhotoRepository; }
+	UNPRelicDeliveryService* GetRelicDeliveryService() const { return RelicDeliveryService; }
+	void HandlePhotoStored(APlayerController* Photographer, uint16 CaptureSequence, const FGuid& PhotoId);
+
+	virtual void InitGame(
+		const FString& MapName,
+		const FString& Options,
+		FString& ErrorMessage) override;
 
 protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Main Game", meta = (ClampMin = "1"))
@@ -28,6 +41,9 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Main Game")
 	TSoftObjectPtr<UWorld> RoomLevel;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Photo")
+	TSubclassOf<UNPPhotoEvidenceService> PhotoEvidenceServiceClass;
 
 private:
 	void StartMainGame();
@@ -39,4 +55,13 @@ private:
 	FTimerHandle MainGameTimer;
 	bool bInitialScoreAwarded = false;
 	bool bReturningToRoom = false;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNPPhotoEvidenceService> PhotoEvidenceService;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNPPhotoRepository> PhotoRepository;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNPRelicDeliveryService> RelicDeliveryService;
 };

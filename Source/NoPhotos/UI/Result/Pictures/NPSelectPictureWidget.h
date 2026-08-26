@@ -4,7 +4,7 @@
 #include "UI/NPUserWidget.h"
 #include "NPSelectPictureWidget.generated.h"
 
-class ANoPhotosGameState;
+class ANPMainGameState;
 class UButton;
 class UTextBlock;
 class UTexture2D;
@@ -64,7 +64,7 @@ private:
 	TObjectPtr<UButton> NextButton;
 
 	UPROPERTY(Transient)
-	TObjectPtr<ANoPhotosGameState> ObservedGameState;
+	TObjectPtr<ANPMainGameState> ObservedGameState;
 	UPROPERTY(Transient)
 	TObjectPtr<UNPPhotoTransferComponent> TransferComponent;
 

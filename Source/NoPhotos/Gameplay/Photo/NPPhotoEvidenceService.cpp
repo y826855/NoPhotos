@@ -13,9 +13,9 @@
 #include "Gameplay/Photo/NPPhotoLog.h"
 #include "Gameplay/Relic/NPBaseRelic.h"
 #include "Gameplay/Relic/NPBreakableRelic.h"
-#include "NoPhotosGameMode.h"
+#include "Core/Main/NPMainGameMode.h"
 
-void UNPPhotoEvidenceService::Initialize(ANoPhotosGameMode* InOwningGameMode)
+void UNPPhotoEvidenceService::Initialize(ANPMainGameMode* InOwningGameMode)
 {
 	OwningGameMode = InOwningGameMode;
 }

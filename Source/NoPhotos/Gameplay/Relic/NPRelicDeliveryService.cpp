@@ -9,9 +9,9 @@
 #include "Gameplay/Relic/NPBaseRelic.h"
 #include "Gameplay/Relic/NPRelicReturnZone.h"
 #include "NoPhotos.h"
-#include "NoPhotosGameMode.h"
+#include "Core/Main/NPMainGameMode.h"
 
-void UNPRelicDeliveryService::Initialize(ANoPhotosGameMode* InGameMode)
+void UNPRelicDeliveryService::Initialize(ANPMainGameMode* InGameMode)
 {
 	OwningGameMode = InGameMode;
 }

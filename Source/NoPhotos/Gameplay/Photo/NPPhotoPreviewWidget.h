@@ -9,7 +9,7 @@ class UImage;
 class UTextBlock;
 class UTexture;
 class UTexture2D;
-class ANoPhotosGameState;
+class ANPMainGameState;
 class UNPPhotoTransferComponent;
 
 /** 새 사진 알림을 표시하고 요청한 네트워크 사진을 2초 동안 보여주는 WBP 기반 클래스입니다. */
@@ -68,7 +68,7 @@ private:
 	TObjectPtr<UTexture> DisplayedPhoto;
 
 	UPROPERTY(Transient)
-	TObjectPtr<ANoPhotosGameState> ObservedGameState;
+	TObjectPtr<ANPMainGameState> ObservedGameState;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNPPhotoTransferComponent> TransferComponent;

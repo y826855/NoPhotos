@@ -9,8 +9,8 @@
 #include "Gameplay/Photo/NPPhotoLog.h"
 #include "Gameplay/Photo/NPPhotoTransferComponent.h"
 #include "GameFramework/PlayerController.h"
-#include "NoPhotosGameState.h"
-#include "NoPhotosPlayerController.h"
+#include "Core/Main/NPMainGameState.h"
+#include "Core/Main/NPMainPlayerController.h"
 #include "TimerManager.h"
 
 void UNPPhotoPreviewWidget::NativeConstruct()
@@ -29,7 +29,7 @@ void UNPPhotoPreviewWidget::NativeConstruct()
 		PhotoReceiveButton->OnClicked.AddUniqueDynamic(this, &UNPPhotoPreviewWidget::HandleReceiveButtonClicked);
 	}
 
-	if (ANoPhotosPlayerController* Controller = Cast<ANoPhotosPlayerController>(GetOwningPlayer()))
+	if (ANPMainPlayerController* Controller = Cast<ANPMainPlayerController>(GetOwningPlayer()))
 	{
 		TransferComponent = Controller->GetPhotoTransferComponent();
 		if (TransferComponent)
@@ -38,7 +38,7 @@ void UNPPhotoPreviewWidget::NativeConstruct()
 		}
 	}
 
-	ObservedGameState = GetWorld() ? GetWorld()->GetGameState<ANoPhotosGameState>() : nullptr;
+	ObservedGameState = GetWorld() ? GetWorld()->GetGameState<ANPMainGameState>() : nullptr;
 	if (ObservedGameState)
 	{
 		ObservedGameState->OnPhotoEvidenceChanged.AddUniqueDynamic(this, &UNPPhotoPreviewWidget::HandlePhotoEvidenceChanged);
@@ -101,7 +101,7 @@ void UNPPhotoPreviewWidget::RefreshAvailablePhotos()
 {
 	if (!ObservedGameState)
 	{
-		ObservedGameState = GetWorld() ? GetWorld()->GetGameState<ANoPhotosGameState>() : nullptr;
+		ObservedGameState = GetWorld() ? GetWorld()->GetGameState<ANPMainGameState>() : nullptr;
 	}
 	if (!ObservedGameState)
 	{

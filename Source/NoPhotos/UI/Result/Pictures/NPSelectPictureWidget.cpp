@@ -8,8 +8,8 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "Gameplay/Photo/NPPhotoTransferComponent.h"
-#include "NoPhotosGameState.h"
-#include "NoPhotosPlayerController.h"
+#include "Core/Main/NPMainGameState.h"
+#include "Core/Main/NPMainPlayerController.h"
 #include "UI/Result/Pictures/NPPictureList.h"
 #include "UI/Result/Pictures/NPShowPicture.h"
 
@@ -38,8 +38,8 @@ void UNPSelectPictureWidget::NativeConstruct()
 			&UNPSelectPictureWidget::HandleNextButtonClicked);
 	}
 
-	if (ANoPhotosPlayerController* Controller =
-		Cast<ANoPhotosPlayerController>(GetOwningPlayer()))
+	if (ANPMainPlayerController* Controller =
+		Cast<ANPMainPlayerController>(GetOwningPlayer()))
 	{
 		TransferComponent = Controller->GetPhotoTransferComponent();
 		if (IsValid(TransferComponent))
@@ -51,7 +51,7 @@ void UNPSelectPictureWidget::NativeConstruct()
 	}
 
 	ObservedGameState = GetWorld()
-		? GetWorld()->GetGameState<ANoPhotosGameState>()
+		? GetWorld()->GetGameState<ANPMainGameState>()
 		: nullptr;
 
 	if (IsValid(ObservedGameState))
@@ -212,7 +212,7 @@ void UNPSelectPictureWidget::RequestOwnedPictures()
 	if (!IsValid(ObservedGameState))
 	{
 		ObservedGameState = GetWorld()
-			? GetWorld()->GetGameState<ANoPhotosGameState>()
+			? GetWorld()->GetGameState<ANPMainGameState>()
 			: nullptr;
 
 		if (IsValid(ObservedGameState))

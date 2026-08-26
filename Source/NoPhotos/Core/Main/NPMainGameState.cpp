@@ -21,6 +21,9 @@ void ANPMainGameState::GetLifetimeReplicatedProps(
 	DOREPLIFETIME(
 		ANPMainGameState,
 		PictureSelectionCompletedPlayers);
+	DOREPLIFETIME(ANPMainGameState, PhotoEvidence);
+	DOREPLIFETIME(ANPMainGameState, TransferredPhotoIds);
+	DOREPLIFETIME(ANPMainGameState, SelectedPhotos);
 }
 
 TArray<FNPPlayerRanking> ANPMainGameState::GetPlayerRankings() const
@@ -48,6 +51,109 @@ bool ANPMainGameState::IsPlayerPictureSelectionComplete(const APlayerState* Play
 	return IsValid(PlayerState)
 		&& PictureSelectionCompletedPlayers.Contains(
 			const_cast<APlayerState*>(PlayerState));
+}
+
+TArray<FGuid> ANPMainGameState::GetSelectedPhotoIds(const APlayerState* PlayerState) const
+{
+	if (!IsValid(PlayerState))
+	{
+		return {};
+	}
+
+	for (const FNPPlayerSelectedPhotos& Selected : SelectedPhotos)
+	{
+		if (Selected.PlayerState == PlayerState)
+		{
+			return Selected.PhotoIds;
+		}
+	}
+
+	return {};
+}
+
+void ANPMainGameState::SetSelectedPhotoIds(APlayerState* PlayerState, const TArray<FGuid>& PhotoIds)
+{
+	if (!HasAuthority() || !IsValid(PlayerState))
+	{
+		return;
+	}
+
+	for (FNPPlayerSelectedPhotos& Selected : SelectedPhotos)
+	{
+		if (Selected.PlayerState == PlayerState)
+		{
+			Selected.PhotoIds = PhotoIds;
+			ForceNetUpdate();
+			OnPhotoEvidenceChanged.Broadcast();
+			return;
+		}
+	}
+
+	FNPPlayerSelectedPhotos& NewSelected = SelectedPhotos.AddDefaulted_GetRef();
+	NewSelected.PlayerState = PlayerState;
+	NewSelected.PhotoIds = PhotoIds;
+	ForceNetUpdate();
+	OnPhotoEvidenceChanged.Broadcast();
+}
+
+void ANPMainGameState::AddPhotoEvidence(const FNPPhotoEvidenceResult& Result, const int32 AwardedScore)
+{
+	if (!HasAuthority() || !Result.bSuccess)
+	{
+		return;
+	}
+
+	FNPReplicatedPhotoEvidence& NewEvidence = PhotoEvidence.AddDefaulted_GetRef();
+	NewEvidence.CaptureSequence = Result.CaptureSequence;
+	NewEvidence.Photographer = Result.Photographer;
+	NewEvidence.Thief = Result.Thief;
+	NewEvidence.Relic = Result.Relic;
+	NewEvidence.AwardedScore = AwardedScore;
+	NewEvidence.ServerCaptureTime = Result.ServerCaptureTime;
+	if (PhotoEvidence.Num() > MaximumStoredPhotos)
+	{
+		PhotoEvidence.RemoveAt(0, PhotoEvidence.Num() - MaximumStoredPhotos);
+	}
+	ForceNetUpdate();
+	OnPhotoEvidenceChanged.Broadcast();
+}
+
+void ANPMainGameState::RegisterTransferredPhoto(const FGuid& PhotoId)
+{
+	if (!HasAuthority() || !PhotoId.IsValid() || TransferredPhotoIds.Contains(PhotoId))
+	{
+		return;
+	}
+
+	TransferredPhotoIds.Add(PhotoId);
+	if (TransferredPhotoIds.Num() > MaximumStoredPhotos)
+	{
+		TransferredPhotoIds.RemoveAt(0, TransferredPhotoIds.Num() - MaximumStoredPhotos);
+	}
+	ForceNetUpdate();
+	OnPhotoEvidenceChanged.Broadcast();
+}
+
+void ANPMainGameState::AttachPhotoId(
+	APlayerState* Photographer,
+	const uint16 CaptureSequence,
+	const FGuid& PhotoId)
+{
+	if (!HasAuthority() || !PhotoId.IsValid())
+	{
+		return;
+	}
+
+	for (FNPReplicatedPhotoEvidence& Evidence : PhotoEvidence)
+	{
+		if (Evidence.Photographer == Photographer && Evidence.CaptureSequence == CaptureSequence)
+		{
+			Evidence.PhotoId = PhotoId;
+			ForceNetUpdate();
+			OnPhotoEvidenceChanged.Broadcast();
+			return;
+		}
+	}
 }
 
 void ANPMainGameState::ConfirmPictureSelection(APlayerController* PlayerController)
@@ -221,6 +327,21 @@ void ANPMainGameState::OnRep_MainGameState()
 void ANPMainGameState::OnRep_PictureSelectionCompletedPlayers()
 {
 	OnPictureSelectionStateChanged.Broadcast();
+}
+
+void ANPMainGameState::OnRep_PhotoEvidence()
+{
+	OnPhotoEvidenceChanged.Broadcast();
+}
+
+void ANPMainGameState::OnRep_TransferredPhotoIds()
+{
+	OnPhotoEvidenceChanged.Broadcast();
+}
+
+void ANPMainGameState::OnRep_SelectedPhotos()
+{
+	OnPhotoEvidenceChanged.Broadcast();
 }
 
 bool ANPMainGameState::AreAllConnectedPlayersPictureSelectionComplete() const

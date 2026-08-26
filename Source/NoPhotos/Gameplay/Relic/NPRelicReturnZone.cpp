@@ -3,7 +3,7 @@
 #include "Components/BoxComponent.h"
 #include "Gameplay/Relic/NPBaseRelic.h"
 #include "Gameplay/Relic/NPRelicDeliveryService.h"
-#include "NoPhotosGameMode.h"
+#include "Core/Main/NPMainGameMode.h"
 
 ANPRelicReturnZone::ANPRelicReturnZone()
 {
@@ -39,8 +39,8 @@ void ANPRelicReturnZone::HandleReturnVolumeBeginOverlap(
 	const FHitResult&)
 {
 	ANPBaseRelic* Relic = Cast<ANPBaseRelic>(OtherActor);
-	ANoPhotosGameMode* GameMode = GetWorld()
-		? GetWorld()->GetAuthGameMode<ANoPhotosGameMode>()
+	ANPMainGameMode* GameMode = GetWorld()
+		? GetWorld()->GetAuthGameMode<ANPMainGameMode>()
 		: nullptr;
 	UNPRelicDeliveryService* DeliveryService = GameMode
 		? GameMode->GetRelicDeliveryService()
