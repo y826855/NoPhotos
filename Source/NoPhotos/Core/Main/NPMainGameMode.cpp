@@ -112,7 +112,6 @@ void ANPMainGameMode::PostLogin(APlayerController* NewPlayer)
 	}
 
 	RefreshPlayerRankings();
-	TryAwardInitialScore();
 }
 
 void ANPMainGameMode::Logout(AController* Exiting)
@@ -158,7 +157,6 @@ void ANPMainGameMode::HandleSeamlessTravelPlayer(AController*& Controller)
 	}
 
 	RefreshPlayerRankings();
-	TryAwardInitialScore();
 }
 
 AActor* ANPMainGameMode::ChoosePlayerStart_Implementation(AController* Player)
@@ -250,7 +248,6 @@ void ANPMainGameMode::StartMainGame()
 	NPMainGameLog::Info(
 		this,
 		FString::Printf(TEXT("게임 시작: 제한시간=%d초"), GameDurationSeconds));
-	TryAwardInitialScore();
 	GetWorldTimerManager().SetTimer(
 		MainGameTimer,
 		this,
@@ -285,36 +282,6 @@ void ANPMainGameMode::RefreshPlayerRankings()
 	if (ANPMainGameState* MainGameState = GetGameState<ANPMainGameState>())
 	{
 		MainGameState->RefreshPlayerRankings();
-	}
-}
-
-void ANPMainGameMode::TryAwardInitialScore()
-{
-	if (bInitialScoreAwarded)
-	{
-		return;
-	}
-
-	ANPMainGameState* MainGameState = GetGameState<ANPMainGameState>();
-	if (!MainGameState || !MainGameState->IsMainGameActive())
-	{
-		return;
-	}
-
-	for (APlayerState* PlayerState : MainGameState->PlayerArray)
-	{
-		ANPPlayerState* NPPlayerState = Cast<ANPPlayerState>(PlayerState);
-		if (!NPPlayerState)
-		{
-			continue;
-		}
-
-		bInitialScoreAwarded = true;
-		NPPlayerState->AddScore(10);
-		NPMainGameLog::Info(
-			this,
-			FString::Printf(TEXT("시작 점수 지급: Player=%s, Score=10"), *NPPlayerState->GetPlayerName()));
-		return;
 	}
 }
 

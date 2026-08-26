@@ -49,11 +49,9 @@ private:
 	void StartMainGame();
 	void UpdateMainGameTimer();
 	void RefreshPlayerRankings();
-	void TryAwardInitialScore();
 	void HandleWaitingRoomRestored(bool bWasSuccessful);
 
 	FTimerHandle MainGameTimer;
-	bool bInitialScoreAwarded = false;
 	bool bReturningToRoom = false;
 
 	UPROPERTY(Transient)
