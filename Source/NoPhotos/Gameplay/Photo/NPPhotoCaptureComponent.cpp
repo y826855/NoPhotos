@@ -355,8 +355,8 @@ void UNPPhotoCaptureComponent::ClientReceivePhotoResult_Implementation(
 		TEXT("[Result] Success=%s Reason=%d Thief=%s Relic=%s"),
 		Result.bSuccess ? TEXT("true") : TEXT("false"),
 		static_cast<int32>(Result.FailureReason),
-		*GetNameSafe(Result.Thief),
-		*GetNameSafe(Result.Relic));
+		*GetNameSafe(Result.Thief.Get()),
+		*GetNameSafe(Result.Relic.Get()));
 
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	if (Result.bSuccess && GEngine)
@@ -367,9 +367,9 @@ void UNPPhotoCaptureComponent::ClientReceivePhotoResult_Implementation(
 			FColor::Green,
 			FString::Printf(
 				TEXT("[사진 판정 성공]\n촬영자: %s\n도둑: %s\n유물: %s"),
-				*GetNameSafe(Result.Photographer),
-				*GetNameSafe(Result.Thief),
-				*GetNameSafe(Result.Relic)));
+				*GetNameSafe(Result.Photographer.Get()),
+				*GetNameSafe(Result.Thief.Get()),
+				*GetNameSafe(Result.Relic.Get())));
 	}
 #endif
 

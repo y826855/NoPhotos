@@ -142,8 +142,8 @@ FNPPhotoEvidenceResult UNPPhotoEvidenceService::EvaluatePhoto(
 			LogNPPhoto,
 			Log,
 			TEXT("[Evidence] Success. Thief=%s Relic=%s"),
-			*GetNameSafe(Result.Thief),
-			*GetNameSafe(Result.Relic));
+			*GetNameSafe(Result.Thief.Get()),
+			*GetNameSafe(Result.Relic.Get()));
 	}
 	return Result;
 }

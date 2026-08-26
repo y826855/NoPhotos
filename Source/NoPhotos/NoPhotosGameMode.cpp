@@ -3,6 +3,7 @@
 #include "NoPhotosGameMode.h"
 
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
 #include "Gameplay/Photo/NPPhotoEvidenceService.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
 #include "Gameplay/Photo/NPPhotoRepository.h"
@@ -77,9 +78,9 @@ FNPPhotoEvidenceResult ANoPhotosGameMode::HandlePhotoCaptureRequest(
 		LogNPPhoto,
 		Log,
 		TEXT("[GameMode] Photo evidence accepted. Photographer=%s Thief=%s Relic=%s"),
-		*GetNameSafe(Result.Photographer),
-		*GetNameSafe(Result.Thief),
-		*GetNameSafe(Result.Relic));
+		*GetNameSafe(Result.Photographer.Get()),
+		*GetNameSafe(Result.Thief.Get()),
+		*GetNameSafe(Result.Relic.Get()));
 	return Result;
 }
 
