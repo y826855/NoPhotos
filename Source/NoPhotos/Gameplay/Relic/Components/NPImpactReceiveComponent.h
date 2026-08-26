@@ -24,6 +24,9 @@ class NOPHOTOS_API UNPImpactReceiveComponent : public UActorComponent
 public:
 	UNPImpactReceiveComponent();
 
+	UFUNCTION(BlueprintPure, Category = "Durability")
+	bool IsBroken() const { return CurrentHealth <= 0; }
+
 	void IgnoreGrabImpact();
 	/** 루트가 아닌 Primitive에서 충격을 받을 오브젝트가 지정할 수 있습니다. */
 	void SetImpactTargetComponent(UPrimitiveComponent* InTargetComponent);

@@ -87,6 +87,29 @@ bool ANPRelicCase::UnlockCase()
 	return true;
 }
 
+bool ANPRelicCase::LockCase()
+{
+	if (!HasAuthority() || !bIsUnlocked || bIsBroken)
+	{
+		return false;
+	}
+
+	bIsUnlocked = false;
+	ApplyCaseState();
+	ForceNetUpdate();
+	return true;
+}
+
+bool ANPRelicCase::TrySetLocked_Implementation(const bool bLocked)
+{
+	return bLocked ? LockCase() : UnlockCase();
+}
+
+bool ANPRelicCase::IsLocked_Implementation() const
+{
+	return !IsAccessible();
+}
+
 void ANPRelicCase::OnRep_IsBroken()
 {
 	ApplyCaseState();
@@ -223,10 +246,23 @@ void ANPRelicCase::ApplyCaseState()
 	{
 		ApplyBrokenState();
 	}
-	else if (bIsUnlocked && !bUnlockedEventDispatched)
+	else if (bIsUnlocked)
 	{
-		bUnlockedEventDispatched = true;
-		OnCaseUnlocked();
+		bLockedEventDispatched = false;
+		if (!bUnlockedEventDispatched)
+		{
+			bUnlockedEventDispatched = true;
+			OnCaseUnlocked();
+		}
+	}
+	else
+	{
+		bUnlockedEventDispatched = false;
+		if (!bLockedEventDispatched)
+		{
+			bLockedEventDispatched = true;
+			OnCaseLocked();
+		}
 	}
 }
 
