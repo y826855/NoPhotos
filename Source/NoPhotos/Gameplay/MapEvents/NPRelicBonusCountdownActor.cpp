@@ -55,8 +55,26 @@ void ANPRelicBonusCountdownActor::SetCountdownDuration(const float DurationSecon
 		return;
 	}
 
-	EndServerWorldTime = GetSynchronizedWorldTime() + FMath::Max(0.0f, DurationSeconds);
+	SetCountdownEndServerWorldTime(
+		GetSynchronizedWorldTime() + FMath::Max(0.0f, DurationSeconds));
+}
+
+void ANPRelicBonusCountdownActor::SetCountdownEndServerWorldTime(
+	const float InEndServerWorldTime)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	EndServerWorldTime = FMath::Max(0.0f, InEndServerWorldTime);
 	ForceNetUpdate();
+	UpdateCountdown();
+}
+
+void ANPRelicBonusCountdownActor::OnRep_EndServerWorldTime()
+{
+	LastDisplayedSeconds = INDEX_NONE;
 	UpdateCountdown();
 }
 

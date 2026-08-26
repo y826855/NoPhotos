@@ -1,6 +1,7 @@
 #include "NPMapEvent.h"
 
 #include "Engine/World.h"
+#include "GameFramework/GameStateBase.h"
 #include "Net/UnrealNetwork.h"
 #include "NPMapEventDefinition.h"
 #include "TimerManager.h"
@@ -18,6 +19,7 @@ void ANPMapEvent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(ANPMapEvent, EventDefinition);
 	DOREPLIFETIME(ANPMapEvent, bIsActive);
+	DOREPLIFETIME(ANPMapEvent, EventEndServerWorldTime);
 }
 
 void ANPMapEvent::InitializeEvent(
@@ -43,6 +45,11 @@ FText ANPMapEvent::GetEventDisplayName() const
 	return EventDefinition ? EventDefinition->GetDisplayName() : EventDisplayName;
 }
 
+FText ANPMapEvent::GetEventDescription() const
+{
+	return EventDefinition ? EventDefinition->GetDescription() : EventDescription;
+}
+
 ENPMapEventType ANPMapEvent::GetEventType() const
 {
 	return EventDefinition ? EventDefinition->GetEventType() : EventType;
@@ -56,6 +63,21 @@ ENPMapEventScale ANPMapEvent::GetEventScale() const
 float ANPMapEvent::GetEventDuration() const
 {
 	return EventDefinition ? EventDefinition->GetDuration() : FMath::Max(0.0f, Duration);
+}
+
+float ANPMapEvent::GetRemainingEventTime() const
+{
+	if (!bIsActive || EventEndServerWorldTime <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	const UWorld* World = GetWorld();
+	const AGameStateBase* GameState = World ? World->GetGameState() : nullptr;
+	const float CurrentServerWorldTime = GameState
+		? GameState->GetServerWorldTimeSeconds()
+		: (World ? World->GetTimeSeconds() : 0.0f);
+	return FMath::Max(0.0f, EventEndServerWorldTime - CurrentServerWorldTime);
 }
 
 bool ANPMapEvent::CanRunAtEventTime(const ENPMapEventType EventTimeType) const
@@ -72,12 +94,19 @@ bool ANPMapEvent::StartEvent()
 		return false;
 	}
 
+	const float EventDuration = GetEventDuration();
+	const AGameStateBase* GameState = World->GetGameState();
+	const float CurrentServerWorldTime = GameState
+		? GameState->GetServerWorldTimeSeconds()
+		: World->GetTimeSeconds();
+	EventEndServerWorldTime = EventDuration > 0.0f
+		? CurrentServerWorldTime + EventDuration
+		: 0.0f;
 	bIsActive = true;
 	ApplyEventState(true);
 	OnEventStarted.Broadcast(this);
 	ForceNetUpdate();
 
-	const float EventDuration = GetEventDuration();
 	if (EventDuration > 0.0f)
 	{
 		World->GetTimerManager().SetTimer(DurationTimer, this, &ANPMapEvent::FinishEvent, EventDuration, false);
@@ -95,6 +124,7 @@ void ANPMapEvent::FinishEvent()
 	}
 
 	World->GetTimerManager().ClearTimer(DurationTimer);
+	EventEndServerWorldTime = 0.0f;
 	bIsActive = false;
 	ApplyEventState(false);
 	OnEventFinished.Broadcast(this);

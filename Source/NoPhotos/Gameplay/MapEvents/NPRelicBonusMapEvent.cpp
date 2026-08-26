@@ -27,6 +27,7 @@ ANPRelicBonusMapEvent::ANPRelicBonusMapEvent()
 	EventType = ENPMapEventType::TypeA;
 	EventScale = ENPMapEventScale::Medium;
 	Duration = 60.0f;
+	LocationSource = ENPMapEventLocationSource::Volume;
 	ReturnZoneClass = ANPRelicReturnZone::StaticClass();
 	CountdownActorClass = ANPRelicBonusCountdownActor::StaticClass();
 	ReturnZoneSpawnGroup = FGameplayTag::RequestGameplayTag(FName(TEXT("RelicBonus")), false);
@@ -209,9 +210,10 @@ void ANPRelicBonusMapEvent::SpawnReturnZones()
 		for (int32 Attempt = 0; Attempt < PlacementAttempts; ++Attempt)
 		{
 			FTransform GroundTransform;
-			if (!EventManager->FindRandomSpawnTransform(
+			if (!EventManager->FindRandomSpawnTransformBySource(
 					ReturnZoneSpawnGroup,
 					ReturnZoneHalfExtent,
+					GetLocationSource(),
 					GroundTransform))
 			{
 				++LocationSearchFailureCount;
@@ -242,6 +244,16 @@ void ANPRelicBonusMapEvent::SpawnReturnZones()
 				{
 					SpawnedCountdownActors.Add(Countdown);
 				}
+				else
+				{
+					UE_LOG(
+						LogNPRelicBonus,
+						Warning,
+						TEXT("반환 존 카운트다운 생성 실패: ZoneIndex=%d Class=%s EndServerTime=%.2f"),
+						ZoneIndex,
+						*GetNameSafe(CountdownActorClass),
+						GetEventEndServerWorldTime());
+				}
 				if (AActor* Helicopter = SpawnHelicopterAt(GroundTransform))
 				{
 					SpawnedHelicopters.Add(Helicopter);
@@ -252,7 +264,16 @@ void ANPRelicBonusMapEvent::SpawnReturnZones()
 						ZoneIndex,
 						*GetNameSafe(Helicopter),
 						*Helicopter->GetActorLocation().ToCompactString());
-					BeginRopeDeployment(Helicopter, ReturnZone, GroundTransform);
+					if (!BeginRopeDeployment(Helicopter, ReturnZone, GroundTransform))
+					{
+						UE_LOG(
+							LogNPRelicBonus,
+							Warning,
+							TEXT("로프 하강 시작 실패: ZoneIndex=%d RopeClass=%s RopeTipClass=%s"),
+							ZoneIndex,
+							*GetNameSafe(RopeClass),
+							*GetNameSafe(RopeTipClass));
+					}
 					MulticastSpawnGroundWind(GroundTransform.GetLocation());
 				}
 				else
@@ -359,8 +380,15 @@ ANPRelicBonusCountdownActor* ANPRelicBonusMapEvent::SpawnCountdownAt(
 		return nullptr;
 	}
 
-	Countdown->SetCountdownDuration(EventDuration);
+	Countdown->SetCountdownEndServerWorldTime(GetEventEndServerWorldTime());
 	UGameplayStatics::FinishSpawningActor(Countdown, SpawnTransform);
+	UE_LOG(
+		LogNPRelicBonus,
+		Log,
+		TEXT("반환 존 카운트다운 생성 성공: Actor=%s Remaining=%.2f초 Location=%s"),
+		*GetNameSafe(Countdown),
+		GetRemainingEventTime(),
+		*SpawnTransform.GetLocation().ToCompactString());
 	return Countdown;
 }
 
@@ -486,6 +514,15 @@ bool ANPRelicBonusMapEvent::BeginRopeDeployment(
 	Deployment.RopeTip = RopeTip;
 	Deployment.StartLocation = StartLocation;
 	Deployment.TargetLocation = TargetLocation;
+	UE_LOG(
+		LogNPRelicBonus,
+		Log,
+		TEXT("로프 하강 시작: Rope=%s Tip=%s Start=%s Target=%s Duration=%.2f초"),
+		*GetNameSafe(Rope),
+		*GetNameSafe(RopeTip),
+		*StartLocation.ToCompactString(),
+		*TargetLocation.ToCompactString(),
+		RopeLoweringDuration);
 	SetActorTickEnabled(true);
 	return true;
 }

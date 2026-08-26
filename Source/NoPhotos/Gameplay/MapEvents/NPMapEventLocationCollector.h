@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "GameplayTagContainer.h"
+#include "NPMapEventTypes.h"
 #include "NPMapEventLocationCollector.generated.h"
 
 class ANPMapEventSpawnPoint;
@@ -23,9 +24,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Map Event|Locations")
 	bool SupportsSpawnGroup(FGameplayTag SpawnGroup) const;
 
-	/** 현재 로드된 월드의 Point와 Volume 목록을 다시 수집합니다. */
+	/** 현재 로드된 월드에서 선택한 종류의 위치 목록만 다시 수집합니다. */
 	UFUNCTION(BlueprintCallable, Category = "Map Event|Locations")
-	void RefreshLocations();
+	void RefreshLocations(ENPMapEventLocationSource LocationSource = ENPMapEventLocationSource::Both);
 
 	UFUNCTION(BlueprintCallable, Category = "Map Event|Locations")
 	void GetSpawnPointsForGroup(
@@ -61,4 +62,7 @@ protected:
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category = "Map Event|Locations")
 	TArray<TObjectPtr<ANPMapEventSpawnVolume>> CollectedSpawnVolumes;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Transient, Category = "Map Event|Locations")
+	ENPMapEventLocationSource LastCollectionSource = ENPMapEventLocationSource::Both;
 };

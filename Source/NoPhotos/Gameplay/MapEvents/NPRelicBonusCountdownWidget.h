@@ -16,6 +16,7 @@ public:
 	void SetRemainingSeconds(int32 RemainingSeconds);
 
 protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 
 private:

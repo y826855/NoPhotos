@@ -124,6 +124,25 @@ bool ANPBaseRelic::TryMarkReturned()
 	return true;
 }
 
+bool ANPBaseRelic::ReleaseWithVelocityImpulse(const FVector VelocityImpulse)
+{
+	if (!HasAuthority() || bIsReturned || !IsValid(RelicMesh))
+	{
+		return false;
+	}
+
+	ReleaseFromDisplay();
+	if (!RelicMesh->IsSimulatingPhysics())
+	{
+		return false;
+	}
+
+	RelicMesh->WakeAllRigidBodies();
+	RelicMesh->AddImpulse(VelocityImpulse, NAME_None, true);
+	ForceNetUpdate();
+	return true;
+}
+
 void ANPBaseRelic::OnRep_IsReturned()
 {
 	if (!bIsReturned)

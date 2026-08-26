@@ -18,6 +18,7 @@ public:
 	TSubclassOf<ANPMapEvent> GetEventClass() const { return EventClass; }
 	FName GetEventId() const { return EventId; }
 	const FText& GetDisplayName() const { return DisplayName; }
+	const FText& GetDescription() const { return Description; }
 	ENPMapEventType GetEventType() const { return EventType; }
 	ENPMapEventScale GetEventScale() const { return EventScale; }
 	float GetDuration() const { return FMath::Max(0.0f, Duration); }
@@ -33,6 +34,10 @@ private:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Map Event|Metadata", meta = (AllowPrivateAccess = "true"))
 	FText DisplayName;
+
+	/** UI에 표시할 이벤트 설명입니다. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Map Event|Metadata", meta = (AllowPrivateAccess = "true", MultiLine = "true"))
+	FText Description;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Map Event|Metadata", meta = (AllowPrivateAccess = "true"))
 	ENPMapEventType EventType = ENPMapEventType::TypeA;

@@ -9,6 +9,7 @@
 #include "GameFramework/PlayerState.h"
 #include "Gameplay/Character/NPReplicatedStablePhysicsPawn.h"
 #include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
+#include "Data/Interface/NPPhotoReactiveTarget.h"
 #include "Gameplay/Photo/NPRelicHolderInterface.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
 #include "Gameplay/Relic/NPBaseRelic.h"
@@ -131,19 +132,78 @@ FNPPhotoEvidenceResult UNPPhotoEvidenceService::EvaluatePhoto(
 			RelicVisibility);
 	}
 
-	if (!Result.bSuccess)
+	AActor* BestReactiveTarget = nullptr;
+	float BestReactiveVisibility = -1.0f;
+	const float MaximumDistanceSquared = FMath::Square(MaximumCaptureDistance);
+	for (TActorIterator<AActor> Iterator(GetWorld()); Iterator; ++Iterator)
 	{
-		Result.FailureReason = ENPPhotoEvidenceFailureReason::NoValidEvidence;
-		UE_LOG(LogNPPhoto, Warning, TEXT("[Evidence] Failed: no valid thief/relic pair."));
+		AActor* CandidateTarget = *Iterator;
+		if (!IsValid(CandidateTarget)
+			|| CandidateTarget == PhotographerPawn
+			|| !CandidateTarget->GetClass()->ImplementsInterface(UNPPhotoReactiveTarget::StaticClass())
+			|| FVector::DistSquared(Request.CameraLocation, CandidateTarget->GetActorLocation())
+				> MaximumDistanceSquared
+			|| !INPPhotoReactiveTarget::Execute_CanBePhotographed(
+				CandidateTarget,
+				Result.Photographer.Get()))
+		{
+			continue;
+		}
+
+		const float Visibility = CalculateActorVisibility(
+			Request,
+			CandidateTarget,
+			PhotographerPawn);
+		if (Visibility < MinimumReactiveTargetVisibility
+			|| Visibility <= BestReactiveVisibility)
+		{
+			continue;
+		}
+
+		BestReactiveTarget = CandidateTarget;
+		BestReactiveVisibility = Visibility;
 	}
-	else
+
+	if (IsValid(BestReactiveTarget))
 	{
+		Result.bReactiveTargetSuccess = true;
+		Result.ReactiveTarget = BestReactiveTarget;
+		Result.ReactiveTargetVisibility = BestReactiveVisibility;
+		Result.ServerCaptureTime = GetWorld()->GetTimeSeconds();
+		INPPhotoReactiveTarget::Execute_OnPhotographed(
+			BestReactiveTarget,
+			Result.Photographer.Get(),
+			BestReactiveVisibility,
+			Result.CaptureSequence);
+
 		UE_LOG(
 			LogNPPhoto,
 			Log,
-			TEXT("[Evidence] Success. Thief=%s Relic=%s"),
-			*GetNameSafe(Result.Thief),
-			*GetNameSafe(Result.Relic));
+			TEXT("[Evidence] Reactive target success. Target=%s Visibility=%.2f Photographer=%s"),
+			*GetNameSafe(BestReactiveTarget),
+			BestReactiveVisibility,
+			*GetNameSafe(Result.Photographer.Get()));
+	}
+
+	if (!Result.bSuccess && !Result.bReactiveTargetSuccess)
+	{
+		Result.FailureReason = ENPPhotoEvidenceFailureReason::NoValidEvidence;
+		UE_LOG(
+			LogNPPhoto,
+			Warning,
+			TEXT("[Evidence] Failed: no valid thief/relic pair or reactive target."));
+	}
+	else
+	{
+		Result.FailureReason = ENPPhotoEvidenceFailureReason::None;
+		UE_LOG(
+			LogNPPhoto,
+			Log,
+			TEXT("[Evidence] Success. RelicEvidence=%s Thief=%s Relic=%s ReactiveTarget=%s"),
+			Result.bSuccess ? TEXT("true") : TEXT("false"),
+			*GetNameSafe(Result.Thief.Get()),
+			*GetNameSafe(Result.Relic.Get()),
+			*GetNameSafe(Result.ReactiveTarget.Get()));
 	}
 	return Result;
 }

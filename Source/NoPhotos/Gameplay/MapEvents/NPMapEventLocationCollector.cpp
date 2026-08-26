@@ -48,10 +48,12 @@ void ANPMapEventLocationCollector::EndPlay(const EEndPlayReason::Type EndPlayRea
 	Super::EndPlay(EndPlayReason);
 }
 
-void ANPMapEventLocationCollector::RefreshLocations()
+void ANPMapEventLocationCollector::RefreshLocations(
+	const ENPMapEventLocationSource LocationSource)
 {
 	CollectedSpawnPoints.Reset();
 	CollectedSpawnVolumes.Reset();
+	LastCollectionSource = LocationSource;
 
 	UWorld* World = GetWorld();
 	if (!World)
@@ -59,47 +61,54 @@ void ANPMapEventLocationCollector::RefreshLocations()
 		return;
 	}
 
-	for (TActorIterator<ANPMapEventSpawnPoint> Iterator(World); Iterator; ++Iterator)
+	if (LocationSource != ENPMapEventLocationSource::Volume)
 	{
-		if (ANPMapEventSpawnPoint* SpawnPoint = *Iterator;
-			IsValid(SpawnPoint) && SpawnPoint->GetLevel() == GetLevel())
+		for (TActorIterator<ANPMapEventSpawnPoint> Iterator(World); Iterator; ++Iterator)
 		{
-			CollectedSpawnPoints.Add(SpawnPoint);
+			if (ANPMapEventSpawnPoint* SpawnPoint = *Iterator;
+				IsValid(SpawnPoint) && SpawnPoint->GetLevel() == GetLevel())
+			{
+				CollectedSpawnPoints.Add(SpawnPoint);
+			}
 		}
 	}
 
-	for (TActorIterator<ANPMapEventSpawnVolume> Iterator(World); Iterator; ++Iterator)
+	if (LocationSource != ENPMapEventLocationSource::Point)
 	{
-		if (ANPMapEventSpawnVolume* SpawnVolume = *Iterator;
-			IsValid(SpawnVolume) && SpawnVolume->GetLevel() == GetLevel())
+		for (TActorIterator<ANPMapEventSpawnVolume> Iterator(World); Iterator; ++Iterator)
 		{
-			CollectedSpawnVolumes.Add(SpawnVolume);
+			if (ANPMapEventSpawnVolume* SpawnVolume = *Iterator;
+				IsValid(SpawnVolume) && SpawnVolume->GetLevel() == GetLevel())
+			{
+				CollectedSpawnVolumes.Add(SpawnVolume);
 
-			const FVector Location = SpawnVolume->GetActorLocation();
-			const FRotator Rotation = SpawnVolume->GetActorRotation();
-			const FVector Scale = SpawnVolume->GetActorScale3D();
-			const FBox WorldBounds = SpawnVolume->GetComponentsBoundingBox(true);
-			UE_LOG(
-				LogNPMapEventLocationCollector,
-				Display,
-				TEXT("Level Instance SpawnVolume 수집: Collector=%s, Level=%s, Volume=%s, Location=%s, Rotation=%s, Scale=%s, BoundsCenter=%s, BoundsExtent=%s"),
-				*GetNameSafe(this),
-				*GetNameSafe(GetLevel()),
-				*GetNameSafe(SpawnVolume),
-				*Location.ToCompactString(),
-				*Rotation.ToCompactString(),
-				*Scale.ToCompactString(),
-				*WorldBounds.GetCenter().ToCompactString(),
-				*WorldBounds.GetExtent().ToCompactString());
+				const FVector Location = SpawnVolume->GetActorLocation();
+				const FRotator Rotation = SpawnVolume->GetActorRotation();
+				const FVector Scale = SpawnVolume->GetActorScale3D();
+				const FBox WorldBounds = SpawnVolume->GetComponentsBoundingBox(true);
+				UE_LOG(
+					LogNPMapEventLocationCollector,
+					Display,
+					TEXT("Level Instance SpawnVolume 수집: Collector=%s, Level=%s, Volume=%s, Location=%s, Rotation=%s, Scale=%s, BoundsCenter=%s, BoundsExtent=%s"),
+					*GetNameSafe(this),
+					*GetNameSafe(GetLevel()),
+					*GetNameSafe(SpawnVolume),
+					*Location.ToCompactString(),
+					*Rotation.ToCompactString(),
+					*Scale.ToCompactString(),
+					*WorldBounds.GetCenter().ToCompactString(),
+					*WorldBounds.GetExtent().ToCompactString());
+			}
 		}
 	}
 
 	UE_LOG(
 		LogNPMapEventLocationCollector,
 		Display,
-		TEXT("Level Instance 위치 수집 완료: Collector=%s, Level=%s, SpawnPoints=%d, SpawnVolumes=%d"),
+		TEXT("Level Instance 위치 수집 완료: Collector=%s, Level=%s, Source=%s, SpawnPoints=%d, SpawnVolumes=%d"),
 		*GetNameSafe(this),
 		*GetNameSafe(GetLevel()),
+		*StaticEnum<ENPMapEventLocationSource>()->GetNameStringByValue(static_cast<int64>(LocationSource)),
 		CollectedSpawnPoints.Num(),
 		CollectedSpawnVolumes.Num());
 }
