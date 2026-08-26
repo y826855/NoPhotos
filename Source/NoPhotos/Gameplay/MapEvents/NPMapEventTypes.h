@@ -21,3 +21,12 @@ enum class ENPMapEventScale : uint8
 	Large UMETA(DisplayName = "대"),
 	Colossal UMETA(DisplayName = "초대형")
 };
+
+/** 이벤트가 생성 위치 후보로 사용할 레벨 마커 종류입니다. */
+UENUM(BlueprintType)
+enum class ENPMapEventLocationSource : uint8
+{
+	Point UMETA(DisplayName = "Point"),
+	Volume UMETA(DisplayName = "Volume"),
+	Both UMETA(DisplayName = "Both")
+};

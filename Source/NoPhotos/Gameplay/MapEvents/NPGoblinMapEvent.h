@@ -56,7 +56,8 @@ private:
 	ANPGoblinCharacter* SpawnGoblinAt(
 		const FTransform& GroundTransform,
 		ANPGoblinPatrolRoute* PatrolRoute);
-	void DestroySpawnedGoblins();
+	void BeginDespawnSpawnedGoblins();
+	void DestroySpawnedGoblinsImmediately();
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<ANPGoblinCharacter>> SpawnedGoblins;

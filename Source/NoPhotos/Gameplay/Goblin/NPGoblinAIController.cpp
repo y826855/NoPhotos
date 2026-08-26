@@ -33,6 +33,7 @@ void ANPGoblinAIController::OnPossess(APawn* InPawn)
 	bReturnMoveRequested = false;
 	NextRoamTime = 0.0;
 	NextFleeRepathTime = 0.0;
+	bGameplayEnabled = Goblin->IsGameplayActive();
 	GetWorldTimerManager().SetTimer(
 		DecisionTimer,
 		this,
@@ -40,6 +41,11 @@ void ANPGoblinAIController::OnPossess(APawn* InPawn)
 		Goblin->GetAIDecisionInterval(),
 		true,
 		0.01f);
+
+	if (!bGameplayEnabled)
+	{
+		StopMovement();
+	}
 }
 
 void ANPGoblinAIController::OnUnPossess()
@@ -49,11 +55,41 @@ void ANPGoblinAIController::OnUnPossess()
 	Super::OnUnPossess();
 }
 
+void ANPGoblinAIController::SetGameplayEnabled(const bool bEnabled)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	bGameplayEnabled = bEnabled;
+	bHasActivePatrolTarget = false;
+	bReturnMoveRequested = false;
+	NextRoamTime = 0.0;
+	NextFleeRepathTime = 0.0;
+	StopMovement();
+
+	ANPGoblinCharacter* Goblin = GetGoblin();
+	if (!bGameplayEnabled || !Goblin)
+	{
+		return;
+	}
+
+	RoamOrigin = Goblin->GetActorLocation();
+	MovementState = GetUsablePatrolRoute()
+		? ENPGoblinMovementState::Patrol
+		: ENPGoblinMovementState::RandomRoamFallback;
+	if (UCharacterMovementComponent* Movement = Goblin->GetCharacterMovement())
+	{
+		Movement->MaxWalkSpeed = Goblin->GetRoamMoveSpeed();
+	}
+}
+
 void ANPGoblinAIController::EvaluateMovement()
 {
 	ANPGoblinCharacter* Goblin = GetGoblin();
 	UWorld* World = GetWorld();
-	if (!HasAuthority() || !Goblin || !World)
+	if (!HasAuthority() || !bGameplayEnabled || !Goblin || !World)
 	{
 		return;
 	}

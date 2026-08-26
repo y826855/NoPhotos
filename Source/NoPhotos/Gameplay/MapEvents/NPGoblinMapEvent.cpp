@@ -16,6 +16,7 @@ ANPGoblinMapEvent::ANPGoblinMapEvent()
 	EventType = ENPMapEventType::TypeA;
 	EventScale = ENPMapEventScale::Medium;
 	Duration = 60.0f;
+	LocationSource = ENPMapEventLocationSource::Volume;
 	GoblinSpawnGroup = FGameplayTag::RequestGameplayTag(FName(TEXT("Goblin")), false);
 }
 
@@ -32,14 +33,14 @@ void ANPGoblinMapEvent::ApplyEventState_Implementation(const bool bNewActive)
 		return;
 	}
 
-	DestroySpawnedGoblins();
+	BeginDespawnSpawnedGoblins();
 }
 
 void ANPGoblinMapEvent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (HasAuthority())
 	{
-		DestroySpawnedGoblins();
+		DestroySpawnedGoblinsImmediately();
 	}
 
 	Super::EndPlay(EndPlayReason);
@@ -47,7 +48,7 @@ void ANPGoblinMapEvent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void ANPGoblinMapEvent::SpawnGoblins()
 {
-	DestroySpawnedGoblins();
+	DestroySpawnedGoblinsImmediately();
 
 	UNPMapEventManagerComponent* EventManager = GetOwner()
 		? GetOwner()->FindComponentByClass<UNPMapEventManagerComponent>()
@@ -86,9 +87,10 @@ void ANPGoblinMapEvent::SpawnGoblins()
 		for (int32 Attempt = 0; Attempt < AttemptsPerGoblin; ++Attempt)
 		{
 			FTransform GroundTransform;
-			if (!EventManager->FindRandomSpawnTransform(
+			if (!EventManager->FindRandomSpawnTransformBySource(
 					GoblinSpawnGroup,
 					RequiredHalfExtent,
+					GetLocationSource(),
 					GroundTransform))
 			{
 				continue;
@@ -181,11 +183,25 @@ ANPGoblinCharacter* ANPGoblinMapEvent::SpawnGoblinAt(
 	Goblin->SetReplicates(true);
 	Goblin->SetReplicateMovement(true);
 	Goblin->SetPatrolRoute(PatrolRoute);
+	Goblin->PrepareForSpawnPresentation();
 	UGameplayStatics::FinishSpawningActor(Goblin, SpawnTransform);
 	return Goblin;
 }
 
-void ANPGoblinMapEvent::DestroySpawnedGoblins()
+void ANPGoblinMapEvent::BeginDespawnSpawnedGoblins()
+{
+	for (ANPGoblinCharacter* Goblin : SpawnedGoblins)
+	{
+		if (IsValid(Goblin))
+		{
+			Goblin->BeginDespawnPresentation();
+		}
+	}
+
+	SpawnedGoblins.Reset();
+}
+
+void ANPGoblinMapEvent::DestroySpawnedGoblinsImmediately()
 {
 	for (ANPGoblinCharacter* Goblin : SpawnedGoblins)
 	{

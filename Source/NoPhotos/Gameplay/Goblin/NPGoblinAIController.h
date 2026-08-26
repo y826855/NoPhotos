@@ -24,6 +24,9 @@ class NOPHOTOS_API ANPGoblinAIController : public AAIController
 public:
 	ANPGoblinAIController();
 
+	/** 등장/퇴장 연출 동안 이동 판단을 중지하거나 다시 시작합니다. */
+	void SetGameplayEnabled(bool bEnabled);
+
 protected:
 	virtual void OnPossess(APawn* InPawn) override;
 	virtual void OnUnPossess() override;
@@ -50,6 +53,7 @@ private:
 	ENPGoblinMovementState MovementState = ENPGoblinMovementState::RandomRoamFallback;
 	bool bHasActivePatrolTarget = false;
 	bool bReturnMoveRequested = false;
+	bool bGameplayEnabled = false;
 	double NextRoamTime = 0.0;
 	double NextFleeRepathTime = 0.0;
 	FTimerHandle DecisionTimer;
