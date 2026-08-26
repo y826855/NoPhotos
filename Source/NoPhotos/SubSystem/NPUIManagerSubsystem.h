@@ -28,11 +28,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "UI")
 	UNPUserWidget* GetTopWidget() const;
+
+	//현재 입력 설정 다시 적용
+	void RefreshTopWidgetInputMode();
 	
 private:
-	// 현재 클라이언트의 로컬 PlayerController를 찾아 반환. 전용 서버에서는 nullptr을 반환.
 	class APlayerController* GetOwningPlayerController() const;
-	// 최상단 위젯의 설정에 맞춰 로컬 플레이어의 입력 모드와 마우스 커서를 갱신한다.
 	void ApplyInputModeForTopWidget();
 	bool RemoveWidgetFromStack(UNPUserWidget* Widget, bool bForceRemove);
 	void CleanInvalidWidgetsFromStack();
