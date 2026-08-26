@@ -45,6 +45,10 @@ public:
 	bool RegisterEvidencePhotographer(APlayerState* Photographer);
 	bool TryMarkReturned();
 
+	/** 서버에서 전시 상태를 해제하고 물리를 활성화한 뒤 질량과 무관한 속도 충격을 적용합니다. */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category="Relic|Physics")
+	bool ReleaseWithVelocityImpulse(FVector VelocityImpulse);
+
 protected:
 	static const FName RelicComponentName;
 
