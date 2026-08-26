@@ -15,6 +15,13 @@ void UNPUserWidget::OnPopped_Implementation()
 	
 }
 
+void UNPUserWidget::SetInputModeState(const ENPWidgetInputMode InInputMode)
+{
+	bUseGameAndUIInputMode = InInputMode == ENPWidgetInputMode::GameAndUI;
+	bUseGameOnlyInputMode = InInputMode == ENPWidgetInputMode::GameOnly;
+	bShowMouseCursor = InInputMode != ENPWidgetInputMode::GameOnly;
+}
+
 bool UNPUserWidget::CompletePop()
 {
 	UGameInstance* GameInstance = GetGameInstance();

@@ -38,6 +38,8 @@ public:
 	bool UsesGameOnlyInputMode() const { return bUseGameOnlyInputMode; }
 	//마우스 커서 표시 여부 확인
 	bool ShouldShowMouseCursor() const { return bShowMouseCursor; }
+	//런타임 중 입력모드 변경
+	void SetInputModeState(ENPWidgetInputMode InInputMode);
 
 private:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "UI|Input", meta = (AllowPrivateAccess = "true"))

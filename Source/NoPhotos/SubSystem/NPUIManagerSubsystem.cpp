@@ -100,7 +100,12 @@ UNPUserWidget* UNPUIManagerSubsystem::GetTopWidget() const
 	return nullptr;
 }
 
-//위젯을 제거, 입력 모드 갱신
+void UNPUIManagerSubsystem::RefreshTopWidgetInputMode()
+{
+	ApplyInputModeForTopWidget();
+}
+
+//위젯 제거, 입력 모드 갱신
 bool UNPUIManagerSubsystem::RemoveWidgetFromStack(UNPUserWidget* Widget, bool bForceRemove)
 {
 	if (!IsValid(Widget))
