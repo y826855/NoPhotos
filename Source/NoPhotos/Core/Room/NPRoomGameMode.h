@@ -4,7 +4,7 @@
 #include "GameFramework/GameMode.h"
 #include "NPRoomGameMode.generated.h"
 
-class ANPPlayerController;
+class ANPRoomPlayerController;
 class UWorld;
 
 UCLASS()
@@ -22,7 +22,7 @@ public:
 
 	bool ActivateRoom(APlayerController* HostPlayer);
 	void TryStartGame(APlayerController* RequestingPlayer);
-	void RequestExitRoom(ANPPlayerController* RequestingPlayer);
+	void RequestExitRoom(APlayerController* RequestingController);
 
 protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Room")
@@ -36,7 +36,7 @@ private:
 	bool bRoomActive = false;
 
 	UPROPERTY()
-	TObjectPtr<ANPPlayerController> PendingExitingHost;
+	TObjectPtr<ANPRoomPlayerController> PendingExitingHost;
 
 	FTimerHandle HostMigrationExitTimer;
 };

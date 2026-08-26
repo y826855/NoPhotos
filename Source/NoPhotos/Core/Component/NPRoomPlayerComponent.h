@@ -4,7 +4,7 @@
 #include "Components/ActorComponent.h"
 #include "NPRoomPlayerComponent.generated.h"
 
-class ANPPlayerController;
+class APlayerController;
 class UWorld;
 
 UCLASS(ClassGroup = (Room), meta = (BlueprintSpawnableComponent))
@@ -52,6 +52,9 @@ protected:
 	virtual void BeginPlay() override;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Room")
+	TSoftObjectPtr<UWorld> RoomLevel;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Room")
 	TSoftObjectPtr<UWorld> MenuLevel;
 
 	UFUNCTION(Server, Reliable)
@@ -64,6 +67,7 @@ protected:
 	void ServerRequestExitRoom();
 
 private:
-	ANPPlayerController* GetNPPlayerController() const;
+	APlayerController* GetPlayerController() const;
+	FString GetRoomLevelPath() const;
 	FString GetMenuLevelPath() const;
 };

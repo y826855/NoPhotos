@@ -3,8 +3,8 @@
 
 #include "Components/ScrollBox.h"
 #include "Components/Button.h"
-#include "Core/NPPlayerController.h"
 #include "Core/Room/NPRoomSubsystem.h"
+#include "Core/Title/NPTitlePlayerController.h"
 #include "SubSystem/NPUIManagerSubsystem.h"
 
 void UNPRoomListWidget::NativeConstruct()
@@ -59,9 +59,9 @@ void UNPRoomListWidget::NativeDestruct()
 
 void UNPRoomListWidget::OnRefreshClicked()
 {
-	if (ANPPlayerController* NPPC = Cast<ANPPlayerController>(GetOwningPlayer()))
+	if (ANPTitlePlayerController* TitlePlayerController = Cast<ANPTitlePlayerController>(GetOwningPlayer()))
 	{
-		NPPC->FindRooms();
+		TitlePlayerController->FindRooms();
 	}
 }
 
@@ -99,9 +99,9 @@ void UNPRoomListWidget::RefreshRoomList()
 
 void UNPRoomListWidget::OnRoomItemSelected(int32 SelectedRoomNumber)
 {
-	if (ANPPlayerController* NPPC = Cast<ANPPlayerController>(GetOwningPlayer()))
+	if (ANPTitlePlayerController* TitlePlayerController = Cast<ANPTitlePlayerController>(GetOwningPlayer()))
 	{
-		NPPC->JoinRoom(SelectedRoomNumber);
+		TitlePlayerController->JoinRoom(SelectedRoomNumber);
 	}
 }
 

@@ -67,6 +67,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Room")
 	bool JoinRoom(int32 RoomNumber);
 
+	void SetRoomLevelPath(const FString& LevelPath);
 	void LeaveRoom(const FString& MenuLevelPath);
 	void BeginHostMigration(const FString& MigrationId, bool bBecomeHost, const FString& MenuLevelPath);
 
@@ -110,6 +111,7 @@ private:
 	FTimerHandle MigrationSearchTimer;
 	ENPRoomExitAction PendingExitAction = ENPRoomExitAction::None;
 	FString PendingMigrationId;
+	FString RoomLevelPath;
 	FString ReturnMapPath;
 	FNPOnWaitingRoomRestored WaitingRoomRestoredDelegate;
 	int32 MigrationSearchAttempts = 0;

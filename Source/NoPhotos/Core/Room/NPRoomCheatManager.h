@@ -4,6 +4,8 @@
 #include "GameFramework/CheatManager.h"
 #include "NPRoomCheatManager.generated.h"
 
+class UNPRoomPlayerComponent;
+
 UCLASS()
 class NOPHOTOS_API UNPRoomCheatManager : public UCheatManager
 {
@@ -30,4 +32,7 @@ public:
 
 	UFUNCTION(Exec)
 	void Out(const FString& Command);
+
+private:
+	UNPRoomPlayerComponent* GetRoomComponent() const;
 };
