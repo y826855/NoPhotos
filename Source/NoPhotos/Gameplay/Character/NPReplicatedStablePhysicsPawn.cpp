@@ -2,8 +2,10 @@
 
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "EnhancedInputComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "PhysicsEngine/BodyInstance.h"
+#include "Gameplay/AbilitySystem/NPAbilitySystemComponent.h"
 #include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Character/Component/NPStablePhysicsNetworkPredictionComponent.h"
 #include "Gameplay/Interaction/Components/GrabbableComponent.h"
@@ -22,11 +24,15 @@ ANPReplicatedStablePhysicsPawn::ANPReplicatedStablePhysicsPawn()
 
 	NetworkPrediction = CreateDefaultSubobject<
 		UNPStablePhysicsNetworkPredictionComponent>(TEXT("NetworkPrediction"));
+
+	AbilitySystem = CreateDefaultSubobject<UNPAbilitySystemComponent>(
+		TEXT("AbilitySystem"));
 }
 
 void ANPReplicatedStablePhysicsPawn::BeginPlay()
 {
 	Super::BeginPlay();
+	AbilitySystem->InitializeForOwner();
 
 	const bool bServerAuthority = HasAuthority();
 	const bool bRunsMovementPhysics = bServerAuthority || IsLocallyControlled();
@@ -63,6 +69,14 @@ void ANPReplicatedStablePhysicsPawn::BeginPlay()
 void ANPReplicatedStablePhysicsPawn::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
+
+	AbilitySystem->InitializeForOwner();
+}
+
+void ANPReplicatedStablePhysicsPawn::OnRep_Controller()
+{
+	Super::OnRep_Controller();
+	AbilitySystem->InitializeForOwner();
 }
 
 void ANPReplicatedStablePhysicsPawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -97,6 +111,26 @@ void ANPReplicatedStablePhysicsPawn::GetLifetimeReplicatedProps(
 		ANPReplicatedStablePhysicsPawn,
 		ReplicatedViewRotation,
 		COND_SkipOwner);
+}
+
+UAbilitySystemComponent* ANPReplicatedStablePhysicsPawn::GetAbilitySystemComponent() const
+{
+	return AbilitySystem;
+}
+
+void ANPReplicatedStablePhysicsPawn::SetupPlayerInputComponent(
+	UInputComponent* PlayerInputComponent)
+{
+	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	UEnhancedInputComponent* EnhancedInputComponent =
+		Cast<UEnhancedInputComponent>(PlayerInputComponent);
+	if (EnhancedInputComponent && RelicUseAction)
+	{
+		AbilitySystem->BindRelicUseInput(
+			EnhancedInputComponent,
+			RelicUseAction);
+	}
 }
 
 void ANPReplicatedStablePhysicsPawn::Tick(float DeltaSeconds)
@@ -417,6 +451,11 @@ void ANPReplicatedStablePhysicsPawn::UpdateLocalPredictedGrab(float DeltaSeconds
 void ANPReplicatedStablePhysicsPawn::HandleGrabbedComponentChanged(
 	UPrimitiveComponent* NewGrabbedComponent)
 {
+	ANPBaseRelic* NewHeldRelic = IsValid(NewGrabbedComponent)
+		? Cast<ANPBaseRelic>(NewGrabbedComponent->GetOwner())
+		: nullptr;
+	AbilitySystem->SetHeldRelic(NewHeldRelic);
+
 	ANPReplicatedStablePhysicsPawn* NewGrabbedPawn = IsValid(NewGrabbedComponent)
 		? Cast<ANPReplicatedStablePhysicsPawn>(NewGrabbedComponent->GetOwner())
 		: nullptr;
@@ -451,9 +490,10 @@ void ANPReplicatedStablePhysicsPawn::HandleGrabbedComponentChanged(
 		ReplicatedServerHandWorldLocation =
 			PhysicsMesh->GetSocketLocation(RightHandBoneName);
 
-		if (ANPBaseRelic* Relic = Cast<ANPBaseRelic>(NewGrabbedComponent->GetOwner()))
+		if (NewHeldRelic)
 		{
-			Relic->SetLastCarrierPlayerState(GetPlayerState<ANPPlayerState>());
+			NewHeldRelic->SetLastCarrierPlayerState(
+				GetPlayerState<ANPPlayerState>());
 		}
 	}
 	else
