@@ -64,7 +64,7 @@ void ANPReplicatedStablePhysicsPawn::BeginPlay()
 	InitializeNameplate();
 }
 
-void ANPRStablePhysicsPawn::PossessedBy(AController* NewController)
+void ANPReplicatedStablePhysicsPawn::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
 
@@ -278,7 +278,7 @@ void ANPReplicatedStablePhysicsPawn::ApplyRightHandState(bool bActive)
 	}
 }
 
-void ANPRStablePhysicsPawn::OnRep_PlayerState()
+void ANPReplicatedStablePhysicsPawn::OnRep_PlayerState()
 {
 	Super::OnRep_PlayerState();
 	
@@ -571,7 +571,7 @@ void ANPReplicatedStablePhysicsPawn::SetServerRightHandState(bool bActive)
 	ForceNetUpdate();
 }
 
-void ANPRStablePhysicsPawn::InitializeNameplate()
+void ANPReplicatedStablePhysicsPawn::InitializeNameplate()
 {
 	UWidgetComponent* NameplateComponent =	FindComponentByClass<UWidgetComponent>();
 	if (!IsValid(NameplateComponent))
