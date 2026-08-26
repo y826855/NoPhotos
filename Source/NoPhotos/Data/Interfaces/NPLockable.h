@@ -2,15 +2,15 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
-#include "NPLockableInterface.generated.h"
+#include "NPLockable.generated.h"
 
 UINTERFACE(BlueprintType)
-class NOPHOTOS_API UNPLockableInterface : public UInterface
+class NOPHOTOS_API UNPLockable : public UInterface
 {
 	GENERATED_BODY()
 };
 
-class NOPHOTOS_API INPLockableInterface
+class NOPHOTOS_API INPLockable
 {
 	GENERATED_BODY()
 

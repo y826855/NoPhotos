@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Data/Interfaces/NPLockableInterface.h"
+#include "Data/Interfaces/NPLockable.h"
 #include "GameFramework/Actor.h"
 #include "NPRelicCase.generated.h"
 
@@ -14,7 +14,7 @@ class USceneComponent;
 UCLASS(Blueprintable)
 class NOPHOTOS_API ANPRelicCase
 	: public AActor,
-	  public INPLockableInterface
+	  public INPLockable
 {
 	GENERATED_BODY()
 

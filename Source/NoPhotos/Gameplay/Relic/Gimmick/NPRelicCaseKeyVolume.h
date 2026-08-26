@@ -36,7 +36,7 @@ protected:
 		EditInstanceOnly,
 		BlueprintReadOnly,
 		Category = "Relic Case Key",
-		meta = (MustImplement = "/Script/NoPhotos.NPLockableInterface"))
+		meta = (MustImplement = "/Script/NoPhotos.NPLockable"))
 	TArray<TObjectPtr<AActor>> UnlockTargets;
 
 private:

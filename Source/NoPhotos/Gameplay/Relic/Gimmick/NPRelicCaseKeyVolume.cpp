@@ -1,7 +1,7 @@
 #include "Gameplay/Relic/Gimmick/NPRelicCaseKeyVolume.h"
 
 #include "Components/BoxComponent.h"
-#include "Data/Interfaces/NPLockableInterface.h"
+#include "Data/Interfaces/NPLockable.h"
 #include "Gameplay/Relic/Gimmick/NPRelicCaseKey.h"
 
 #if WITH_EDITOR
@@ -76,9 +76,9 @@ bool ANPRelicCaseKeyVolume::UnlockTargetActors()
 	for (AActor* UnlockTarget : UnlockTargets)
 	{
 		if (IsValid(UnlockTarget) && UnlockTarget->GetClass()->ImplementsInterface(
-			UNPLockableInterface::StaticClass()))
+			UNPLockable::StaticClass()))
 		{
-			bUnlockedAnyTarget |= INPLockableInterface::Execute_TrySetLocked(
+			bUnlockedAnyTarget |= INPLockable::Execute_TrySetLocked(
 				UnlockTarget,
 				false);
 		}
