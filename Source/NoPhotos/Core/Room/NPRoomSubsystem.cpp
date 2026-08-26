@@ -1,11 +1,9 @@
 #include "NPRoomSubsystem.h"
 
-#include "NPRoomGameMode.h"
 #include "NPRoomLog.h"
 #include "Debug/DebugDrawService.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
-#include "Engine/GameInstance.h"
 #include "Engine/NetDriver.h"
 #include "Engine/World.h"
 #include "GameFramework/GameStateBase.h"
@@ -18,7 +16,6 @@
 #include "OnlineSubsystem.h"
 #include "OnlineSubsystemUtils.h"
 #include "TimerManager.h"
-#include "Core/Room/NPRoomPlayerController.h"
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 
@@ -117,6 +114,7 @@ void UNPRoomSubsystem::Deinitialize()
 	ListedRooms.Reset();
 	PendingExitAction = ENPRoomExitAction::None;
 	PendingMigrationId.Reset();
+	RoomLevelPath.Reset();
 	ReturnMapPath.Reset();
 	WaitingRoomRestoredDelegate.Unbind();
 	bCleaningSessionAfterNetworkFailure = false;
@@ -125,6 +123,12 @@ void UNPRoomSubsystem::Deinitialize()
 
 bool UNPRoomSubsystem::HostRoom()
 {
+	if (RoomLevelPath.IsEmpty())
+	{
+		NPRoomLog::Warning(this, TEXT("방 생성 실패: 이동할 RoomLevel이 지정되지 않았습니다."));
+		return false;
+	}
+
 	if (bCleaningSessionAfterNetworkFailure)
 	{
 		NPRoomLog::Warning(this, TEXT("방 생성 생략: 연결이 끊긴 이전 방 정보를 정리 중입니다."));
@@ -217,6 +221,14 @@ bool UNPRoomSubsystem::HostRoom()
 	}
 
 	return true;
+}
+
+void UNPRoomSubsystem::SetRoomLevelPath(const FString& LevelPath)
+{
+	if (!LevelPath.IsEmpty())
+	{
+		RoomLevelPath = LevelPath;
+	}
 }
 
 bool UNPRoomSubsystem::FindRooms()
@@ -659,26 +671,6 @@ void UNPRoomSubsystem::HandleCreateSessionComplete(const FName SessionName, cons
 		return;
 	}
 
-	UGameInstance* GameInstance = GetGameInstance();
-	if (!GameInstance || !GameInstance->EnableListenServer(true, 7777))
-	{
-		NPRoomLog::Warning(this, TEXT("방 생성 실패: Listen Server를 활성화하지 못했습니다."));
-		return;
-	}
-
-	ANPRoomGameMode* RoomGameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ANPRoomGameMode>() : nullptr;
-	APlayerController* HostPlayer = GameInstance->GetFirstLocalPlayerController();
-	if (!RoomGameMode || !RoomGameMode->ActivateRoom(HostPlayer))
-	{
-		NPRoomLog::Warning(this, TEXT("방 생성 실패: 방 상태 또는 호스트를 활성화하지 못했습니다."));
-		return;
-	}
-	
-	if (ANPRoomPlayerController* HostPC = Cast<ANPRoomPlayerController>(HostPlayer))
-	{
-		HostPC->ShowLobbyUI();
-	}
-
 	const FNamedOnlineSession* NamedSession = SessionInterface.IsValid()
 		? SessionInterface->GetNamedSession(NAME_GameSession)
 		: nullptr;
@@ -696,6 +688,9 @@ void UNPRoomSubsystem::HandleCreateSessionComplete(const FName SessionName, cons
 		PendingExitAction = ENPRoomExitAction::None;
 		PendingMigrationId.Reset();
 	}
+
+	NPRoomLog::Info(this, FString::Printf(TEXT("대기방 이동: OpenLevel -> %s?listen"), *RoomLevelPath));
+	UGameplayStatics::OpenLevel(this, FName(*RoomLevelPath), true, TEXT("listen"));
 }
 
 void UNPRoomSubsystem::HandleFindSessionsComplete(const bool bWasSuccessful)

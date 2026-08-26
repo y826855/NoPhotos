@@ -1,13 +1,13 @@
 #include "NPRoomPlayerComponent.h"
 
 #include "Core/Main/NPMainGameMode.h"
-#include "Core/NPPlayerController.h"
 #include "Core/Room/NPRoomGameMode.h"
 #include "Core/Room/NPRoomGameState.h"
 #include "Core/Room/NPRoomLog.h"
 #include "Core/Room/NPRoomSubsystem.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 
 UNPRoomPlayerComponent::UNPRoomPlayerComponent()
@@ -19,7 +19,7 @@ void UNPRoomPlayerComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	ANPPlayerController* PlayerController = GetNPPlayerController();
+	APlayerController* PlayerController = GetPlayerController();
 	if (!PlayerController || !PlayerController->IsLocalController())
 	{
 		return;
@@ -29,6 +29,7 @@ void UNPRoomPlayerComponent::BeginPlay()
 	{
 		if (UNPRoomSubsystem* RoomSubsystem = GameInstance->GetSubsystem<UNPRoomSubsystem>())
 		{
+			RoomSubsystem->SetRoomLevelPath(GetRoomLevelPath());
 			RoomSubsystem->LogOnlineServiceStatus();
 		}
 	}
@@ -39,7 +40,7 @@ void UNPRoomPlayerComponent::BeginPlay()
 
 bool UNPRoomPlayerComponent::HostRoom()
 {
-	ANPPlayerController* PlayerController = GetNPPlayerController();
+	APlayerController* PlayerController = GetPlayerController();
 	if (!PlayerController || !PlayerController->IsLocalController())
 	{
 		NPRoomLog::Warning(this, TEXT("호스트 생성 실패: 로컬 PlayerController가 아닙니다."));
@@ -53,13 +54,20 @@ bool UNPRoomPlayerComponent::HostRoom()
 		NPRoomLog::Warning(this, TEXT("호스트 생성 실패: RoomSubsystem을 찾지 못했습니다."));
 		return false;
 	}
+	const FString RoomLevelPath = GetRoomLevelPath();
+	if (RoomLevelPath.IsEmpty())
+	{
+		NPRoomLog::Warning(this, TEXT("호스트 생성 실패: RoomComponent의 RoomLevel이 지정되지 않았습니다."));
+		return false;
+	}
 
+	RoomSubsystem->SetRoomLevelPath(RoomLevelPath);
 	return RoomSubsystem->HostRoom();
 }
 
 bool UNPRoomPlayerComponent::FindRooms()
 {
-	ANPPlayerController* PlayerController = GetNPPlayerController();
+	APlayerController* PlayerController = GetPlayerController();
 	if (!PlayerController || !PlayerController->IsLocalController())
 	{
 		NPRoomLog::Warning(this, TEXT("방 목록 검색 실패: 로컬 PlayerController가 아닙니다."));
@@ -79,7 +87,7 @@ bool UNPRoomPlayerComponent::FindRooms()
 
 bool UNPRoomPlayerComponent::JoinRoom(const int32 RoomNumber)
 {
-	ANPPlayerController* PlayerController = GetNPPlayerController();
+	APlayerController* PlayerController = GetPlayerController();
 	if (!PlayerController || !PlayerController->IsLocalController())
 	{
 		NPRoomLog::Warning(this, TEXT("방 참가 실패: 로컬 PlayerController가 아닙니다."));
@@ -99,7 +107,7 @@ bool UNPRoomPlayerComponent::JoinRoom(const int32 RoomNumber)
 
 void UNPRoomPlayerComponent::RequestStartGame()
 {
-	const ANPPlayerController* PlayerController = GetNPPlayerController();
+	const APlayerController* PlayerController = GetPlayerController();
 	NPRoomLog::Info(
 		this,
 		FString::Printf(
@@ -110,7 +118,7 @@ void UNPRoomPlayerComponent::RequestStartGame()
 
 void UNPRoomPlayerComponent::RequestRestartRoom()
 {
-	const ANPPlayerController* PlayerController = GetNPPlayerController();
+	const APlayerController* PlayerController = GetPlayerController();
 	NPRoomLog::Info(
 		this,
 		FString::Printf(
@@ -121,7 +129,7 @@ void UNPRoomPlayerComponent::RequestRestartRoom()
 
 void UNPRoomPlayerComponent::ExitRoom()
 {
-	ANPPlayerController* PlayerController = GetNPPlayerController();
+	APlayerController* PlayerController = GetPlayerController();
 	if (!PlayerController || !PlayerController->IsLocalController())
 	{
 		NPRoomLog::Warning(this, TEXT("방 나가기 실패: 로컬 PlayerController가 아닙니다."));
@@ -155,7 +163,7 @@ void UNPRoomPlayerComponent::ExitRoom()
 
 void UNPRoomPlayerComponent::ShowRoomUsers() const
 {
-	const ANPPlayerController* PlayerController = GetNPPlayerController();
+	const APlayerController* PlayerController = GetPlayerController();
 	const ANPRoomGameState* RoomGameState = PlayerController && PlayerController->GetWorld()
 		? PlayerController->GetWorld()->GetGameState<ANPRoomGameState>()
 		: nullptr;
@@ -185,7 +193,7 @@ void UNPRoomPlayerComponent::ShowRoomUsers() const
 
 bool UNPRoomPlayerComponent::IsRoomHost() const
 {
-	const ANPPlayerController* PlayerController = GetNPPlayerController();
+	const APlayerController* PlayerController = GetPlayerController();
 	const ANPRoomGameState* RoomGameState = PlayerController && PlayerController->GetWorld()
 		? PlayerController->GetWorld()->GetGameState<ANPRoomGameState>()
 		: nullptr;
@@ -201,7 +209,7 @@ bool UNPRoomPlayerComponent::IsRoomHost() const
 
 bool UNPRoomPlayerComponent::CanStartGame() const
 {
-	const ANPPlayerController* PlayerController = GetNPPlayerController();
+	const APlayerController* PlayerController = GetPlayerController();
 	const ANPRoomGameState* RoomGameState = PlayerController && PlayerController->GetWorld()
 		? PlayerController->GetWorld()->GetGameState<ANPRoomGameState>()
 		: nullptr;
@@ -210,7 +218,7 @@ bool UNPRoomPlayerComponent::CanStartGame() const
 
 void UNPRoomPlayerComponent::ServerRequestStartGame_Implementation()
 {
-	ANPPlayerController* PlayerController = GetNPPlayerController();
+	APlayerController* PlayerController = GetPlayerController();
 	NPRoomLog::Info(
 		this,
 		FString::Printf(
@@ -228,7 +236,7 @@ void UNPRoomPlayerComponent::ServerRequestStartGame_Implementation()
 
 void UNPRoomPlayerComponent::ServerRequestRestartRoom_Implementation()
 {
-	ANPPlayerController* PlayerController = GetNPPlayerController();
+	APlayerController* PlayerController = GetPlayerController();
 	if (ANPMainGameMode* MainGameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ANPMainGameMode>() : nullptr)
 	{
 		MainGameMode->RequestRestartRoom(PlayerController);
@@ -240,7 +248,7 @@ void UNPRoomPlayerComponent::ServerRequestRestartRoom_Implementation()
 
 void UNPRoomPlayerComponent::ServerRequestExitRoom_Implementation()
 {
-	ANPPlayerController* PlayerController = GetNPPlayerController();
+	APlayerController* PlayerController = GetPlayerController();
 	if (ANPRoomGameMode* RoomGameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ANPRoomGameMode>() : nullptr)
 	{
 		RoomGameMode->RequestExitRoom(PlayerController);
@@ -260,7 +268,7 @@ void UNPRoomPlayerComponent::ClientBeginHostMigration_Implementation(
 	const FString& MigrationId,
 	const bool bBecomeHost)
 {
-	const ANPPlayerController* PlayerController = GetNPPlayerController();
+	const APlayerController* PlayerController = GetPlayerController();
 	UGameInstance* GameInstance = PlayerController ? PlayerController->GetGameInstance() : nullptr;
 	UNPRoomSubsystem* RoomSubsystem = GameInstance ? GameInstance->GetSubsystem<UNPRoomSubsystem>() : nullptr;
 	if (!RoomSubsystem)
@@ -281,7 +289,7 @@ void UNPRoomPlayerComponent::ClientBeginHostMigration_Implementation(
 
 void UNPRoomPlayerComponent::ClientLeaveRoom_Implementation()
 {
-	const ANPPlayerController* PlayerController = GetNPPlayerController();
+	const APlayerController* PlayerController = GetPlayerController();
 	UGameInstance* GameInstance = PlayerController ? PlayerController->GetGameInstance() : nullptr;
 	UNPRoomSubsystem* RoomSubsystem = GameInstance ? GameInstance->GetSubsystem<UNPRoomSubsystem>() : nullptr;
 	if (!RoomSubsystem)
@@ -300,9 +308,16 @@ void UNPRoomPlayerComponent::ClientLeaveRoom_Implementation()
 	RoomSubsystem->LeaveRoom(MenuLevelPath);
 }
 
-ANPPlayerController* UNPRoomPlayerComponent::GetNPPlayerController() const
+APlayerController* UNPRoomPlayerComponent::GetPlayerController() const
 {
-	return Cast<ANPPlayerController>(GetOwner());
+	return Cast<APlayerController>(GetOwner());
+}
+
+FString UNPRoomPlayerComponent::GetRoomLevelPath() const
+{
+	return RoomLevel.IsNull()
+		? FString()
+		: RoomLevel.ToSoftObjectPath().GetLongPackageName();
 }
 
 FString UNPRoomPlayerComponent::GetMenuLevelPath() const

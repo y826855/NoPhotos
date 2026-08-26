@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameState.h"
+#include "Gameplay/Photo/NPPhotoEvidenceTypes.h"
 #include "NPMainGameState.generated.h"
 
 class APlayerController;
@@ -23,6 +24,7 @@ struct NOPHOTOS_API FNPPlayerRanking
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FNPOnPlayerRankingsChanged);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FNPOnMainGameStateChanged);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FNPOnPictureSelectionStateChanged);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnNoPhotosPhotoEvidenceChanged);
 
 UCLASS()
 class NOPHOTOS_API ANPMainGameState : public AGameState
@@ -47,6 +49,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Picture Selection")
 	bool IsPlayerPictureSelectionComplete(const APlayerState* PlayerState) const;
 
+	UFUNCTION(BlueprintPure, Category = "Photo")
+	TArray<FNPReplicatedPhotoEvidence> GetPhotoEvidence() const { return PhotoEvidence; }
+
+	UFUNCTION(BlueprintPure, Category = "Photo")
+	TArray<FGuid> GetTransferredPhotoIds() const { return TransferredPhotoIds; }
+
+	UFUNCTION(BlueprintPure, Category = "Photo")
+	TArray<FGuid> GetSelectedPhotoIds(const APlayerState* PlayerState) const;
+
 	//모든 플레이어가 사진 선택을 완료했으면 정산 화면으로 전환
 	void ConfirmPictureSelection(APlayerController* PlayerController);
 
@@ -59,10 +70,17 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Picture Selection")
 	FNPOnPictureSelectionStateChanged OnPictureSelectionStateChanged;
 
+	UPROPERTY(BlueprintAssignable, Category = "Photo")
+	FOnNoPhotosPhotoEvidenceChanged OnPhotoEvidenceChanged;
+
 	void RefreshPlayerRankings();
 	void StartMainGame(int32 DurationSeconds);
 	void SetRemainingGameTime(int32 RemainingSeconds);
 	void FinishMainGame();
+	void AddPhotoEvidence(const FNPPhotoEvidenceResult& Result, int32 AwardedScore);
+	void RegisterTransferredPhoto(const FGuid& PhotoId);
+	void AttachPhotoId(APlayerState* Photographer, uint16 CaptureSequence, const FGuid& PhotoId);
+	void SetSelectedPhotoIds(APlayerState* PlayerState, const TArray<FGuid>& PhotoIds);
 
 private:
 	UFUNCTION()
@@ -73,6 +91,15 @@ private:
 
 	UFUNCTION()
 	void OnRep_PictureSelectionCompletedPlayers();
+
+	UFUNCTION()
+	void OnRep_PhotoEvidence();
+
+	UFUNCTION()
+	void OnRep_TransferredPhotoIds();
+
+	UFUNCTION()
+	void OnRep_SelectedPhotos();
 
 	bool AreAllConnectedPlayersPictureSelectionComplete() const;
 
@@ -95,6 +122,17 @@ private:
 	//사진 선택 완료를 누른 플레이어 목록
 	UPROPERTY(ReplicatedUsing = OnRep_PictureSelectionCompletedPlayers)
 	TArray<TObjectPtr<APlayerState>> PictureSelectionCompletedPlayers;
+
+	static constexpr int32 MaximumStoredPhotos = 10;
+
+	UPROPERTY(ReplicatedUsing = OnRep_PhotoEvidence)
+	TArray<FNPReplicatedPhotoEvidence> PhotoEvidence;
+
+	UPROPERTY(ReplicatedUsing = OnRep_TransferredPhotoIds)
+	TArray<FGuid> TransferredPhotoIds;
+
+	UPROPERTY(ReplicatedUsing = OnRep_SelectedPhotos)
+	TArray<FNPPlayerSelectedPhotos> SelectedPhotos;
 
 	int32 LastLoggedRemainingTime = INDEX_NONE;
 	bool bFinalRankingsLogged = false;

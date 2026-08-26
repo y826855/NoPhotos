@@ -4,7 +4,7 @@
 #include "UObject/Object.h"
 #include "NPPhotoRepository.generated.h"
 
-class ANoPhotosGameMode;
+class ANPMainGameMode;
 class APlayerController;
 class APlayerState;
 
@@ -25,7 +25,7 @@ class NOPHOTOS_API UNPPhotoRepository : public UObject
 	GENERATED_BODY()
 
 public:
-	void Initialize(ANoPhotosGameMode* InGameMode);
+	void Initialize(ANPMainGameMode* InGameMode);
 	void AuthorizeCapture(APlayerController* Photographer, uint16 CaptureSequence);
 	bool IsCaptureAuthorized(APlayerController* Photographer, uint16 CaptureSequence) const;
 	bool StorePhoto(
@@ -46,7 +46,7 @@ private:
 
 	void TrimOldestPhotos();
 
-	TWeakObjectPtr<ANoPhotosGameMode> OwningGameMode;
+	TWeakObjectPtr<ANPMainGameMode> OwningGameMode;
 	TArray<FAuthorizedCapture> AuthorizedCaptures;
 	TMap<FGuid, FNPStoredPhoto> StoredPhotos;
 	TArray<FGuid> StorageOrder;

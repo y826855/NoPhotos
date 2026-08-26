@@ -16,6 +16,7 @@ ANPBaseRelic::ANPBaseRelic(const FObjectInitializer& ObjectInitializer)
 	PrimaryActorTick.bCanEverTick = false;
 	bReplicates = true;
 	SetReplicateMovement(true);
+	SetPhysicsReplicationMode(EPhysicsReplicationMode::PredictiveInterpolation);
 
 	RelicMesh = CreateDefaultSubobject<
 		UPrimitiveComponent,

@@ -6,7 +6,7 @@
 #include "Gameplay/Photo/NPPhotoImageCodec.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
 #include "Gameplay/Photo/NPPhotoRepository.h"
-#include "NoPhotosGameMode.h"
+#include "Core/Main/NPMainGameMode.h"
 
 UNPPhotoTransferComponent::UNPPhotoTransferComponent()
 {
@@ -140,7 +140,7 @@ void UNPPhotoTransferComponent::ServerBeginPhotoUpload_Implementation(
 	const FNPPhotoTransferHeader& Header)
 {
 	APlayerController* Controller = Cast<APlayerController>(GetOwner());
-	ANoPhotosGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ANoPhotosGameMode>() : nullptr;
+	ANPMainGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ANPMainGameMode>() : nullptr;
 	UNPPhotoRepository* Repository = GameMode ? GameMode->GetPhotoRepository() : nullptr;
 	if (!IsValidHeader(Header) || !Repository
 		|| !Repository->IsCaptureAuthorized(Controller, Header.CaptureSequence)
@@ -203,7 +203,7 @@ void UNPPhotoTransferComponent::ServerFinishPhotoUpload_Implementation(FGuid Pho
 		return;
 	}
 
-	ANoPhotosGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ANoPhotosGameMode>() : nullptr;
+	ANPMainGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ANPMainGameMode>() : nullptr;
 	UNPPhotoRepository* Repository = GameMode ? GameMode->GetPhotoRepository() : nullptr;
 	if (Repository)
 	{
@@ -219,7 +219,7 @@ void UNPPhotoTransferComponent::ServerFinishPhotoUpload_Implementation(FGuid Pho
 
 void UNPPhotoTransferComponent::ServerRequestPhoto_Implementation(FGuid PhotoId)
 {
-	ANoPhotosGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ANoPhotosGameMode>() : nullptr;
+	ANPMainGameMode* GameMode = GetWorld() ? GetWorld()->GetAuthGameMode<ANPMainGameMode>() : nullptr;
 	const UNPPhotoRepository* Repository = GameMode ? GameMode->GetPhotoRepository() : nullptr;
 	const FNPStoredPhoto* StoredPhoto = Repository ? Repository->FindPhoto(PhotoId) : nullptr;
 	if (!StoredPhoto || PendingDownload.IsSet())
