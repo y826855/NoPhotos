@@ -2,6 +2,7 @@
 
 #include "Components/BoxComponent.h"
 #include "Data/Interfaces/NPLockable.h"
+#include "Gameplay/Relic/Gimmick/Components/NPGimmickProgressComponent.h"
 #include "Gameplay/Relic/Gimmick/NPRelicCaseKey.h"
 
 #if WITH_EDITOR
@@ -25,6 +26,9 @@ ANPRelicCaseKeyVolume::ANPRelicCaseKeyVolume()
 	LockVolume->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	LockVolume->SetCollisionResponseToAllChannels(ECR_Overlap);
 	LockVolume->SetGenerateOverlapEvents(true);
+
+	GimmickProgressComponent = CreateDefaultSubobject<UNPGimmickProgressComponent>(
+		TEXT("GimmickProgressComponent"));
 }
 
 void ANPRelicCaseKeyVolume::BeginPlay()
@@ -39,10 +43,19 @@ void ANPRelicCaseKeyVolume::BeginPlay()
 
 	LockVolume->OnComponentBeginOverlap.AddDynamic(
 		this,
-		&ANPRelicCaseKeyVolume::HandleLockOverlap);
+		&ANPRelicCaseKeyVolume::HandleLockBeginOverlap);
+	LockVolume->OnComponentEndOverlap.AddDynamic(
+		this,
+		&ANPRelicCaseKeyVolume::HandleLockEndOverlap);
+	GimmickProgressComponent->OnProgressCompleted.AddDynamic(
+		this,
+		&ANPRelicCaseKeyVolume::HandleProgressCompleted);
+	GimmickProgressComponent->OnProgressLost.AddDynamic(
+		this,
+		&ANPRelicCaseKeyVolume::HandleProgressLost);
 }
 
-void ANPRelicCaseKeyVolume::HandleLockOverlap(
+void ANPRelicCaseKeyVolume::HandleLockBeginOverlap(
 	UPrimitiveComponent* OverlappedComponent,
 	AActor* OtherActor,
 	UPrimitiveComponent* OtherComponent,
@@ -51,18 +64,40 @@ void ANPRelicCaseKeyVolume::HandleLockOverlap(
 	const FHitResult& SweepResult)
 {
 	ANPRelicCaseKey* KeyActor = Cast<ANPRelicCaseKey>(OtherActor);
-	if (!HasAuthority() || !IsValid(KeyActor) || !UnlockTargetActors())
+	if (!HasAuthority() || !IsValid(KeyActor) || IsValid(ActiveKey))
 	{
 		return;
 	}
 
-	LockVolume->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	MulticastUnlockSucceeded();
-	KeyActor->NotifyUnlockSucceeded();
-	if (bConsumeKeyOnUnlock)
+	ActiveKey = KeyActor;
+	MulticastStartProgress();
+}
+
+void ANPRelicCaseKeyVolume::HandleLockEndOverlap(
+	UPrimitiveComponent* OverlappedComponent,
+	AActor* OtherActor,
+	UPrimitiveComponent* OtherComponent,
+	int32 OtherBodyIndex)
+{
+	ANPRelicCaseKey* KeyActor = Cast<ANPRelicCaseKey>(OtherActor);
+	if (!HasAuthority() || !IsValid(KeyActor) || KeyActor != ActiveKey ||
+		LockVolume->IsOverlappingActor(KeyActor))
 	{
-		KeyActor->Destroy();
+		return;
 	}
+
+	ActiveKey = nullptr;
+	MulticastReverseProgress();
+}
+
+void ANPRelicCaseKeyVolume::HandleProgressCompleted()
+{
+	RequestUnlock();
+}
+
+void ANPRelicCaseKeyVolume::HandleProgressLost()
+{
+	RequestLock();
 }
 
 void ANPRelicCaseKeyVolume::MulticastUnlockSucceeded_Implementation()
@@ -70,20 +105,54 @@ void ANPRelicCaseKeyVolume::MulticastUnlockSucceeded_Implementation()
 	OnUnlockSucceeded();
 }
 
-bool ANPRelicCaseKeyVolume::UnlockTargetActors()
+void ANPRelicCaseKeyVolume::MulticastStartProgress_Implementation()
 {
-	bool bUnlockedAnyTarget = false;
+	GimmickProgressComponent->StartProgress();
+	OnKeyOverlapStarted();
+}
+
+void ANPRelicCaseKeyVolume::MulticastReverseProgress_Implementation()
+{
+	GimmickProgressComponent->ReverseProgress();
+	OnKeyOverlapEnded();
+}
+
+void ANPRelicCaseKeyVolume::RequestUnlock()
+{
+	if (!HasAuthority() || !IsValid(ActiveKey) ||
+		GimmickProgressComponent->GetProgress() < 1.0f ||
+		!LockVolume->IsOverlappingActor(ActiveKey) ||
+		!SetTargetActorsLocked(false))
+	{
+		return;
+	}
+
+	MulticastUnlockSucceeded();
+	ActiveKey->NotifyUnlockSucceeded();
+}
+
+void ANPRelicCaseKeyVolume::RequestLock()
+{
+	if (HasAuthority())
+	{
+		SetTargetActorsLocked(true);
+	}
+}
+
+bool ANPRelicCaseKeyVolume::SetTargetActorsLocked(const bool bLocked)
+{
+	bool bChangedAnyTarget = false;
 	for (AActor* UnlockTarget : UnlockTargets)
 	{
 		if (IsValid(UnlockTarget) && UnlockTarget->GetClass()->ImplementsInterface(
 			UNPLockable::StaticClass()))
 		{
-			bUnlockedAnyTarget |= INPLockable::Execute_TrySetLocked(
+			bChangedAnyTarget |= INPLockable::Execute_TrySetLocked(
 				UnlockTarget,
-				false);
+				bLocked);
 		}
 	}
-	return bUnlockedAnyTarget;
+	return bChangedAnyTarget;
 }
 
 #pragma region Debug

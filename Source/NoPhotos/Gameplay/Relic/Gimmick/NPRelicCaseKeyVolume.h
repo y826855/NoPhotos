@@ -6,6 +6,8 @@
 
 class UBoxComponent;
 class UPrimitiveComponent;
+class ANPRelicCaseKey;
+class UNPGimmickProgressComponent;
 
 UCLASS(Blueprintable)
 class NOPHOTOS_API ANPRelicCaseKeyVolume : public AActor
@@ -21,15 +23,26 @@ protected:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Relic Case Key")
 	void OnUnlockSucceeded();
 
+	UFUNCTION(BlueprintImplementableEvent, Category = "Relic Case Key")
+	void OnKeyOverlapStarted();
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "Relic Case Key")
+	void OnKeyOverlapEnded();
+
 	UFUNCTION(NetMulticast, Reliable)
 	void MulticastUnlockSucceeded();
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastStartProgress();
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastReverseProgress();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Relic Case Key|Components")
 	TObjectPtr<UBoxComponent> LockVolume;
 
-	/** 해금 성공 시 사용한 열쇠를 제거합니다. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Relic Case Key")
-	bool bConsumeKeyOnUnlock = true;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Relic Case Key|Components")
+	TObjectPtr<UNPGimmickProgressComponent> GimmickProgressComponent;
 
 	/** 이 볼륨이 해금할 액터들입니다. */
 	UPROPERTY(
@@ -39,9 +52,9 @@ protected:
 		meta = (MustImplement = "/Script/NoPhotos.NPLockable"))
 	TArray<TObjectPtr<AActor>> UnlockTargets;
 
-private:
+	private:
 	UFUNCTION()
-	void HandleLockOverlap(
+	void HandleLockBeginOverlap(
 		UPrimitiveComponent* OverlappedComponent,
 		AActor* OtherActor,
 		UPrimitiveComponent* OtherComponent,
@@ -49,7 +62,25 @@ private:
 		bool bFromSweep,
 		const FHitResult& SweepResult);
 
-	bool UnlockTargetActors();
+	UFUNCTION()
+	void HandleLockEndOverlap(
+		UPrimitiveComponent* OverlappedComponent,
+		AActor* OtherActor,
+		UPrimitiveComponent* OtherComponent,
+		int32 OtherBodyIndex);
+
+	UFUNCTION()
+	void HandleProgressCompleted();
+
+	UFUNCTION()
+	void HandleProgressLost();
+
+	void RequestUnlock();
+	void RequestLock();
+	bool SetTargetActorsLocked(bool bLocked);
+
+	UPROPERTY(Transient)
+	TObjectPtr<ANPRelicCaseKey> ActiveKey;
 
 #pragma region Debug
 #if WITH_EDITOR
