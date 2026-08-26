@@ -352,11 +352,13 @@ void UNPPhotoCaptureComponent::ClientReceivePhotoResult_Implementation(
 	UE_LOG(
 		LogNPPhoto,
 		Log,
-		TEXT("[Result] Success=%s Reason=%d Thief=%s Relic=%s"),
+		TEXT("[Result] RelicSuccess=%s ReactiveSuccess=%s Reason=%d Thief=%s Relic=%s ReactiveTarget=%s"),
 		Result.bSuccess ? TEXT("true") : TEXT("false"),
+		Result.bReactiveTargetSuccess ? TEXT("true") : TEXT("false"),
 		static_cast<int32>(Result.FailureReason),
 		*GetNameSafe(Result.Thief.Get()),
-		*GetNameSafe(Result.Relic.Get()));
+		*GetNameSafe(Result.Relic.Get()),
+		*GetNameSafe(Result.ReactiveTarget.Get()));
 
 #if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
 	if (Result.bSuccess && GEngine)
@@ -371,11 +373,24 @@ void UNPPhotoCaptureComponent::ClientReceivePhotoResult_Implementation(
 				*GetNameSafe(Result.Thief.Get()),
 				*GetNameSafe(Result.Relic.Get())));
 	}
+	if (Result.bReactiveTargetSuccess && GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			-1,
+			5.0f,
+			FColor::Yellow,
+			FString::Printf(
+				TEXT("[고블린 촬영 성공]\n촬영자: %s\n대상: %s\n가시율: %.0f%%"),
+				*GetNameSafe(Result.Photographer.Get()),
+				*GetNameSafe(Result.ReactiveTarget.Get()),
+				Result.ReactiveTargetVisibility * 100.0f));
+	}
 #endif
 
 	if (TArray<uint8>* JpegData = PendingJpegPhotos.Find(Result.CaptureSequence))
 	{
 		if (Result.bSuccess
+			|| Result.bReactiveTargetSuccess
 			|| Result.FailureReason == ENPPhotoEvidenceFailureReason::NoValidEvidence)
 		{
 			if (UNPPhotoTransferComponent* TransferComponent =

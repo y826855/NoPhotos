@@ -39,6 +39,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Photo|Validation", meta=(ClampMin="0.0", ClampMax="1.0"))
 	float MinimumRelicVisibility = 0.5f;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Photo|Validation", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float MinimumReactiveTargetVisibility = 0.5f;
+
 	/** 요청 카메라가 서버 Pawn 원점에서 떨어질 수 있는 최대 거리입니다. 3인칭 Spring Arm 길이를 포함해야 합니다. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Photo|Security", meta=(ClampMin="0.0"))
 	float MaximumCameraDistanceFromPawn = 700.0f;

@@ -1,17 +1,25 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Data/Interface/NPPhotoReactiveTarget.h"
 #include "GameFramework/Character.h"
 #include "NPGoblinCharacter.generated.h"
 
 class ANPGoblinPatrolRoute;
+class APlayerState;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(
+	FNPOnGoblinPhotographed,
+	APlayerState*, Photographer,
+	float, Visibility,
+	int32, CaptureSequence);
 
 /**
  * NavMesh를 이용해 배회하고 가까운 플레이어에게서 도망가는 고블린입니다.
  * 실제 이동 의사결정은 ANPGoblinAIController가 서버에서 수행합니다.
  */
 UCLASS(Blueprintable)
-class NOPHOTOS_API ANPGoblinCharacter : public ACharacter
+class NOPHOTOS_API ANPGoblinCharacter : public ACharacter, public INPPhotoReactiveTarget
 {
 	GENERATED_BODY()
 
@@ -48,7 +56,21 @@ public:
 	float GetRoamMoveSpeed() const { return FMath::Max(0.0f, RoamMoveSpeed); }
 	float GetFleeMoveSpeed() const { return FMath::Max(0.0f, FleeMoveSpeed); }
 
+	virtual bool CanBePhotographed_Implementation(APlayerState* Photographer) const override;
+	virtual void OnPhotographed_Implementation(
+		APlayerState* Photographer,
+		float Visibility,
+		int32 CaptureSequence) override;
+
+	/** 서버에서 플레이어가 이 고블린을 처음 촬영했을 때 발생합니다. */
+	UPROPERTY(BlueprintAssignable, Category = "Goblin|Photo")
+	FNPOnGoblinPhotographed OnGoblinPhotographed;
+
 protected:
+	/** C++ 중복 방지 처리가 끝난 뒤 서버에서 BP 고블린에게 전달되는 콜백입니다. */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Goblin|Photo", meta = (DisplayName = "On Photographed"))
+	void BP_OnPhotographed(APlayerState* Photographer, float Visibility, int32 CaptureSequence);
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Goblin|AI", meta = (ClampMin = "0.05", Units = "s"))
 	float AIDecisionInterval = 0.25f;
 
@@ -117,4 +139,8 @@ protected:
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<ANPGoblinPatrolRoute> PatrolRoute;
+
+	/** 보상 중복 방지를 위한 서버 전용 촬영자 목록입니다. */
+	UPROPERTY(Transient)
+	TSet<TObjectPtr<APlayerState>> PhotographedPlayers;
 };

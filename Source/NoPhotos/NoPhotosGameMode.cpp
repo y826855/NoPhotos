@@ -51,11 +51,12 @@ FNPPhotoEvidenceResult ANoPhotosGameMode::HandlePhotoCaptureRequest(
 	Result = PhotoEvidenceService->EvaluatePhoto(Request);
 	if (PhotoRepository
 		&& (Result.bSuccess
+			|| Result.bReactiveTargetSuccess
 			|| Result.FailureReason == ENPPhotoEvidenceFailureReason::NoValidEvidence))
 	{
 		PhotoRepository->AuthorizeCapture(Request.Photographer, Request.CaptureSequence);
 	}
-	if (!Result.bSuccess)
+	if (!Result.bSuccess && !Result.bReactiveTargetSuccess)
 	{
 		UE_LOG(
 			LogNPPhoto,
@@ -65,22 +66,27 @@ FNPPhotoEvidenceResult ANoPhotosGameMode::HandlePhotoCaptureRequest(
 		return Result;
 	}
 
-	if (RelicDeliveryService)
+	if (Result.bSuccess && RelicDeliveryService)
 	{
 		RelicDeliveryService->RegisterPhotoEvidence(Result);
 	}
 
-	if (ANoPhotosGameState* PhotoGameState = GetGameState<ANoPhotosGameState>())
+	if (Result.bSuccess)
 	{
-		PhotoGameState->AddPhotoEvidence(Result, 0);
+		if (ANoPhotosGameState* PhotoGameState = GetGameState<ANoPhotosGameState>())
+		{
+			PhotoGameState->AddPhotoEvidence(Result, 0);
+		}
 	}
 	UE_LOG(
 		LogNPPhoto,
 		Log,
-		TEXT("[GameMode] Photo evidence accepted. Photographer=%s Thief=%s Relic=%s"),
+		TEXT("[GameMode] Photo accepted. Photographer=%s RelicEvidence=%s Thief=%s Relic=%s ReactiveTarget=%s"),
 		*GetNameSafe(Result.Photographer.Get()),
+		Result.bSuccess ? TEXT("true") : TEXT("false"),
 		*GetNameSafe(Result.Thief.Get()),
-		*GetNameSafe(Result.Relic.Get()));
+		*GetNameSafe(Result.Relic.Get()),
+		*GetNameSafe(Result.ReactiveTarget.Get()));
 	return Result;
 }
 
