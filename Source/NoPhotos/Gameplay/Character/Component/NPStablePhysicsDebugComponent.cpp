@@ -2,7 +2,7 @@
 
 #include "Components/SkeletalMeshComponent.h"
 #include "DrawDebugHelpers.h"
-#include "Gameplay/Character/NPRStablePhysicsPawn.h"
+#include "Gameplay/Character/NPReplicatedStablePhysicsPawn.h"
 #include "Gameplay/Character/NPStablePhysicsCharacterProfile.h"
 #include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Character/Component/NPStablePhysicsMovementComponent.h"
@@ -281,12 +281,17 @@ void UNPStablePhysicsDebugComponent::DrawGrabDebug(
 
 	const FVector HandLocation = GrabComponent.PhysicsMesh->GetSocketLocation(
 		GrabComponent.HandBoneName);
+	const FColor GrabSphereColor = GrabComponent.IsHoldingObject()
+		? FColor::Green
+		: GrabComponent.bGrabRequested
+			? FColor::Blue
+			: FColor::Yellow;
 	DrawDebugSphere(
 		GrabComponent.GetWorld(),
 		HandLocation,
 		GrabComponent.GrabRadius,
 		16,
-		GrabComponent.IsHoldingObject() ? FColor::Green : FColor::Yellow,
+		GrabSphereColor,
 		false,
 		0.0f,
 		0,
@@ -383,7 +388,8 @@ void UNPStablePhysicsDebugComponent::DrawGrabForceDebug(
 void UNPStablePhysicsDebugComponent::DrawGrabNetworkDebug(
 	const ANPStablePhysicsPawn& Pawn) const
 {
-	const ANPRStablePhysicsPawn* NetworkPawn = Cast<ANPRStablePhysicsPawn>(&Pawn);
+	const ANPReplicatedStablePhysicsPawn* NetworkPawn =
+		Cast<ANPReplicatedStablePhysicsPawn>(&Pawn);
 	if (!NetworkPawn
 		|| !NetworkPawn->bDrawGrabNetworkDebug
 		|| !NetworkPawn->IsReplicatedGrabActive()

@@ -12,6 +12,7 @@
 #include "PhysicsEngine/BodyInstance.h"
 #include "PhysicsEngine/PhysicalAnimationComponent.h"
 #include "PhysicsEngine/PhysicsAsset.h"
+#include "PhysicsControlComponent.h"
 #include "Gameplay/Character/Component/NPStablePhysicsDebugComponent.h"
 #include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Character/Component/NPStablePhysicsMovementComponent.h"
@@ -54,8 +55,10 @@ ANPStablePhysicsPawn::ANPStablePhysicsPawn()
 	FollowCamera->bUsePawnControlRotation = false;
 
 	PhysicalAnimation = CreateDefaultSubobject<UPhysicalAnimationComponent>(TEXT("PhysicalAnimation"));
+	PhysicsControl = CreateDefaultSubobject<UPhysicsControlComponent>(TEXT("PhysicsControl"));
 	PhysicsMovement = CreateDefaultSubobject<UNPStablePhysicsMovementComponent>(TEXT("NPPhysicsMovement"));
 	PhysicsDebug = CreateDefaultSubobject<UNPStablePhysicsDebugComponent>(TEXT("NPPhysicsDebug"));
+	PhysicsControl->AddTickPrerequisiteComponent(PhysicsMovement);
 
 	RightHandGrab = CreateDefaultSubobject<UNPStablePhysicsGrabComponent>(TEXT("RightHandGrab"));
 	RightHandGrab->SetupAttachment(PhysicsMesh);
@@ -84,6 +87,7 @@ void ANPStablePhysicsPawn::BeginPlay()
 		RightHandGrab,
 		&UNPStablePhysicsGrabComponent::NotifyJumpIntent);
 	InitializePhysicalAnimation();
+	PhysicsMovement->InitializeFacingControl(PhysicsControl);
 	DefaultCameraArmLength = CameraBoom->TargetArmLength;
 	DefaultCameraFOV = FollowCamera->FieldOfView;
 	CurrentCameraTargetHeight = CameraTargetHeight;
@@ -99,6 +103,7 @@ void ANPStablePhysicsPawn::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 
 	RefreshCharacterProfileIfChanged();
+	PhysicsMovement->SetFacingControlEnabled(IsLocallyControlled());
 	UpdatePhotoCamera(DeltaSeconds);
 	UpdateCameraTarget();
 	UpdateFacingTarget();
@@ -307,6 +312,11 @@ void ANPStablePhysicsPawn::ApplyCharacterProfile()
 	PhysicsMovement->SetTargetPelvisHeight(CharacterProfile->PelvisHeight);
 	PhysicsMovement->SetMaxMoveSpeed(CharacterProfile->MaxMoveSpeed);
 	PhysicsMovement->SetJumpVelocityChange(CharacterProfile->JumpVelocityChange);
+	PhysicsMovement->SetFacingControlSettings(
+		CharacterProfile->FacingAngularStrength,
+		CharacterProfile->FacingAngularDampingRatio,
+		CharacterProfile->MaxFacingTorque,
+		CharacterProfile->MaxFacingTargetSpeed);
 	RightHandGrab->SetLinearBreakThreshold(
 		CharacterProfile->GrabLinearBreakThreshold);
 	RightHandGrab->SetReplicatedGrabFrameBlendDuration(
@@ -329,6 +339,7 @@ void ANPStablePhysicsPawn::RefreshCharacterProfileIfChanged()
 	PhysicsMovement->Initialize(PhysicsMesh, CharacterForwardYawOffset);
 	RightHandGrab->Initialize(PhysicsMesh, RightHandBoneName);
 	InitializePhysicalAnimation();
+	PhysicsMovement->InitializeFacingControl(PhysicsControl);
 }
 
 void ANPStablePhysicsPawn::InitializePhysicalAnimation()
@@ -451,12 +462,29 @@ void ANPStablePhysicsPawn::UpdateRightHandIK(float DeltaSeconds)
 	const FVector ShoulderLocation = PhysicsMesh->GetSocketLocation(RightShoulderBoneName);
 	FRotator HandTargetRotation = GetTargetViewRotation();
 	HandTargetRotation.Roll = 0.0f;
-	const FVector HandForward = HandTargetRotation.Vector();
-	const FVector HandRight = FRotationMatrix(HandTargetRotation).GetUnitAxis(EAxis::Y);
-	const FVector HandTargetLocation = ShoulderLocation + HandForward * RightHandReachDistance;
-	const FVector ElbowTargetLocation = ShoulderLocation
+	FVector HandForward = HandTargetRotation.Vector();
+	FVector HandRight = FRotationMatrix(HandTargetRotation).GetUnitAxis(EAxis::Y);
+	FVector HandTargetLocation = ShoulderLocation
+		+ HandForward * RightHandReachDistance;
+	FVector ElbowTargetLocation = ShoulderLocation
 		+ HandForward * (RightHandReachDistance * 0.5f)
 		+ HandRight * RightElbowOutwardDistance;
+
+	if (bHasRightHandIKWorldTarget)
+	{
+		HandTargetLocation = RightHandIKWorldTarget;
+		HandForward = (HandTargetLocation - ShoulderLocation).GetSafeNormal();
+		HandRight = FVector::CrossProduct(FVector::UpVector, HandForward)
+			.GetSafeNormal();
+		if (HandRight.IsNearlyZero())
+		{
+			HandRight = FRotationMatrix(HandTargetRotation).GetUnitAxis(EAxis::Y);
+		}
+		ElbowTargetLocation = FMath::Lerp(
+			ShoulderLocation,
+			HandTargetLocation,
+			0.5f) + HandRight * RightElbowOutwardDistance;
+	}
 
 	const FTransform& MeshTransform = PhysicsMesh->GetComponentTransform();
 	RightHandIKLocation = MeshTransform.InverseTransformPosition(HandTargetLocation);
@@ -592,4 +620,15 @@ void ANPStablePhysicsPawn::ApplyRightHandState(bool bActive)
 void ANPStablePhysicsPawn::SetRightHandVisualState(bool bActive)
 {
 	bRightHandActive = bActive;
+}
+
+void ANPStablePhysicsPawn::SetRightHandIKWorldTarget(const FVector& WorldTarget)
+{
+	bHasRightHandIKWorldTarget = true;
+	RightHandIKWorldTarget = WorldTarget;
+}
+
+void ANPStablePhysicsPawn::ClearRightHandIKWorldTarget()
+{
+	bHasRightHandIKWorldTarget = false;
 }

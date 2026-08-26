@@ -42,6 +42,10 @@
 		{
 			"Name": "CableComponent",
 			"Enabled": true
+		},
+		{
+			"Name": "PhysicsControl",
+			"Enabled": true
 		}
 	]
 }
