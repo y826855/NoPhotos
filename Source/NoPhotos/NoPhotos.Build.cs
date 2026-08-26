@@ -12,6 +12,7 @@ public class NoPhotos : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
+			"GameplayTags",
 			"InputCore",
 			"EnhancedInput",
 			"AIModule",
@@ -19,6 +20,7 @@ public class NoPhotos : ModuleRules
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"CableComponent",
+			"Niagara",
 			"UMG",
 			"Slate",
 			"OnlineSubsystem"
@@ -27,7 +29,9 @@ public class NoPhotos : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] {
 			"OnlineSubsystemUtils",
 			"ImageCore",
-			"GeometryCollectionEngine"
+			"GeometryCollectionEngine",
+			"PhysicsCore",
+			"NavigationSystem"
 		});
 
 		PublicIncludePaths.Add(ModuleDirectory);

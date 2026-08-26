@@ -11,8 +11,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogNPSpeedBoostEvent, Log, All);
 ANPSpeedBoostMapEvent::ANPSpeedBoostMapEvent()
 {
 	Duration = 10.0f;
-	Cooldown = 45.0f;
-	SelectionWeight = 1.0f;
 	SpeedMultiplier = 2.0f;
 }
 
@@ -38,7 +36,7 @@ void ANPSpeedBoostMapEvent::ApplyEventState_Implementation(const bool bNewActive
 			Display,
 			TEXT("플레이어 이동속도 증가 이벤트 시작: Multiplier=%.2f, Duration=%.2f"),
 			SpeedMultiplier,
-			Duration);
+			GetEventDuration());
 		return;
 	}
 

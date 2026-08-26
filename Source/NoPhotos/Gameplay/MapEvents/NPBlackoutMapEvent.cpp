@@ -7,8 +7,6 @@
 ANPBlackoutMapEvent::ANPBlackoutMapEvent()
 {
 	Duration = 8.0f;
-	Cooldown = 30.0f;
-	SelectionWeight = 1.0f;
 }
 
 void ANPBlackoutMapEvent::ApplyEventState_Implementation(const bool bNewActive)
