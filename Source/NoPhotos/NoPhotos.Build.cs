@@ -24,6 +24,7 @@ public class NoPhotos : ModuleRules
 			"Niagara",
 			"UMG",
 			"Slate",
+			"SlateCore",
 			"OnlineSubsystem"
 		});
 
