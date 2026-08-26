@@ -17,26 +17,49 @@ void UNPImpactReceiveComponent::BeginPlay()
 	MaxHealth = FMath::Max(1, MaxHealth);
 	CurrentHealth = MaxHealth;
 
-	AActor* Owner = GetOwner();
-	UPrimitiveComponent* CollisionComponent = ImpactTargetComponent;
-	if (!CollisionComponent)
+	if (ImpactTargetComponents.IsEmpty())
 	{
-		CollisionComponent = Owner
+		AActor* Owner = GetOwner();
+		if (UPrimitiveComponent* RootPrimitive = Owner
 			? Cast<UPrimitiveComponent>(Owner->GetRootComponent())
-			: nullptr;
+			: nullptr)
+		{
+			ImpactTargetComponents.Add(RootPrimitive);
+		}
 	}
-	if (CollisionComponent)
+
+	for (UPrimitiveComponent* ImpactTargetComponent : ImpactTargetComponents)
 	{
-		CollisionComponent->OnComponentHit.AddDynamic(
-			this,
-			&UNPImpactReceiveComponent::HandleHit);
+		if (IsValid(ImpactTargetComponent))
+		{
+			ImpactTargetComponent->OnComponentHit.AddUniqueDynamic(
+				this,
+				&UNPImpactReceiveComponent::HandleHit);
+		}
 	}
 }
 
 void UNPImpactReceiveComponent::SetImpactTargetComponent(
 	UPrimitiveComponent* InTargetComponent)
 {
-	ImpactTargetComponent = InTargetComponent;
+	ImpactTargetComponents.Reset();
+	if (IsValid(InTargetComponent))
+	{
+		ImpactTargetComponents.Add(InTargetComponent);
+	}
+}
+
+void UNPImpactReceiveComponent::SetImpactTargetComponents(
+	const TArray<UPrimitiveComponent*>& InTargetComponents)
+{
+	ImpactTargetComponents.Reset(InTargetComponents.Num());
+	for (UPrimitiveComponent* ImpactTargetComponent : InTargetComponents)
+	{
+		if (IsValid(ImpactTargetComponent))
+		{
+			ImpactTargetComponents.AddUnique(ImpactTargetComponent);
+		}
+	}
 }
 
 void UNPImpactReceiveComponent::IgnoreGrabImpact()
@@ -59,6 +82,11 @@ void UNPImpactReceiveComponent::HandleHit(
 {
 	AActor* Owner = GetOwner();
 	if (!Owner || !Owner->HasAuthority() || CurrentHealth <= 0)
+	{
+		return;
+	}
+	if (OtherActor == Owner ||
+		(OtherComponent && OtherComponent->GetOwner() == Owner))
 	{
 		return;
 	}
