@@ -87,6 +87,16 @@ bool ANPRelicCase::UnlockCase()
 	return true;
 }
 
+bool ANPRelicCase::TrySetLocked_Implementation(const bool bLocked)
+{
+	return !bLocked && UnlockCase();
+}
+
+bool ANPRelicCase::IsLocked_Implementation() const
+{
+	return !IsAccessible();
+}
+
 void ANPRelicCase::OnRep_IsBroken()
 {
 	ApplyCaseState();

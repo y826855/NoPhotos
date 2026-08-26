@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Data/Interfaces/NPLockableInterface.h"
 #include "GameFramework/Actor.h"
 #include "NPRelicCase.generated.h"
 
@@ -11,7 +12,9 @@ class UNPRelicCaseSlotComponent;
 class USceneComponent;
 
 UCLASS(Blueprintable)
-class NOPHOTOS_API ANPRelicCase : public AActor
+class NOPHOTOS_API ANPRelicCase
+	: public AActor,
+	  public INPLockableInterface
 {
 	GENERATED_BODY()
 
@@ -33,6 +36,9 @@ public:
 	/** 외부 기믹이 서버에서 케이스를 해금할 때 호출합니다. */
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Relic Case")
 	bool UnlockCase();
+
+	virtual bool TrySetLocked_Implementation(bool bLocked) override;
+	virtual bool IsLocked_Implementation() const override;
 
 protected:
 	virtual void PostInitializeComponents() override;
