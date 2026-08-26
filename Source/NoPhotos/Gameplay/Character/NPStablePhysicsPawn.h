@@ -18,6 +18,7 @@ class USpringArmComponent;
 class UNPStablePhysicsDebugComponent;
 class UNPStablePhysicsGrabComponent;
 class UNPStablePhysicsMovementComponent;
+struct FNPRelicSwingSettings;
 struct FInputActionValue;
 
 /** 물리 캐릭터 프로토타입을 위한 안정적인 힘 기반 Pawn입니다. */
@@ -35,6 +36,8 @@ public:
 	void StopMovementInput();
 	/** 점프대처럼 외부 게임 규칙이 물리 캐릭터 전체에 즉시 속도 변화를 적용할 때 사용합니다. */
 	void AddExternalVelocityChange(const FVector& VelocityChange);
+	bool BeginRelicSwing(const FNPRelicSwingSettings& Settings);
+	void EndRelicSwing();
 
 	/** 설정된 사진 촬영 Montage를 한 번 재생합니다. */
 	bool PlayPhotoShotMontage();
@@ -213,6 +216,9 @@ protected:
 	FName RightShoulderBoneName = TEXT("clavicle_r");
 
 	UPROPERTY(EditAnywhere, Category="Right Hand IK")
+	FName RightUpperArmBoneName = TEXT("upperarm_r");
+
+	UPROPERTY(EditAnywhere, Category="Right Hand IK")
 	FName RightHandBoneName = TEXT("hand_r");
 
 private:
@@ -223,6 +229,8 @@ private:
 	void RefreshCharacterProfileIfChanged();
 	void InitializePhysicalAnimation();
 	void ApplyPhysicalAnimationGroups();
+	void ApplyRelicSwingPhysicalAnimation(
+		const FNPRelicSwingSettings& Settings);
 	void ConfigurePelvisStability();
 	void UpdateCameraTarget();
 	void UpdatePhotoCamera(float DeltaSeconds);
@@ -237,6 +245,7 @@ private:
 	void StopRightHand();
 
 	bool bRightHandActive = false;
+	bool bRelicSwingActive = false;
 	bool bHasRightHandIKWorldTarget = false;
 	FVector RightHandIKWorldTarget = FVector::ZeroVector;
 	float RightHandReachDistance = 120.0f;

@@ -32,6 +32,11 @@ public:
 	/** 로컬 예측 Constraint가 게임플레이 Grab 델리게이트를 실행하지 않도록 분리합니다. */
 	void SetGameplayNotificationsEnabled(bool bEnabled);
 	void SetLinearBreakThreshold(float InLinearBreakThreshold);
+	void BeginAbilityGrip(
+		bool bPreventConstraintBreak,
+		bool bDisableHeldGravity,
+		float HeldMass);
+	void EndAbilityGrip();
 	void SetReplicatedGrabFrameBlendDuration(float InBlendDuration);
 	void SetGrabRetryCooldown(float InRetryCooldown);
 	void SetMovementIntent(const FVector& WorldMovementIntent);
@@ -132,7 +137,16 @@ private:
 	FVector MovementIntent = FVector::ZeroVector;
 	float JumpIntentRemainingTime = 0.0f;
 	float GrabRetryCooldownRemaining = 0.0f;
+	float PreviousHeldMassOverride = 0.0f;
 	float ReplicatedGrabFrameBlendElapsed = 0.0f;
+	bool bAbilityGripActive = false;
+	bool bAbilityGripPreventsConstraintBreak = false;
+	bool bAbilityGripGravityOverrideActive = false;
+	bool bAbilityGripMassOverrideActive = false;
+	bool bPreviousHeldGravityEnabled = true;
+	bool bPreviousHeldMassOverridden = false;
+	TWeakObjectPtr<UPrimitiveComponent> AbilityGripPhysicsComponent;
+	FName AbilityGripPhysicsBoneName = NAME_None;
 	FTransform ReplicatedGrabFrameBlendStart = FTransform::Identity;
 	FTransform ReplicatedGrabFrameBlendTarget = FTransform::Identity;
 

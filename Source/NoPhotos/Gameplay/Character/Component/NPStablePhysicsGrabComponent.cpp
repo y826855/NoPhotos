@@ -88,6 +88,88 @@ void UNPStablePhysicsGrabComponent::SetLinearBreakThreshold(
 	GrabLinearBreakThreshold = FMath::Max(InLinearBreakThreshold, 0.0f);
 	if (GetOwner() && GetOwner()->HasAuthority())
 	{
+		SetLinearBreakable(
+			!bAbilityGripPreventsConstraintBreak,
+			GrabLinearBreakThreshold);
+	}
+}
+
+void UNPStablePhysicsGrabComponent::BeginAbilityGrip(
+	bool bPreventConstraintBreak,
+	bool bDisableHeldGravity,
+	float HeldMass)
+{
+	bAbilityGripActive = true;
+	bAbilityGripPreventsConstraintBreak = bPreventConstraintBreak;
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
+		SetLinearBreakable(
+			!bAbilityGripPreventsConstraintBreak,
+			GrabLinearBreakThreshold);
+	}
+
+	FBodyInstance* HeldBody = GrabbedComponent
+		? GrabbedComponent->GetBodyInstance(GrabbedBoneName)
+		: nullptr;
+	if (!HeldBody)
+	{
+		return;
+	}
+
+	AbilityGripPhysicsComponent = GrabbedComponent;
+	AbilityGripPhysicsBoneName = GrabbedBoneName;
+	if (bDisableHeldGravity)
+	{
+		bAbilityGripGravityOverrideActive = true;
+		bPreviousHeldGravityEnabled = HeldBody->bEnableGravity;
+		HeldBody->SetEnableGravity(false);
+	}
+	if (HeldMass > UE_SMALL_NUMBER)
+	{
+		bAbilityGripMassOverrideActive = true;
+		bPreviousHeldMassOverridden = HeldBody->bOverrideMass;
+		PreviousHeldMassOverride = HeldBody->GetMassOverride();
+		GrabbedComponent->SetMassOverrideInKg(
+			GrabbedBoneName,
+			HeldMass,
+			true);
+	}
+}
+
+void UNPStablePhysicsGrabComponent::EndAbilityGrip()
+{
+	if (!bAbilityGripActive)
+	{
+		return;
+	}
+
+	bAbilityGripActive = false;
+	bAbilityGripPreventsConstraintBreak = false;
+	if (UPrimitiveComponent* PhysicsComponent =
+		AbilityGripPhysicsComponent.Get())
+	{
+		if (FBodyInstance* HeldBody = PhysicsComponent->GetBodyInstance(
+			AbilityGripPhysicsBoneName))
+		{
+			if (bAbilityGripGravityOverrideActive)
+			{
+				HeldBody->SetEnableGravity(bPreviousHeldGravityEnabled);
+			}
+			if (bAbilityGripMassOverrideActive)
+			{
+				PhysicsComponent->SetMassOverrideInKg(
+					AbilityGripPhysicsBoneName,
+					PreviousHeldMassOverride,
+					bPreviousHeldMassOverridden);
+			}
+		}
+	}
+	bAbilityGripGravityOverrideActive = false;
+	bAbilityGripMassOverrideActive = false;
+	AbilityGripPhysicsComponent.Reset();
+	AbilityGripPhysicsBoneName = NAME_None;
+	if (GetOwner() && GetOwner()->HasAuthority())
+	{
 		SetLinearBreakable(true, GrabLinearBreakThreshold);
 	}
 }
