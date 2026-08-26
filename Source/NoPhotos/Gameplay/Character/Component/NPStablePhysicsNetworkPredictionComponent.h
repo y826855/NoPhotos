@@ -19,9 +19,6 @@ struct FNPStablePhysicsRootState
 	FVector_NetQuantize100 Position = FVector::ZeroVector;
 
 	UPROPERTY()
-	FQuat Rotation = FQuat::Identity;
-
-	UPROPERTY()
 	FVector_NetQuantize10 LinearVelocity = FVector::ZeroVector;
 
 	UPROPERTY()
@@ -32,8 +29,8 @@ struct FNPStablePhysicsRootState
 };
 
 /**
- * 소유 클라이언트는 입력을 즉시 예측하고, 서버는 같은 입력으로 권위 물리를 실행합니다.
- * 서버의 Root Body 상태는 소유 클라이언트에만 전달되어 부드러운 속도 보정에 사용됩니다.
+ * 평상시에는 서버가 소유 클라이언트의 Root 상태를 따라갑니다.
+ * 공유 Grab 중에는 서버 권한으로 전환하여 소유 클라이언트를 서버 상태에 맞춥니다.
  */
 UCLASS(ClassGroup=(Network), meta=(BlueprintSpawnableComponent))
 class NOPHOTOS_API UNPStablePhysicsNetworkPredictionComponent : public UActorComponent
@@ -93,8 +90,7 @@ private:
 	void ApplyCorrection(
 		const FNPStablePhysicsRootState& TargetRootState,
 		float DeltaTime,
-		bool bUseFullBodyCorrection,
-		bool bShowOwnerDebug);
+		bool bUseFullBodyCorrection);
 	void SendPendingMoveInput(float DeltaTime);
 	void SendClientRootState(float DeltaTime);
 	bool IsNearUnheldDynamicBody(const FVector& RootPosition) const;

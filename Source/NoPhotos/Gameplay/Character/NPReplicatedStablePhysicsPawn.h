@@ -4,7 +4,7 @@
 #include "Engine/EngineTypes.h"
 #include "Gameplay/Character/NPStablePhysicsPawn.h"
 #include "Gameplay/Photo/NPRelicHolderInterface.h"
-#include "NPRStablePhysicsPawn.generated.h"
+#include "NPReplicatedStablePhysicsPawn.generated.h"
 
 class UPrimitiveComponent;
 class FLifetimeProperty;
@@ -31,15 +31,15 @@ struct FReplicatedStableGrabState
 	FTransform ConstraintFrame2 = FTransform::Identity;
 };
 
-/** 소유 클라이언트가 입력을 예측하고, 이동 정답과 Grab 판정은 서버가 결정합니다. */
+/** 평상시에는 소유 클라이언트, 공유 Grab 중에는 서버가 이동 물리 기준을 결정합니다. */
 UCLASS()
-class NOPHOTOS_API ANPRStablePhysicsPawn : public ANPStablePhysicsPawn, public INPRelicHolderInterface
+class NOPHOTOS_API ANPReplicatedStablePhysicsPawn : public ANPStablePhysicsPawn, public INPRelicHolderInterface
 {
 	GENERATED_BODY()
 	friend class UNPStablePhysicsDebugComponent;
 
 public:
-	ANPRStablePhysicsPawn();
+	ANPReplicatedStablePhysicsPawn();
 
 	virtual void GetLifetimeReplicatedProps(
 		TArray<FLifetimeProperty>& OutLifetimeProps) const override;
@@ -138,7 +138,7 @@ private:
 
 	/** 서버에서 이 캐릭터가 현재 잡고 있는 다른 캐릭터를 추적합니다. */
 	UPROPERTY(Transient)
-	TObjectPtr<ANPRStablePhysicsPawn> ExternallyGrabbedTargetPawn = nullptr;
+	TObjectPtr<ANPReplicatedStablePhysicsPawn> ExternallyGrabbedTargetPawn = nullptr;
 
 	UPROPERTY(EditAnywhere, Category="Network|Grab Prediction", meta=(ClampMin="0.0"))
 	float LocalGrabPredictionTimeout = 0.35f;

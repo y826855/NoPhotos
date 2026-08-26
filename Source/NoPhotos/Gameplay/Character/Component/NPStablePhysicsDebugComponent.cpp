@@ -2,7 +2,7 @@
 
 #include "Components/SkeletalMeshComponent.h"
 #include "DrawDebugHelpers.h"
-#include "Gameplay/Character/NPRStablePhysicsPawn.h"
+#include "Gameplay/Character/NPReplicatedStablePhysicsPawn.h"
 #include "Gameplay/Character/NPStablePhysicsCharacterProfile.h"
 #include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Character/Component/NPStablePhysicsMovementComponent.h"
@@ -388,7 +388,8 @@ void UNPStablePhysicsDebugComponent::DrawGrabForceDebug(
 void UNPStablePhysicsDebugComponent::DrawGrabNetworkDebug(
 	const ANPStablePhysicsPawn& Pawn) const
 {
-	const ANPRStablePhysicsPawn* NetworkPawn = Cast<ANPRStablePhysicsPawn>(&Pawn);
+	const ANPReplicatedStablePhysicsPawn* NetworkPawn =
+		Cast<ANPReplicatedStablePhysicsPawn>(&Pawn);
 	if (!NetworkPawn
 		|| !NetworkPawn->bDrawGrabNetworkDebug
 		|| !NetworkPawn->IsReplicatedGrabActive()

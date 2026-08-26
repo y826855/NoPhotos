@@ -1,7 +1,6 @@
 #include "Gameplay/Character/Component/NPStablePhysicsNetworkPredictionComponent.h"
 
 #include "Components/SkeletalMeshComponent.h"
-#include "Engine/Engine.h"
 #include "Engine/HitResult.h"
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
@@ -198,7 +197,6 @@ void UNPStablePhysicsNetworkPredictionComponent::ServerSetClientRootState_Implem
 {
 	if (bServerAuthoritativeInteraction
 		|| FVector(NewRootState.Position).ContainsNaN()
-		|| NewRootState.Rotation.ContainsNaN()
 		|| FVector(NewRootState.LinearVelocity).ContainsNaN()
 		|| FVector(NewRootState.AngularVelocity).ContainsNaN()
 		|| (bHasReceivedClientRootState
@@ -210,29 +208,6 @@ void UNPStablePhysicsNetworkPredictionComponent::ServerSetClientRootState_Implem
 	bHasReceivedClientRootState = true;
 	LastServerRootStateSequence = StateSequence;
 	ClientRootState = NewRootState;
-
-#if !UE_BUILD_SHIPPING
-	if (GEngine)
-	{
-		const float ServerReceiveTime = GetEstimatedServerWorldTime();
-		const float ClientStateAge =
-			ServerReceiveTime - NewRootState.ServerWorldTime;
-		GEngine->AddOnScreenDebugMessage(
-			reinterpret_cast<uint64>(this),
-			0.25f,
-			FColor::Yellow,
-			FString::Printf(
-				TEXT("Client Root RX | Seq %u | Sent %.3f | Server %.3f | Age %.3fs / Max %.3fs | Stale %s"),
-				StateSequence,
-				NewRootState.ServerWorldTime,
-				ServerReceiveTime,
-				ClientStateAge,
-				MaximumServerStateAge,
-				ClientStateAge > MaximumServerStateAge
-					? TEXT("Y")
-					: TEXT("N")));
-	}
-#endif
 }
 
 void UNPStablePhysicsNetworkPredictionComponent::OnRep_ServerRootState()
@@ -256,7 +231,6 @@ void UNPStablePhysicsNetworkPredictionComponent::CaptureServerRootState()
 
 	const FTransform RootTransform = RootBody->GetUnrealWorldTransform();
 	ServerRootState.Position = RootTransform.GetLocation();
-	ServerRootState.Rotation = RootTransform.GetRotation();
 	ServerRootState.LinearVelocity = RootBody->GetUnrealWorldVelocity();
 	ServerRootState.AngularVelocity = FMath::RadiansToDegrees(
 		RootBody->GetUnrealWorldAngularVelocityInRadians());
@@ -274,8 +248,7 @@ void UNPStablePhysicsNetworkPredictionComponent::ApplyOwnerCorrection(
 	ApplyCorrection(
 		ServerRootState,
 		DeltaTime,
-		bExternalGrabActive,
-		true);
+		bExternalGrabActive);
 }
 
 void UNPStablePhysicsNetworkPredictionComponent::ApplyServerCorrection(
@@ -286,14 +259,13 @@ void UNPStablePhysicsNetworkPredictionComponent::ApplyServerCorrection(
 		return;
 	}
 
-	ApplyCorrection(ClientRootState, DeltaTime, false, false);
+	ApplyCorrection(ClientRootState, DeltaTime, false);
 }
 
 void UNPStablePhysicsNetworkPredictionComponent::ApplyCorrection(
 	const FNPStablePhysicsRootState& TargetRootState,
 	float DeltaTime,
-	bool bUseFullBodyCorrection,
-	bool bShowOwnerDebug)
+	bool bUseFullBodyCorrection)
 {
 	if (DeltaTime <= UE_SMALL_NUMBER)
 	{
@@ -378,12 +350,10 @@ void UNPStablePhysicsNetworkPredictionComponent::ApplyCorrection(
 		/ SafeCorrectionTime;
 	CorrectionAcceleration = CorrectionAcceleration.GetClampedToMaxSize(
 		MaximumCorrectionAcceleration);
-	const FVector CorrectionAccelerationBeforeScale = CorrectionAcceleration;
 	if (bNearUnheldDynamicBody)
 	{
 		CorrectionAcceleration *= DynamicBodyCorrectionScale;
 	}
-	const FVector CorrectionAccelerationAfterScale = CorrectionAcceleration;
 
 	FVector BlockingNormal = FVector::ZeroVector;
 	const bool bBlockedByCorrectionSweep = FindBlockingCorrectionNormal(
@@ -401,63 +371,6 @@ void UNPStablePhysicsNetworkPredictionComponent::ApplyCorrection(
 				BlockingNormal * IntoSurfaceAcceleration;
 		}
 	}
-
-#if !UE_BUILD_SHIPPING
-	if (bShowOwnerDebug && GEngine)
-	{
-		const FVector CurrentRootVelocity =
-			RootBody->GetUnrealWorldVelocity();
-		const FVector ServerVelocity = FVector(TargetRootState.LinearVelocity);
-		const float RootBodyMass = RootBody->GetBodyMass();
-		const float TotalMeshMass = PhysicsMesh->GetMass();
-		const float AppliedMass = bUseFullBodyCorrection
-			? TotalMeshMass
-			: RootBodyMass;
-		const FVector AppliedForceEquivalent =
-			CorrectionAcceleration * AppliedMass;
-		GEngine->AddOnScreenDebugMessage(
-			reinterpret_cast<uint64>(this),
-			0.25f,
-			FColor::Cyan,
-			FString::Printf(
-				TEXT("Soft Correction | Error %.1fcm (%.1f, %.1f, %.1f) | StateAge %.3fs\n")
-				TEXT("Velocity Root(%.1f, %.1f, %.1f) Server(%.1f, %.1f, %.1f) Desired(%.1f, %.1f, %.1f)\n")
-				TEXT("Accel %.1f -> %.1f -> %.1f | Final(%.1f, %.1f, %.1f) | ForceEq(%.1f, %.1f, %.1f)\n")
-				TEXT("Body %s | Sim %s Awake %s | Mass Root %.1f / Total %.1f | ExternalGrab %s | NearDynamic %s | Sweep %s"),
-				PositionErrorSize,
-				PositionError.X,
-				PositionError.Y,
-				PositionError.Z,
-				ServerStateAge,
-				CurrentRootVelocity.X,
-				CurrentRootVelocity.Y,
-				CurrentRootVelocity.Z,
-				ServerVelocity.X,
-				ServerVelocity.Y,
-				ServerVelocity.Z,
-				DesiredVelocity.X,
-				DesiredVelocity.Y,
-				DesiredVelocity.Z,
-				CorrectionAccelerationBeforeScale.Size(),
-				CorrectionAccelerationAfterScale.Size(),
-				CorrectionAcceleration.Size(),
-				CorrectionAcceleration.X,
-				CorrectionAcceleration.Y,
-				CorrectionAcceleration.Z,
-				AppliedForceEquivalent.X,
-				AppliedForceEquivalent.Y,
-				AppliedForceEquivalent.Z,
-				*RootBodyName.ToString(),
-				PhysicsMesh->IsSimulatingPhysics(RootBodyName) ? TEXT("Y") : TEXT("N"),
-				RootBody->IsInstanceAwake() ? TEXT("Y") : TEXT("N"),
-				RootBodyMass,
-				TotalMeshMass,
-				bUseFullBodyCorrection ? TEXT("Y") : TEXT("N"),
-				bNearUnheldDynamicBody ? TEXT("Y") : TEXT("N"),
-				bBlockedByCorrectionSweep ? TEXT("Y") : TEXT("N")));
-	}
-#endif
-
 	if (bUseFullBodyCorrection)
 	{
 		PhysicsMesh->AddForceToAllBodiesBelow(
@@ -743,7 +656,6 @@ void UNPStablePhysicsNetworkPredictionComponent::SendClientRootState(
 	const FTransform RootTransform = RootBody->GetUnrealWorldTransform();
 	FNPStablePhysicsRootState NewRootState;
 	NewRootState.Position = RootTransform.GetLocation();
-	NewRootState.Rotation = RootTransform.GetRotation();
 	NewRootState.LinearVelocity = RootBody->GetUnrealWorldVelocity();
 	NewRootState.AngularVelocity = FMath::RadiansToDegrees(
 		RootBody->GetUnrealWorldAngularVelocityInRadians());

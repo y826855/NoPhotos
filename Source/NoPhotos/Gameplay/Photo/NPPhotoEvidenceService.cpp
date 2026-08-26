@@ -7,7 +7,7 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
-#include "Gameplay/Character/NPRStablePhysicsPawn.h"
+#include "Gameplay/Character/NPReplicatedStablePhysicsPawn.h"
 #include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Photo/NPRelicHolderInterface.h"
 #include "Gameplay/Photo/NPPhotoLog.h"
@@ -183,8 +183,8 @@ bool UNPPhotoEvidenceService::ValidateRequest(
 	}
 
 	APawn* PhotographerPawn = Photographer->GetPawn();
-	const ANPRStablePhysicsPawn* StablePhysicsPawn =
-		Cast<ANPRStablePhysicsPawn>(PhotographerPawn);
+	const ANPReplicatedStablePhysicsPawn* StablePhysicsPawn =
+		Cast<ANPReplicatedStablePhysicsPawn>(PhotographerPawn);
 	const FRotator ServerViewRotation = StablePhysicsPawn
 		? StablePhysicsPawn->GetServerViewRotation()
 		: PhotographerPawn->GetViewRotation();

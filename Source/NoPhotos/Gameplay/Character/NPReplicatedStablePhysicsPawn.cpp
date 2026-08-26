@@ -1,4 +1,4 @@
-#include "Gameplay/Character/NPRStablePhysicsPawn.h"
+#include "Gameplay/Character/NPReplicatedStablePhysicsPawn.h"
 
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -11,20 +11,20 @@
 #include "Core/NPPlayerState.h"
 #include "Gameplay/Character/Component/NPStablePhysicsMovementComponent.h"
 
-ANPRStablePhysicsPawn::ANPRStablePhysicsPawn()
+ANPReplicatedStablePhysicsPawn::ANPReplicatedStablePhysicsPawn()
 {
 	bReplicates = true;
 	SetReplicateMovement(true);
 	SetNetUpdateFrequency(30.0f);
 
-	// 소유 클라이언트는 로컬 예측을 유지하고 서버 Root 상태를 별도로 보정받습니다.
+	// 소유 클라이언트는 공유 Grab 중에만 서버 Root 상태를 별도로 보정받습니다.
 	PhysicsMesh->bReplicatePhysicsToAutonomousProxy = false;
 
 	NetworkPrediction = CreateDefaultSubobject<
 		UNPStablePhysicsNetworkPredictionComponent>(TEXT("NetworkPrediction"));
 }
 
-void ANPRStablePhysicsPawn::BeginPlay()
+void ANPReplicatedStablePhysicsPawn::BeginPlay()
 {
 	Super::BeginPlay();
 
@@ -52,7 +52,7 @@ void ANPRStablePhysicsPawn::BeginPlay()
 	{
 		RightHandGrab->OnGrabbedComponentChanged.AddUObject(
 			this,
-			&ANPRStablePhysicsPawn::HandleGrabbedComponentChanged);
+			&ANPReplicatedStablePhysicsPawn::HandleGrabbedComponentChanged);
 	}
 	else if (IsReplicatedGrabActive())
 	{
@@ -60,11 +60,11 @@ void ANPRStablePhysicsPawn::BeginPlay()
 	}
 }
 
-void ANPRStablePhysicsPawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
+void ANPReplicatedStablePhysicsPawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (HasAuthority() && IsValid(ExternallyGrabbedTargetPawn))
 	{
-		ANPRStablePhysicsPawn* TargetPawn = ExternallyGrabbedTargetPawn;
+		ANPReplicatedStablePhysicsPawn* TargetPawn = ExternallyGrabbedTargetPawn;
 		ExternallyGrabbedTargetPawn = nullptr;
 		TargetPawn->RemoveExternalGrabber();
 	}
@@ -72,29 +72,29 @@ void ANPRStablePhysicsPawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-void ANPRStablePhysicsPawn::GetLifetimeReplicatedProps(
+void ANPReplicatedStablePhysicsPawn::GetLifetimeReplicatedProps(
 	TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(ANPRStablePhysicsPawn, bReplicatedRightHandActive);
-	DOREPLIFETIME(ANPRStablePhysicsPawn, ReplicatedGrabState);
+	DOREPLIFETIME(ANPReplicatedStablePhysicsPawn, bReplicatedRightHandActive);
+	DOREPLIFETIME(ANPReplicatedStablePhysicsPawn, ReplicatedGrabState);
 	DOREPLIFETIME_CONDITION(
-		ANPRStablePhysicsPawn,
+		ANPReplicatedStablePhysicsPawn,
 		bExternallyGrabbed,
 		COND_OwnerOnly);
-	DOREPLIFETIME(ANPRStablePhysicsPawn, ReplicatedServerHandWorldLocation);
-	DOREPLIFETIME(ANPRStablePhysicsPawn, ReplicatedAnimationVelocity);
-	DOREPLIFETIME(ANPRStablePhysicsPawn, ReplicatedAnimationAcceleration);
-	DOREPLIFETIME(ANPRStablePhysicsPawn, bReplicatedAnimationIsFalling);
-	DOREPLIFETIME(ANPRStablePhysicsPawn, ReplicatedAnimationForwardDirection);
+	DOREPLIFETIME(ANPReplicatedStablePhysicsPawn, ReplicatedServerHandWorldLocation);
+	DOREPLIFETIME(ANPReplicatedStablePhysicsPawn, ReplicatedAnimationVelocity);
+	DOREPLIFETIME(ANPReplicatedStablePhysicsPawn, ReplicatedAnimationAcceleration);
+	DOREPLIFETIME(ANPReplicatedStablePhysicsPawn, bReplicatedAnimationIsFalling);
+	DOREPLIFETIME(ANPReplicatedStablePhysicsPawn, ReplicatedAnimationForwardDirection);
 	DOREPLIFETIME_CONDITION(
-		ANPRStablePhysicsPawn,
+		ANPReplicatedStablePhysicsPawn,
 		ReplicatedViewRotation,
 		COND_SkipOwner);
 }
 
-void ANPRStablePhysicsPawn::Tick(float DeltaSeconds)
+void ANPReplicatedStablePhysicsPawn::Tick(float DeltaSeconds)
 {
 	UpdateViewRotationReplication(DeltaSeconds);
 	UpdateClientSimulationState();
@@ -105,17 +105,11 @@ void ANPRStablePhysicsPawn::Tick(float DeltaSeconds)
 	if (HasAuthority())
 	{
 		PhysicsMovement->SetFacingControlEnabled(true);
-	}
-
-	if (HasAuthority())
-	{
 		UpdateServerReplicatedState();
-		return;
 	}
-
 }
 
-void ANPRStablePhysicsPawn::UpdateClientSimulationState()
+void ANPReplicatedStablePhysicsPawn::UpdateClientSimulationState()
 {
 	if (HasAuthority())
 	{
@@ -166,7 +160,7 @@ void ANPRStablePhysicsPawn::UpdateClientSimulationState()
 		bReplicatedAnimationIsFalling);
 }
 
-void ANPRStablePhysicsPawn::UpdateServerReplicatedState()
+void ANPReplicatedStablePhysicsPawn::UpdateServerReplicatedState()
 {
 	ReplicatedAnimationVelocity = PhysicsMovement->GetVelocity();
 	ReplicatedAnimationAcceleration = PhysicsMovement->GetCurrentAcceleration();
@@ -200,7 +194,7 @@ void ANPRStablePhysicsPawn::UpdateServerReplicatedState()
 		|| bSharedRelicGrab);
 }
 
-void ANPRStablePhysicsPawn::ApplyMoveInput(const FVector& WorldMoveInput)
+void ANPReplicatedStablePhysicsPawn::ApplyMoveInput(const FVector& WorldMoveInput)
 {
 	const FVector ClampedMoveInput = WorldMoveInput.GetClampedToMaxSize(1.0f);
 	if (HasAuthority())
@@ -231,7 +225,7 @@ void ANPRStablePhysicsPawn::ApplyMoveInput(const FVector& WorldMoveInput)
 	NetworkPrediction->SendMoveInput(ClampedMoveInput);
 }
 
-void ANPRStablePhysicsPawn::ApplyJumpRequest()
+void ANPReplicatedStablePhysicsPawn::ApplyJumpRequest()
 {
 	if (HasAuthority())
 	{
@@ -244,7 +238,7 @@ void ANPRStablePhysicsPawn::ApplyJumpRequest()
 	}
 }
 
-void ANPRStablePhysicsPawn::ApplyRightHandState(bool bActive)
+void ANPReplicatedStablePhysicsPawn::ApplyRightHandState(bool bActive)
 {
 	if (HasAuthority())
 	{
@@ -273,7 +267,7 @@ void ANPRStablePhysicsPawn::ApplyRightHandState(bool bActive)
 	}
 }
 
-FRotator ANPRStablePhysicsPawn::GetTargetViewRotation() const
+FRotator ANPReplicatedStablePhysicsPawn::GetTargetViewRotation() const
 {
 	if (IsLocallyControlled() && Controller)
 	{
@@ -283,7 +277,7 @@ FRotator ANPRStablePhysicsPawn::GetTargetViewRotation() const
 	return ReplicatedViewRotation;
 }
 
-void ANPRStablePhysicsPawn::ServerSetViewRotation_Implementation(
+void ANPReplicatedStablePhysicsPawn::ServerSetViewRotation_Implementation(
 	uint16 CompressedYaw,
 	uint16 CompressedPitch)
 {
@@ -293,13 +287,13 @@ void ANPRStablePhysicsPawn::ServerSetViewRotation_Implementation(
 		0.0f));
 }
 
-void ANPRStablePhysicsPawn::ServerSetRightHandActive_Implementation(
+void ANPReplicatedStablePhysicsPawn::ServerSetRightHandActive_Implementation(
 	bool bActive)
 {
 	SetServerRightHandState(bActive);
 }
 
-void ANPRStablePhysicsPawn::OnRep_RightHandActive()
+void ANPReplicatedStablePhysicsPawn::OnRep_RightHandActive()
 {
 	SetRightHandVisualState(
 		IsLocallyControlled()
@@ -307,7 +301,7 @@ void ANPRStablePhysicsPawn::OnRep_RightHandActive()
 			: bReplicatedRightHandActive);
 }
 
-void ANPRStablePhysicsPawn::OnRep_GrabState()
+void ANPReplicatedStablePhysicsPawn::OnRep_GrabState()
 {
 	if (IsLocallyControlled() && !bLocalRightHandActive)
 	{
@@ -351,12 +345,12 @@ void ANPRStablePhysicsPawn::OnRep_GrabState()
 		ReplicatedGrabState.GrabbedBoneName);
 }
 
-void ANPRStablePhysicsPawn::OnRep_ExternallyGrabbed()
+void ANPReplicatedStablePhysicsPawn::OnRep_ExternallyGrabbed()
 {
 	NetworkPrediction->SetExternalGrabActive(bExternallyGrabbed);
 }
 
-void ANPRStablePhysicsPawn::UpdateReplicatedGrabVisualTarget()
+void ANPReplicatedStablePhysicsPawn::UpdateReplicatedGrabVisualTarget()
 {
 	if (HasAuthority() || !IsReplicatedGrabActive())
 	{
@@ -387,7 +381,7 @@ void ANPRStablePhysicsPawn::UpdateReplicatedGrabVisualTarget()
 	SetRightHandIKWorldTarget(DesiredHandSocketWorld.GetLocation());
 }
 
-void ANPRStablePhysicsPawn::UpdateLocalPredictedGrab(float DeltaSeconds)
+void ANPReplicatedStablePhysicsPawn::UpdateLocalPredictedGrab(float DeltaSeconds)
 {
 	if (HasAuthority()
 		|| !IsLocallyControlled()
@@ -410,11 +404,11 @@ void ANPRStablePhysicsPawn::UpdateLocalPredictedGrab(float DeltaSeconds)
 	RightHandGrab->SetGameplayNotificationsEnabled(true);
 }
 
-void ANPRStablePhysicsPawn::HandleGrabbedComponentChanged(
+void ANPReplicatedStablePhysicsPawn::HandleGrabbedComponentChanged(
 	UPrimitiveComponent* NewGrabbedComponent)
 {
-	ANPRStablePhysicsPawn* NewGrabbedPawn = IsValid(NewGrabbedComponent)
-		? Cast<ANPRStablePhysicsPawn>(NewGrabbedComponent->GetOwner())
+	ANPReplicatedStablePhysicsPawn* NewGrabbedPawn = IsValid(NewGrabbedComponent)
+		? Cast<ANPReplicatedStablePhysicsPawn>(NewGrabbedComponent->GetOwner())
 		: nullptr;
 	if (NewGrabbedPawn == this)
 	{
@@ -459,7 +453,7 @@ void ANPRStablePhysicsPawn::HandleGrabbedComponentChanged(
 	ForceNetUpdate();
 }
 
-void ANPRStablePhysicsPawn::AddExternalGrabber()
+void ANPReplicatedStablePhysicsPawn::AddExternalGrabber()
 {
 	++ExternalGrabberCount;
 	if (bExternallyGrabbed)
@@ -468,11 +462,10 @@ void ANPRStablePhysicsPawn::AddExternalGrabber()
 	}
 
 	bExternallyGrabbed = true;
-	NetworkPrediction->SetExternalGrabActive(true);
 	ForceNetUpdate();
 }
 
-void ANPRStablePhysicsPawn::RemoveExternalGrabber()
+void ANPReplicatedStablePhysicsPawn::RemoveExternalGrabber()
 {
 	ExternalGrabberCount = FMath::Max(ExternalGrabberCount - 1, 0);
 	if (ExternalGrabberCount > 0 || !bExternallyGrabbed)
@@ -481,16 +474,15 @@ void ANPRStablePhysicsPawn::RemoveExternalGrabber()
 	}
 
 	bExternallyGrabbed = false;
-	NetworkPrediction->SetExternalGrabActive(false);
 	ForceNetUpdate();
 }
 
-AActor* ANPRStablePhysicsPawn::GetHeldRelic_Implementation() const
+AActor* ANPReplicatedStablePhysicsPawn::GetHeldRelic_Implementation() const
 {
 	return Cast<ANPBaseRelic>(ReplicatedGrabState.GrabbedActor);
 }
 
-UPrimitiveComponent* ANPRStablePhysicsPawn::ResolveReplicatedGrabbedComponent() const
+UPrimitiveComponent* ANPReplicatedStablePhysicsPawn::ResolveReplicatedGrabbedComponent() const
 {
 	if (!IsValid(ReplicatedGrabState.GrabbedActor))
 	{
@@ -513,7 +505,7 @@ UPrimitiveComponent* ANPRStablePhysicsPawn::ResolveReplicatedGrabbedComponent() 
 	return nullptr;
 }
 
-void ANPRStablePhysicsPawn::UpdateViewRotationReplication(float DeltaSeconds)
+void ANPReplicatedStablePhysicsPawn::UpdateViewRotationReplication(float DeltaSeconds)
 {
 	if (HasAuthority())
 	{
@@ -542,7 +534,7 @@ void ANPRStablePhysicsPawn::UpdateViewRotationReplication(float DeltaSeconds)
 		FRotator::CompressAxisToShort(ViewRotation.Pitch));
 }
 
-void ANPRStablePhysicsPawn::SetReplicatedViewRotation(
+void ANPReplicatedStablePhysicsPawn::SetReplicatedViewRotation(
 	const FRotator& NewViewRotation)
 {
 	ReplicatedViewRotation = FRotator(
@@ -554,7 +546,7 @@ void ANPRStablePhysicsPawn::SetReplicatedViewRotation(
 		0.0f);
 }
 
-void ANPRStablePhysicsPawn::SetServerRightHandState(bool bActive)
+void ANPReplicatedStablePhysicsPawn::SetServerRightHandState(bool bActive)
 {
 	bReplicatedRightHandActive = bActive;
 	Super::ApplyRightHandState(bActive);
