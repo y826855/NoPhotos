@@ -2,7 +2,6 @@
 
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
-#include "Components/WidgetComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "PhysicsEngine/BodyInstance.h"
 #include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
@@ -11,7 +10,6 @@
 #include "Gameplay/Relic/NPBaseRelic.h"
 #include "Core/NPPlayerState.h"
 #include "Gameplay/Character/Component/NPStablePhysicsMovementComponent.h"
-#include "UI/GameScreen/NPUserNameWidget.h"
 
 ANPReplicatedStablePhysicsPawn::ANPReplicatedStablePhysicsPawn()
 {
@@ -60,15 +58,11 @@ void ANPReplicatedStablePhysicsPawn::BeginPlay()
 	{
 		OnRep_GrabState();
 	}
-	
-	InitializeNameplate();
 }
 
 void ANPReplicatedStablePhysicsPawn::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
-
-	InitializeNameplate();
 }
 
 void ANPReplicatedStablePhysicsPawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -281,8 +275,6 @@ void ANPReplicatedStablePhysicsPawn::ApplyRightHandState(bool bActive)
 void ANPReplicatedStablePhysicsPawn::OnRep_PlayerState()
 {
 	Super::OnRep_PlayerState();
-	
-	InitializeNameplate();
 }
 
 FRotator ANPReplicatedStablePhysicsPawn::GetTargetViewRotation() const
@@ -569,27 +561,4 @@ void ANPReplicatedStablePhysicsPawn::SetServerRightHandState(bool bActive)
 	bReplicatedRightHandActive = bActive;
 	Super::ApplyRightHandState(bActive);
 	ForceNetUpdate();
-}
-
-void ANPReplicatedStablePhysicsPawn::InitializeNameplate()
-{
-	UWidgetComponent* NameplateComponent =	FindComponentByClass<UWidgetComponent>();
-	if (!IsValid(NameplateComponent))
-	{
-		return;
-	}
-
-	APlayerState* CurrentPlayerState = GetPlayerState<APlayerState>();
-	if (!IsValid(CurrentPlayerState))
-	{
-		return;
-	}
-
-	UNPUserNameWidget* NameplateWidget = Cast<UNPUserNameWidget>(NameplateComponent->GetUserWidgetObject());
-	if (!IsValid(NameplateWidget))
-	{
-		return;
-	}
-
-	NameplateWidget->SetTargetPlayerState(CurrentPlayerState);
 }

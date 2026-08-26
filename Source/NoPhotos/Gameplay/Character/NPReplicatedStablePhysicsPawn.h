@@ -152,6 +152,5 @@ private:
 	float LocalGrabPredictionTimeRemaining = 0.0f;
 	float ViewRotationSendAccumulator = ViewRotationSendInterval;
 	
-	void InitializeNameplate();
 	int32 ExternalGrabberCount = 0;
 };
