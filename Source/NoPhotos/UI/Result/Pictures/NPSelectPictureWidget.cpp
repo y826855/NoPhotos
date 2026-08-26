@@ -2,6 +2,7 @@
 
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
+#include "Core/Main/NPMainGameState.h"
 #include "Core/Main/NPMainPlayerController.h"
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
@@ -72,7 +73,19 @@ void UNPSelectPictureWidget::NativeConstruct()
 			&UNPSelectPictureWidget::HandlePhotoEvidenceChanged);
 	}
 
+	ObservedMainGameState = GetWorld()
+		? GetWorld()->GetGameState<ANPMainGameState>()
+		: nullptr;
+
+	if (IsValid(ObservedMainGameState))
+	{
+		ObservedMainGameState->OnPictureSelectionStateChanged.AddUniqueDynamic(
+			this,
+			&UNPSelectPictureWidget::HandlePictureSelectionStateChanged);
+	}
+
 	UpdateSelectedPictureCountText();
+	UpdateNextPlayerText();
 	RequestOwnedPictures();
 }
 
@@ -90,6 +103,13 @@ void UNPSelectPictureWidget::NativeDestruct()
 		ObservedGameState->OnPhotoEvidenceChanged.RemoveDynamic(
 			this,
 			&UNPSelectPictureWidget::HandlePhotoEvidenceChanged);
+	}
+
+	if (IsValid(ObservedMainGameState))
+	{
+		ObservedMainGameState->OnPictureSelectionStateChanged.RemoveDynamic(
+			this,
+			&UNPSelectPictureWidget::HandlePictureSelectionStateChanged);
 	}
 
 	Super::NativeDestruct();
@@ -264,6 +284,11 @@ void UNPSelectPictureWidget::HandlePhotoEvidenceChanged()
 	RequestOwnedPictures();
 }
 
+void UNPSelectPictureWidget::HandlePictureSelectionStateChanged()
+{
+	UpdateNextPlayerText();
+}
+
 void UNPSelectPictureWidget::RequestOwnedPictures()
 {
 	if (!IsValid(ObservedGameState))
@@ -397,6 +422,44 @@ void UNPSelectPictureWidget::UpdateSelectedPictureCountText()
 
 	SelectedPictureCountText->SetText(
 		FText::FromString(FString::Printf(TEXT("%d / %d"), SelectedCount, MaxSelectedPictureCount)));
+}
+
+void UNPSelectPictureWidget::UpdateNextPlayerText()
+{
+	if (!IsValid(IsNextPlayer))
+	{
+		return;
+	}
+
+	if (!IsValid(ObservedMainGameState))
+	{
+		ObservedMainGameState = GetWorld() ? GetWorld()->GetGameState<ANPMainGameState>() : nullptr;
+
+		if (IsValid(ObservedMainGameState))
+		{
+			ObservedMainGameState->OnPictureSelectionStateChanged.AddUniqueDynamic(
+				this,
+				&UNPSelectPictureWidget::HandlePictureSelectionStateChanged);
+		}
+	}
+
+	if (!IsValid(ObservedMainGameState))
+	{
+		return;
+	}
+
+	const int32 TotalPlayerCount = ObservedMainGameState->PlayerArray.Num();
+	int32 CompletedPlayerCount = 0;
+
+	for (APlayerState* PlayerState : ObservedMainGameState->PlayerArray)
+	{
+		if (ObservedMainGameState->IsPlayerPictureSelectionComplete(PlayerState))
+		{
+			++CompletedPlayerCount;
+		}
+	}
+
+	IsNextPlayer->SetText(FText::FromString(FString::Printf(TEXT("%d/%d명 완료"), CompletedPlayerCount, TotalPlayerCount)));
 }
 
 TArray<int32> UNPSelectPictureWidget::GetSelectedPictureIndices() const

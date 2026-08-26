@@ -7,6 +7,7 @@
 #include "NPSelectPictureWidget.generated.h"
 
 class ANoPhotosGameState;
+class ANPMainGameState;
 class UButton;
 class UTextBlock;
 class UTexture2D;
@@ -51,11 +52,14 @@ private:
 	void HandlePhotoEvidenceChanged();
 	UFUNCTION()
 	void HandlePhotoTextureReceived(FGuid PhotoId, UTexture2D* Texture);
+	UFUNCTION()
+	void HandlePictureSelectionStateChanged();
 
 	void RequestOwnedPictures();
 	void RequestNextPicture();
 	void ShowPicture(int32 PictureIndex);
 	void UpdateSelectedPictureCountText();
+	void UpdateNextPlayerText();
 	TArray<int32> GetSelectedPictureIndices() const;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Picture", meta = (ClampMin = "1"))
@@ -71,9 +75,13 @@ private:
 	TObjectPtr<UTextBlock> SelectedPictureCountText;
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UButton> NextButton;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> IsNextPlayer;
 
 	UPROPERTY(Transient)
 	TObjectPtr<ANoPhotosGameState> ObservedGameState;
+	UPROPERTY(Transient)
+	TObjectPtr<ANPMainGameState> ObservedMainGameState;
 	UPROPERTY(Transient)
 	TObjectPtr<UNPPhotoTransferComponent> TransferComponent;
 
