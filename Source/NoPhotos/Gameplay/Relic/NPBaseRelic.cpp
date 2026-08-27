@@ -4,8 +4,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Data/Structs/NPRelicData.h"
 #include "Engine/CollisionProfile.h"
-#include "GameFramework/PlayerState.h"
 #include "Gameplay/Interaction/Components/GrabbableComponent.h"
+#include "Gameplay/Relic/Components/NPRelicOwnershipComponent.h"
 #include "Net/UnrealNetwork.h"
 
 const FName ANPBaseRelic::RelicComponentName(TEXT("RelicMesh"));
@@ -26,6 +26,7 @@ ANPBaseRelic::ANPBaseRelic(const FObjectInitializer& ObjectInitializer)
 	RelicMesh->SetSimulatePhysics(false);
 
 	GrabbableComponent = CreateDefaultSubobject<UGrabbableComponent>(TEXT("GrabbableComponent"));
+	OwnershipComponent = CreateDefaultSubobject<UNPRelicOwnershipComponent>(TEXT("OwnershipComponent"));
 }
 
 void ANPBaseRelic::BeginPlay()
@@ -84,28 +85,19 @@ void ANPBaseRelic::OnRep_IsDisplayed()
 	RelicMesh->SetSimulatePhysics(!bIsDisplayed && !bIsReturned && bCanSimulate);
 }
 
-void ANPBaseRelic::SetLastCarrierPlayerState(APlayerState* PlayerState)
+bool ANPBaseRelic::AddPhotoPenalty(int32 PenaltyAmount)
 {
-	if (!HasAuthority() || bIsReturned || !IsValid(PlayerState)
-		|| LastCarrierPlayerState == PlayerState)
-	{
-		return;
-	}
-
-	LastCarrierPlayerState = PlayerState;
-}
-
-bool ANPBaseRelic::RegisterEvidencePhotographer(APlayerState* Photographer)
-{
-	if (!HasAuthority() || bIsReturned || !IsValid(Photographer)
-		|| EvidencePhotographers.Contains(Photographer)
-		|| EvidencePhotographers.Num() >= MaximumEvidencePhotographers)
+	if (!HasAuthority() || bIsReturned || PenaltyAmount <= 0)
 	{
 		return false;
 	}
 
-	EvidencePhotographers.Add(Photographer);
-	return true;
+	const int32 PreviousPenalty = AccumulatedPhotoPenalty;
+	AccumulatedPhotoPenalty = FMath::Clamp(
+		AccumulatedPhotoPenalty + PenaltyAmount,
+		0,
+		GetBasePrice());
+	return AccumulatedPhotoPenalty != PreviousPenalty;
 }
 
 bool ANPBaseRelic::TryMarkReturned()

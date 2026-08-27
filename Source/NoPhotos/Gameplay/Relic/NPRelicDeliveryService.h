@@ -29,7 +29,7 @@ private:
 	UPROPERTY(Transient)
 	TWeakObjectPtr<ANPMainGameMode> OwningGameMode;
 
-	/** 이 수만큼 서로 다른 플레이어에게 촬영되면 반환 점수가 0이 됩니다. */
-	UPROPERTY(EditDefaultsOnly, Category="Relic|Delivery", meta=(ClampMin="1"))
-	int32 PhotographersForZeroScore = 3;
+	/** 유효한 증거 사진 한 장마다 Relic 반환 가치에서 차감할 점수입니다. */
+	UPROPERTY(EditDefaultsOnly, Category="Relic|Delivery", meta=(ClampMin="0"))
+	int32 PhotoPenaltyPerCapture = 10;
 };

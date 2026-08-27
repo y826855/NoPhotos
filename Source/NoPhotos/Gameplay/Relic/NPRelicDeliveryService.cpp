@@ -2,11 +2,9 @@
 
 #include "Core/Main/NPMainGameState.h"
 #include "Core/NPPlayerState.h"
-#include "Components/PrimitiveComponent.h"
-#include "GameFramework/Pawn.h"
-#include "Gameplay/Character/Component/NPStablePhysicsGrabComponent.h"
 #include "Gameplay/Photo/NPPhotoEvidenceTypes.h"
 #include "Gameplay/Relic/NPBaseRelic.h"
+#include "Gameplay/Relic/Components/NPRelicOwnershipComponent.h"
 #include "Gameplay/Relic/NPRelicReturnZone.h"
 #include "NoPhotos.h"
 #include "Core/Main/NPMainGameMode.h"
@@ -34,33 +32,29 @@ bool UNPRelicDeliveryService::RegisterPhotoEvidence(const FNPPhotoEvidenceResult
 		return false;
 	}
 
-	const bool bRegistered = Relic->RegisterEvidencePhotographer(Evidence.Photographer);
+	const bool bPenaltyChanged = Relic->AddPhotoPenalty(PhotoPenaltyPerCapture);
 	UE_LOG(
 		LogNoPhotos,
 		Log,
-		TEXT("[RelicDelivery] Evidence %s. Relic=%s Photographer=%s UniquePhotographers=%d ReturnScore=%d"),
-		bRegistered ? TEXT("registered") : TEXT("ignored"),
+		TEXT("[RelicDelivery] Evidence penalty %s. Relic=%s Photographer=%s AccumulatedPenalty=%d ReturnScore=%d"),
+		bPenaltyChanged ? TEXT("applied") : TEXT("clamped/ignored"),
 		*GetNameSafe(Relic),
 		*GetNameSafe(Evidence.Photographer),
-		Relic->GetEvidencePhotographerCount(),
+		Relic->GetAccumulatedPhotoPenalty(),
 		CalculateReturnScore(Relic));
-	return bRegistered;
+	return bPenaltyChanged;
 }
 
 int32 UNPRelicDeliveryService::CalculateReturnScore(const ANPBaseRelic* Relic) const
 {
-	if (!IsValid(Relic) || PhotographersForZeroScore <= 0)
+	if (!IsValid(Relic))
 	{
 		return 0;
 	}
 
-	const int32 PhotographerCount = FMath::Clamp(
-		Relic->GetEvidencePhotographerCount(),
+	return FMath::Max(
 		0,
-		PhotographersForZeroScore);
-	const float RemainingRatio = static_cast<float>(PhotographersForZeroScore - PhotographerCount)
-		/ static_cast<float>(PhotographersForZeroScore);
-	return FMath::RoundToInt(static_cast<float>(Relic->GetBasePrice()) * RemainingRatio);
+		Relic->GetBasePrice() - Relic->GetAccumulatedPhotoPenalty());
 }
 
 bool UNPRelicDeliveryService::TryDeliverRelic(
@@ -76,49 +70,59 @@ bool UNPRelicDeliveryService::TryDeliverRelic(
 	ANPMainGameState* MainGameState = GetWorld()
 		? GetWorld()->GetGameState<ANPMainGameState>()
 		: nullptr;
-	ANPPlayerState* Carrier = Cast<ANPPlayerState>(Relic->GetLastCarrierPlayerState());
-	if (!MainGameState || !MainGameState->IsMainGameActive() || !Carrier)
+	UNPRelicOwnershipComponent* Ownership = Relic->GetOwnershipComponent();
+	TArray<ANPPlayerState*> Owners;
+	if (Ownership)
+	{
+		Ownership->GetCurrentOwners(Owners);
+	}
+	Owners.RemoveAll([](const ANPPlayerState* Owner)
+	{
+		return !IsValid(Owner);
+	});
+	Owners.Sort([](const ANPPlayerState& Left, const ANPPlayerState& Right)
+	{
+		return Left.GetPlayerId() < Right.GetPlayerId();
+	});
+
+	if (!MainGameState || !MainGameState->IsMainGameActive() || Owners.IsEmpty())
 	{
 		UE_LOG(
 			LogNoPhotos,
 			Warning,
-			TEXT("[RelicDelivery] Delivery rejected. Relic=%s GameActive=%s Carrier=%s"),
+			TEXT("[RelicDelivery] Delivery rejected. Relic=%s GameActive=%s OwnerCount=%d"),
 			*GetNameSafe(Relic),
 			MainGameState && MainGameState->IsMainGameActive() ? TEXT("true") : TEXT("false"),
-			*GetNameSafe(Carrier));
+			Owners.Num());
 		return false;
 	}
 
 	const int32 AwardedScore = CalculateReturnScore(Relic);
-	if (APawn* CarrierPawn = Carrier->GetPawn())
-	{
-		if (UNPStablePhysicsGrabComponent* GrabComponent =
-			CarrierPawn->FindComponentByClass<UNPStablePhysicsGrabComponent>())
-		{
-			const UPrimitiveComponent* GrabbedComponent = GrabComponent->GetGrabbedComponent();
-			if (GrabbedComponent && GrabbedComponent->GetOwner() == Relic)
-			{
-				GrabComponent->SetGrabRequested(false);
-			}
-		}
-	}
+	const int32 ScorePerOwner = AwardedScore / Owners.Num();
+	const int32 ScoreRemainder = AwardedScore % Owners.Num();
+	Ownership->ReleaseAllGrabbers();
 	if (!Relic->TryMarkReturned())
 	{
 		return false;
 	}
 
-	if (AwardedScore > 0)
+	for (int32 OwnerIndex = 0; OwnerIndex < Owners.Num(); ++OwnerIndex)
 	{
-		Carrier->AddScore(AwardedScore);
+		const int32 OwnerScore = ScorePerOwner + (OwnerIndex < ScoreRemainder ? 1 : 0);
+		if (OwnerScore > 0)
+		{
+			Owners[OwnerIndex]->AddScore(OwnerScore);
+		}
 	}
+	Ownership->ClearOwnership();
 	UE_LOG(
 		LogNoPhotos,
 		Log,
-		TEXT("[RelicDelivery] Relic returned. Relic=%s Carrier=%s BasePrice=%d Photographers=%d AwardedScore=%d"),
+		TEXT("[RelicDelivery] Relic returned. Relic=%s OwnerCount=%d BasePrice=%d PhotoPenalty=%d TotalScore=%d"),
 		*GetNameSafe(Relic),
-		*GetNameSafe(Carrier),
+		Owners.Num(),
 		Relic->GetBasePrice(),
-		Relic->GetEvidencePhotographerCount(),
+		Relic->GetAccumulatedPhotoPenalty(),
 		AwardedScore);
 	return true;
 }

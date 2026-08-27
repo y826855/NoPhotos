@@ -8,6 +8,7 @@
 #include "Gameplay/Character/Component/NPStablePhysicsNetworkPredictionComponent.h"
 #include "Gameplay/Interaction/Components/GrabbableComponent.h"
 #include "Gameplay/Relic/NPBaseRelic.h"
+#include "Gameplay/Relic/Components/NPRelicOwnershipComponent.h"
 #include "Core/NPPlayerState.h"
 #include "Gameplay/Character/Component/NPStablePhysicsMovementComponent.h"
 
@@ -67,6 +68,16 @@ void ANPReplicatedStablePhysicsPawn::PossessedBy(AController* NewController)
 
 void ANPReplicatedStablePhysicsPawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (HasAuthority() && IsValid(RegisteredGrabbedRelic))
+	{
+		if (UNPRelicOwnershipComponent* Ownership =
+			RegisteredGrabbedRelic->GetOwnershipComponent())
+		{
+			Ownership->UnregisterGrabber(RightHandGrab);
+		}
+		RegisteredGrabbedRelic = nullptr;
+	}
+
 	if (HasAuthority() && IsValid(ExternallyGrabbedTargetPawn))
 	{
 		ANPReplicatedStablePhysicsPawn* TargetPawn = ExternallyGrabbedTargetPawn;
@@ -417,6 +428,33 @@ void ANPReplicatedStablePhysicsPawn::UpdateLocalPredictedGrab(float DeltaSeconds
 void ANPReplicatedStablePhysicsPawn::HandleGrabbedComponentChanged(
 	UPrimitiveComponent* NewGrabbedComponent)
 {
+	ANPBaseRelic* NewGrabbedRelic = IsValid(NewGrabbedComponent)
+		? Cast<ANPBaseRelic>(NewGrabbedComponent->GetOwner())
+		: nullptr;
+	if (RegisteredGrabbedRelic != NewGrabbedRelic)
+	{
+		if (IsValid(RegisteredGrabbedRelic))
+		{
+			if (UNPRelicOwnershipComponent* PreviousOwnership =
+				RegisteredGrabbedRelic->GetOwnershipComponent())
+			{
+				PreviousOwnership->UnregisterGrabber(RightHandGrab);
+			}
+		}
+
+		RegisteredGrabbedRelic = NewGrabbedRelic;
+		if (IsValid(RegisteredGrabbedRelic))
+		{
+			if (UNPRelicOwnershipComponent* NewOwnership =
+				RegisteredGrabbedRelic->GetOwnershipComponent())
+			{
+				NewOwnership->RegisterGrabber(
+					RightHandGrab,
+					GetPlayerState<ANPPlayerState>());
+			}
+		}
+	}
+
 	ANPReplicatedStablePhysicsPawn* NewGrabbedPawn = IsValid(NewGrabbedComponent)
 		? Cast<ANPReplicatedStablePhysicsPawn>(NewGrabbedComponent->GetOwner())
 		: nullptr;
@@ -451,10 +489,6 @@ void ANPReplicatedStablePhysicsPawn::HandleGrabbedComponentChanged(
 		ReplicatedServerHandWorldLocation =
 			PhysicsMesh->GetSocketLocation(RightHandBoneName);
 
-		if (ANPBaseRelic* Relic = Cast<ANPBaseRelic>(NewGrabbedComponent->GetOwner()))
-		{
-			Relic->SetLastCarrierPlayerState(GetPlayerState<ANPPlayerState>());
-		}
 	}
 	else
 	{

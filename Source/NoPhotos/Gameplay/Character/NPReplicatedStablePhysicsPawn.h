@@ -10,6 +10,7 @@ class UPrimitiveComponent;
 class AController;
 class FLifetimeProperty;
 class UNPStablePhysicsNetworkPredictionComponent;
+class ANPBaseRelic;
 
 USTRUCT()
 struct FReplicatedStableGrabState
@@ -142,6 +143,10 @@ private:
 	/** 서버에서 이 캐릭터가 현재 잡고 있는 다른 캐릭터를 추적합니다. */
 	UPROPERTY(Transient)
 	TObjectPtr<ANPReplicatedStablePhysicsPawn> ExternallyGrabbedTargetPawn = nullptr;
+
+	/** 서버에서 RightHandGrab을 소유자로 등록한 현재 Relic입니다. */
+	UPROPERTY(Transient)
+	TObjectPtr<ANPBaseRelic> RegisteredGrabbedRelic = nullptr;
 
 	UPROPERTY(EditAnywhere, Category="Network|Grab Prediction", meta=(ClampMin="0.0"))
 	float LocalGrabPredictionTimeout = 0.35f;

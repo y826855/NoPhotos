@@ -6,9 +6,9 @@
 #include "NPBaseRelic.generated.h"
 
 class UGrabbableComponent;
+class UNPRelicOwnershipComponent;
 class UPrimitiveComponent;
 class FLifetimeProperty;
-class APlayerState;
 
 UCLASS(Abstract, Blueprintable)
 class NOPHOTOS_API ANPBaseRelic : public AActor
@@ -29,20 +29,17 @@ public:
 	UFUNCTION(BlueprintPure, Category="Relic|Delivery")
 	bool IsReturned() const { return bIsReturned; }
 
-	/** 서버에서만 유효한 반환 점수 지급 대상입니다. */
-	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly, Category="Relic|Delivery")
-	APlayerState* GetLastCarrierPlayerState() const { return LastCarrierPlayerState; }
-
-	/** 서버에서만 유효한 고유 촬영자 수입니다. */
-	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly, Category="Relic|Delivery")
-	int32 GetEvidencePhotographerCount() const { return EvidencePhotographers.Num(); }
-
 	UFUNCTION(BlueprintPure, Category="Relic|Delivery")
 	int32 GetBasePrice() const;
 
+	UFUNCTION(BlueprintPure, BlueprintAuthorityOnly, Category="Relic|Delivery")
+	int32 GetAccumulatedPhotoPenalty() const { return AccumulatedPhotoPenalty; }
+
+	UFUNCTION(BlueprintPure, Category="Relic|Ownership")
+	UNPRelicOwnershipComponent* GetOwnershipComponent() const { return OwnershipComponent; }
+
 	void SetUnlocked(bool bUnlocked);
-	void SetLastCarrierPlayerState(APlayerState* PlayerState);
-	bool RegisterEvidencePhotographer(APlayerState* Photographer);
+	bool AddPhotoPenalty(int32 PenaltyAmount);
 	bool TryMarkReturned();
 
 	/** 서버에서 전시 상태를 해제하고 물리를 활성화한 뒤 질량과 무관한 속도 충격을 적용합니다. */
@@ -69,6 +66,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	TObjectPtr<UGrabbableComponent> GrabbableComponent;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
+	TObjectPtr<UNPRelicOwnershipComponent> OwnershipComponent;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Relic")
 	FDataTableRowHandle RelicData;
 
@@ -81,12 +81,7 @@ protected:
 	UPROPERTY(ReplicatedUsing=OnRep_IsReturned, VisibleInstanceOnly, BlueprintReadOnly, Category="Relic|Delivery")
 	bool bIsReturned = false;
 
-	UPROPERTY(Transient)
-	TObjectPtr<APlayerState> LastCarrierPlayerState;
-
-	/** 이 Relic을 유효하게 촬영한 고유 플레이어 목록입니다. */
-	UPROPERTY(Transient)
-	TArray<TObjectPtr<APlayerState>> EvidencePhotographers;
-
-	static constexpr int32 MaximumEvidencePhotographers = 6;
+	/** 서버에서만 누적되는 사진 판정 감점입니다. */
+	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, Category="Relic|Delivery")
+	int32 AccumulatedPhotoPenalty = 0;
 };
