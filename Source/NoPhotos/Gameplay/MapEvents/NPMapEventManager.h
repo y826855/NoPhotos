@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "GameplayTagContainer.h"
+#include "NPMapEventTypes.h"
 #include "NPMapEventManager.generated.h"
 
 class ANPMapEvent;
@@ -11,7 +12,24 @@ class ANPMapEventSpawnPoint;
 class UNPMapEventCatalog;
 class ULevelStreamingDynamic;
 class UWorld;
-enum class ENPMapEventType : uint8;
+
+/** 클라이언트 UI가 맵 이벤트 액터에 의존하지 않고 표시할 수 있는 복제 정보입니다. */
+USTRUCT(BlueprintType)
+struct NOPHOTOS_API FNPActiveMapEventPresentation
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Map Event|UI")
+	FName EventId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Map Event|UI")
+	FText Title;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Map Event|UI")
+	FText Description;
+};
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FNPActiveMapEventsChangedSignature);
 
 /** GameState에 부착되어 서버의 맵 이벤트 스케줄과 실행 상태를 관리합니다. */
 UCLASS(Blueprintable, ClassGroup = (MapEvent), meta = (BlueprintSpawnableComponent))
@@ -21,6 +39,22 @@ class NOPHOTOS_API UNPMapEventManagerComponent : public UActorComponent
 
 public:
 	UNPMapEventManagerComponent();
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	/** 활성 이벤트가 시작되거나 종료되어 UI 표시 정보가 바뀌면 서버와 각 클라이언트에서 호출됩니다. */
+	UPROPERTY(BlueprintAssignable, Category = "Map Event|UI")
+	FNPActiveMapEventsChangedSignature OnActiveMapEventsChanged;
+
+	/** 동시 이벤트를 포함한 현재 활성 이벤트 표시 정보입니다. */
+	UFUNCTION(BlueprintPure, Category = "Map Event|UI")
+	TArray<FNPActiveMapEventPresentation> GetActiveEventPresentations() const
+	{
+		return ActiveEventPresentations;
+	}
+
+	/** 가장 최근에 시작된 활성 이벤트를 반환합니다. */
+	UFUNCTION(BlueprintPure, Category = "Map Event|UI")
+	bool GetPrimaryActiveEventPresentation(FNPActiveMapEventPresentation& OutPresentation) const;
 
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Map Event")
 	void StartEventScheduling();
@@ -44,6 +78,14 @@ public:
 	bool FindRandomSpawnTransform(
 		FGameplayTag SpawnGroup,
 		FVector RequiredHalfExtent,
+		FTransform& OutTransform) const;
+
+	/** 이벤트 BP에서 선택한 Point/Volume/Both 방식으로 생성 Transform을 찾습니다. */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Map Event|Locations")
+	bool FindRandomSpawnTransformBySource(
+		FGameplayTag SpawnGroup,
+		FVector RequiredHalfExtent,
+		ENPMapEventLocationSource LocationSource,
 		FTransform& OutTransform) const;
 
 protected:
@@ -78,8 +120,21 @@ protected:
 
 private:
 	bool HasServerAuthority() const;
-	void CollectExistingLocationCollectors();
+	void CollectExistingLocationCollectors(
+		ENPMapEventLocationSource LocationSource = ENPMapEventLocationSource::Both);
 	void CreateEventInstances();
+	void RegisterManagedEvent(ANPMapEvent* EventInstance);
+
+	UFUNCTION()
+	void HandleManagedEventStarted(ANPMapEvent* MapEvent);
+
+	UFUNCTION()
+	void HandleManagedEventFinished(ANPMapEvent* MapEvent);
+
+	UFUNCTION()
+	void OnRep_ActiveEventPresentations();
+
+	void NotifyActiveEventPresentationsChanged();
 	bool RequestEventStart(ANPMapEvent* EventInstance);
 	bool LoadEventLocationLevel(
 		ANPMapEvent* EventInstance,
@@ -103,6 +158,10 @@ private:
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<ANPMapEvent>> EventInstances;
+
+	/** GameState의 이 컴포넌트를 통해 모든 클라이언트에 전달되는 UI용 활성 이벤트 정보입니다. */
+	UPROPERTY(ReplicatedUsing = OnRep_ActiveEventPresentations)
+	TArray<FNPActiveMapEventPresentation> ActiveEventPresentations;
 
 	/** 이벤트 인스턴스가 실행될 때 함께 스트리밍할 위치 Point/Volume 레벨입니다. */
 	UPROPERTY(Transient)

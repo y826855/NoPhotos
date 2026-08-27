@@ -25,6 +25,10 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category="Relic Bonus Countdown")
 	void SetCountdownDuration(float DurationSeconds);
 
+	/** 이벤트 액터와 완전히 동일한 서버 종료 시각을 사용합니다. */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category="Relic Bonus Countdown")
+	void SetCountdownEndServerWorldTime(float InEndServerWorldTime);
+
 	UFUNCTION(BlueprintPure, Category="Relic Bonus Countdown")
 	UWidgetComponent* GetCountdownWidgetComponent() const { return CountdownWidgetComponent; }
 
@@ -38,11 +42,14 @@ protected:
 	TObjectPtr<UWidgetComponent> CountdownWidgetComponent;
 
 private:
+	UFUNCTION()
+	void OnRep_EndServerWorldTime();
+
 	void UpdateCountdown();
 	void FaceLocalPlayerCamera();
 	float GetSynchronizedWorldTime() const;
 
-	UPROPERTY(Replicated)
+	UPROPERTY(ReplicatedUsing=OnRep_EndServerWorldTime)
 	float EndServerWorldTime = 0.0f;
 
 	int32 LastDisplayedSeconds = INDEX_NONE;

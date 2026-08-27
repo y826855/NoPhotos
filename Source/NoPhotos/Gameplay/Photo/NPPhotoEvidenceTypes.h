@@ -67,6 +67,16 @@ struct NOPHOTOS_API FNPPhotoEvidenceResult
 	UPROPERTY(BlueprintReadOnly, Category="Photo")
 	float RelicVisibility = 0.0f;
 
+	/** 유물 증거와 독립적으로 사진 반응 대상이 촬영되었는지 나타냅니다. */
+	UPROPERTY(BlueprintReadOnly, Category="Photo")
+	bool bReactiveTargetSuccess = false;
+
+	UPROPERTY(BlueprintReadOnly, Category="Photo")
+	TObjectPtr<AActor> ReactiveTarget = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category="Photo")
+	float ReactiveTargetVisibility = 0.0f;
+
 	UPROPERTY(BlueprintReadOnly, Category="Photo")
 	float ServerCaptureTime = 0.0f;
 };

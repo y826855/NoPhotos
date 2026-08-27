@@ -4,6 +4,7 @@
 #include "Engine/LevelStreamingDynamic.h"
 #include "EngineUtils.h"
 #include "GameFramework/Actor.h"
+#include "Net/UnrealNetwork.h"
 #include "NPMapEvent.h"
 #include "NPMapEventCatalog.h"
 #include "NPMapEventDefinition.h"
@@ -16,6 +17,26 @@ UNPMapEventManagerComponent::UNPMapEventManagerComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 	SetIsReplicatedByDefault(true);
+}
+
+void UNPMapEventManagerComponent::GetLifetimeReplicatedProps(
+	TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(UNPMapEventManagerComponent, ActiveEventPresentations);
+}
+
+bool UNPMapEventManagerComponent::GetPrimaryActiveEventPresentation(
+	FNPActiveMapEventPresentation& OutPresentation) const
+{
+	if (ActiveEventPresentations.IsEmpty())
+	{
+		OutPresentation = FNPActiveMapEventPresentation();
+		return false;
+	}
+
+	OutPresentation = ActiveEventPresentations.Last();
+	return true;
 }
 
 void UNPMapEventManagerComponent::BeginPlay()
@@ -38,6 +59,14 @@ void UNPMapEventManagerComponent::BeginPlay()
 void UNPMapEventManagerComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	StopEventScheduling();
+	for (ANPMapEvent* EventInstance : EventInstances)
+	{
+		if (IsValid(EventInstance))
+		{
+			EventInstance->OnEventStarted.RemoveDynamic(this, &ThisClass::HandleManagedEventStarted);
+			EventInstance->OnEventFinished.RemoveDynamic(this, &ThisClass::HandleManagedEventFinished);
+		}
+	}
 	if (IsValid(PendingEvent))
 	{
 		PendingEvent->OnEventFinished.RemoveDynamic(
@@ -197,13 +226,33 @@ bool UNPMapEventManagerComponent::FindRandomSpawnTransform(
 	const FVector RequiredHalfExtent,
 	FTransform& OutTransform) const
 {
+	return FindRandomSpawnTransformBySource(
+		SpawnGroup,
+		RequiredHalfExtent,
+		ENPMapEventLocationSource::Volume,
+		OutTransform);
+}
+
+bool UNPMapEventManagerComponent::FindRandomSpawnTransformBySource(
+	const FGameplayTag SpawnGroup,
+	const FVector RequiredHalfExtent,
+	const ENPMapEventLocationSource LocationSource,
+	FTransform& OutTransform) const
+{
 	OutTransform = FTransform::Identity;
 	if (!HasServerAuthority() || !SpawnGroup.IsValid())
 	{
 		return false;
 	}
 
-	TArray<ANPMapEventSpawnVolume*> Candidates;
+	struct FLocationCandidate
+	{
+		ANPMapEventSpawnPoint* Point = nullptr;
+		ANPMapEventSpawnVolume* Volume = nullptr;
+		float Weight = 0.0f;
+	};
+
+	TArray<FLocationCandidate> Candidates;
 	for (ANPMapEventLocationCollector* Collector : LocationCollectors)
 	{
 		if (!IsValid(Collector))
@@ -211,18 +260,51 @@ bool UNPMapEventManagerComponent::FindRandomSpawnTransform(
 			continue;
 		}
 
-		TArray<ANPMapEventSpawnVolume*> CollectorVolumes;
-		Collector->GetSpawnVolumesForGroup(SpawnGroup, CollectorVolumes);
-		for (ANPMapEventSpawnVolume* Volume : CollectorVolumes)
+		if (LocationSource != ENPMapEventLocationSource::Volume)
 		{
-			Candidates.AddUnique(Volume);
+			TArray<ANPMapEventSpawnPoint*> CollectorPoints;
+			Collector->GetSpawnPointsForGroup(SpawnGroup, CollectorPoints);
+			for (ANPMapEventSpawnPoint* Point : CollectorPoints)
+			{
+				const bool bAlreadyAdded = Candidates.ContainsByPredicate(
+					[Point](const FLocationCandidate& Candidate)
+					{
+						return Candidate.Point == Point;
+					});
+				if (!bAlreadyAdded)
+				{
+					FLocationCandidate& Candidate = Candidates.AddDefaulted_GetRef();
+					Candidate.Point = Point;
+					Candidate.Weight = Point->GetSelectionWeight();
+				}
+			}
+		}
+
+		if (LocationSource != ENPMapEventLocationSource::Point)
+		{
+			TArray<ANPMapEventSpawnVolume*> CollectorVolumes;
+			Collector->GetSpawnVolumesForGroup(SpawnGroup, CollectorVolumes);
+			for (ANPMapEventSpawnVolume* Volume : CollectorVolumes)
+			{
+				const bool bAlreadyAdded = Candidates.ContainsByPredicate(
+					[Volume](const FLocationCandidate& Candidate)
+					{
+						return Candidate.Volume == Volume;
+					});
+				if (!bAlreadyAdded)
+				{
+					FLocationCandidate& Candidate = Candidates.AddDefaulted_GetRef();
+					Candidate.Volume = Volume;
+					Candidate.Weight = Volume->GetSelectionWeight();
+				}
+			}
 		}
 	}
 
 	float TotalWeight = 0.0f;
-	for (const ANPMapEventSpawnVolume* Candidate : Candidates)
+	for (const FLocationCandidate& Candidate : Candidates)
 	{
-		TotalWeight += Candidate->GetSelectionWeight();
+		TotalWeight += Candidate.Weight;
 	}
 
 	while (!Candidates.IsEmpty() && TotalWeight > 0.0f)
@@ -231,7 +313,7 @@ bool UNPMapEventManagerComponent::FindRandomSpawnTransform(
 		int32 SelectedIndex = Candidates.Num() - 1;
 		for (int32 Index = 0; Index < Candidates.Num(); ++Index)
 		{
-			Selection -= Candidates[Index]->GetSelectionWeight();
+			Selection -= Candidates[Index].Weight;
 			if (Selection <= 0.0f)
 			{
 				SelectedIndex = Index;
@@ -239,13 +321,21 @@ bool UNPMapEventManagerComponent::FindRandomSpawnTransform(
 			}
 		}
 
-		ANPMapEventSpawnVolume* SelectedVolume = Candidates[SelectedIndex];
-		if (SelectedVolume->FindRandomGroundTransform(RequiredHalfExtent, OutTransform))
+		const FLocationCandidate& SelectedCandidate = Candidates[SelectedIndex];
+		if (IsValid(SelectedCandidate.Point))
+		{
+			OutTransform = SelectedCandidate.Point->GetActorTransform();
+			return true;
+		}
+		if (IsValid(SelectedCandidate.Volume)
+			&& SelectedCandidate.Volume->FindRandomGroundTransform(
+				RequiredHalfExtent,
+				OutTransform))
 		{
 			return true;
 		}
 
-		TotalWeight -= SelectedVolume->GetSelectionWeight();
+		TotalWeight -= SelectedCandidate.Weight;
 		Candidates.RemoveAtSwap(SelectedIndex, 1, EAllowShrinking::No);
 	}
 
@@ -258,7 +348,8 @@ bool UNPMapEventManagerComponent::HasServerAuthority() const
 	return IsValid(Owner) && Owner->HasAuthority();
 }
 
-void UNPMapEventManagerComponent::CollectExistingLocationCollectors()
+void UNPMapEventManagerComponent::CollectExistingLocationCollectors(
+	const ENPMapEventLocationSource LocationSource)
 {
 	UWorld* World = GetWorld();
 	if (!World)
@@ -271,7 +362,7 @@ void UNPMapEventManagerComponent::CollectExistingLocationCollectors()
 		ANPMapEventLocationCollector* Collector = *Iterator;
 		if (IsValid(Collector))
 		{
-			Collector->RefreshLocations();
+			Collector->RefreshLocations(LocationSource);
 			RegisterLocationCollector(Collector);
 		}
 	}
@@ -307,8 +398,8 @@ void UNPMapEventManagerComponent::CreateEventInstances()
 		if (EventInstance)
 		{
 			EventInstance->InitializeEvent(Definition, Entry.SelectionWeight);
+			RegisterManagedEvent(EventInstance);
 			EventInstance->FinishSpawning(SpawnTransform);
-			EventInstances.Add(EventInstance);
 			if (!Entry.LocationLevelInstance.IsNull())
 			{
 				EventLocationLevels.Add(EventInstance, Entry.LocationLevelInstance);
@@ -335,8 +426,89 @@ void UNPMapEventManagerComponent::CreateEventInstances()
 		SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		if (ANPMapEvent* EventInstance = World->SpawnActor<ANPMapEvent>(EventClass, SpawnTransform, SpawnParameters))
 		{
-			EventInstances.Add(EventInstance);
+			RegisterManagedEvent(EventInstance);
 		}
+	}
+}
+
+void UNPMapEventManagerComponent::RegisterManagedEvent(ANPMapEvent* EventInstance)
+{
+	if (!IsValid(EventInstance))
+	{
+		return;
+	}
+
+	EventInstances.AddUnique(EventInstance);
+	EventInstance->OnEventStarted.AddUniqueDynamic(this, &ThisClass::HandleManagedEventStarted);
+	EventInstance->OnEventFinished.AddUniqueDynamic(this, &ThisClass::HandleManagedEventFinished);
+
+	// SpawnActor 경로에서 BeginPlay 중 이미 시작된 이벤트도 놓치지 않습니다.
+	if (EventInstance->IsEventActive())
+	{
+		HandleManagedEventStarted(EventInstance);
+	}
+}
+
+void UNPMapEventManagerComponent::HandleManagedEventStarted(ANPMapEvent* MapEvent)
+{
+	if (!HasServerAuthority() || !IsValid(MapEvent))
+	{
+		return;
+	}
+
+	FNPActiveMapEventPresentation Presentation;
+	Presentation.EventId = MapEvent->GetEventId();
+	if (Presentation.EventId.IsNone())
+	{
+		Presentation.EventId = MapEvent->GetFName();
+	}
+	Presentation.Title = MapEvent->GetEventDisplayName();
+	Presentation.Description = MapEvent->GetEventDescription();
+
+	ActiveEventPresentations.RemoveAll(
+		[EventId = Presentation.EventId](const FNPActiveMapEventPresentation& Existing)
+		{
+			return Existing.EventId == EventId;
+		});
+	ActiveEventPresentations.Add(MoveTemp(Presentation));
+	NotifyActiveEventPresentationsChanged();
+}
+
+void UNPMapEventManagerComponent::HandleManagedEventFinished(ANPMapEvent* MapEvent)
+{
+	if (!HasServerAuthority() || !IsValid(MapEvent))
+	{
+		return;
+	}
+
+	FName EventId = MapEvent->GetEventId();
+	if (EventId.IsNone())
+	{
+		EventId = MapEvent->GetFName();
+	}
+
+	const int32 RemovedCount = ActiveEventPresentations.RemoveAll(
+		[EventId](const FNPActiveMapEventPresentation& Existing)
+		{
+			return Existing.EventId == EventId;
+		});
+	if (RemovedCount > 0)
+	{
+		NotifyActiveEventPresentationsChanged();
+	}
+}
+
+void UNPMapEventManagerComponent::OnRep_ActiveEventPresentations()
+{
+	OnActiveMapEventsChanged.Broadcast();
+}
+
+void UNPMapEventManagerComponent::NotifyActiveEventPresentationsChanged()
+{
+	OnActiveMapEventsChanged.Broadcast();
+	if (AActor* Owner = GetOwner())
+	{
+		Owner->ForceNetUpdate();
 	}
 }
 
@@ -353,6 +525,7 @@ bool UNPMapEventManagerComponent::RequestEventStart(ANPMapEvent* EventInstance)
 	const TSoftObjectPtr<UWorld>* LocationLevelInstance = EventLocationLevels.Find(EventInstance);
 	if (!LocationLevelInstance || LocationLevelInstance->IsNull())
 	{
+		CollectExistingLocationCollectors(EventInstance->GetLocationSource());
 		return EventInstance->StartEvent();
 	}
 
@@ -419,9 +592,6 @@ void UNPMapEventManagerComponent::HandleLocationLevelShown()
 	ActiveLocationLevel->OnLevelShown.RemoveDynamic(this, &ThisClass::HandleLocationLevelShown);
 	bLocationLevelTransitionInProgress = false;
 
-	// 스트리밍된 Level Instance 내부 Collector의 BeginPlay 순서에만 의존하지 않습니다.
-	CollectExistingLocationCollectors();
-
 	ANPMapEvent* EventToStart = PendingEvent;
 	PendingEvent = nullptr;
 	if (!IsValid(EventToStart))
@@ -429,6 +599,10 @@ void UNPMapEventManagerComponent::HandleLocationLevelShown()
 		UnloadActiveLocationLevel();
 		return;
 	}
+
+	// 이벤트 BP가 선택한 Point/Volume 종류만 다시 수집합니다.
+	// 스트리밍된 Level Instance 내부 Collector의 BeginPlay 순서에도 의존하지 않습니다.
+	CollectExistingLocationCollectors(EventToStart->GetLocationSource());
 
 	EventToStart->OnEventFinished.AddUniqueDynamic(
 		this,

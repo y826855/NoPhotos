@@ -4,10 +4,17 @@
 #include "Components/Border.h"
 #include "Components/TextBlock.h"
 
+TSharedRef<SWidget> UNPRelicBonusCountdownWidget::RebuildWidget()
+{
+	// NativeConstruct 시점에는 Slate 위젯이 이미 만들어진 뒤이므로,
+	// 네이티브 전용 WidgetTree는 반드시 Super::RebuildWidget 전에 구성합니다.
+	BuildDefaultWidget();
+	return Super::RebuildWidget();
+}
+
 void UNPRelicBonusCountdownWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	BuildDefaultWidget();
 	SetRemainingSeconds(CachedRemainingSeconds == INDEX_NONE ? 0 : CachedRemainingSeconds);
 }
 

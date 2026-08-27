@@ -45,6 +45,9 @@ public:
 	FText GetEventDisplayName() const;
 
 	UFUNCTION(BlueprintPure, Category = "Map Event|Metadata")
+	FText GetEventDescription() const;
+
+	UFUNCTION(BlueprintPure, Category = "Map Event|Metadata")
 	ENPMapEventType GetEventType() const;
 
 	UFUNCTION(BlueprintPure, Category = "Map Event|Metadata")
@@ -52,6 +55,18 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Map Event|Metadata")
 	float GetEventDuration() const;
+
+	/** 서버 동기화 시간을 기준으로 계산한 현재 이벤트의 남은 시간입니다. */
+	UFUNCTION(BlueprintPure, Category = "Map Event|Timing")
+	float GetRemainingEventTime() const;
+
+	/** 월드 UI처럼 동일한 종료 시각을 공유해야 하는 객체에서 사용하는 서버 절대 시간입니다. */
+	UFUNCTION(BlueprintPure, Category = "Map Event|Timing")
+	float GetEventEndServerWorldTime() const { return EventEndServerWorldTime; }
+
+	/** 이 이벤트 BP가 위치 후보로 사용할 Point/Volume 종류입니다. */
+	UFUNCTION(BlueprintPure, Category = "Map Event|Locations")
+	ENPMapEventLocationSource GetLocationSource() const { return LocationSource; }
 
 	/** 이 이벤트가 지정된 A/B 발생 시간의 후보로 들어갈 수 있는지 반환합니다. */
 	UFUNCTION(BlueprintPure, Category = "Map Event|Metadata")
@@ -87,6 +102,9 @@ protected:
 	FText EventDisplayName;
 
 	UPROPERTY()
+	FText EventDescription;
+
+	UPROPERTY()
 	ENPMapEventType EventType = ENPMapEventType::TypeA;
 
 	UPROPERTY()
@@ -94,6 +112,10 @@ protected:
 
 	UPROPERTY()
 	float Duration = 8.0f;
+
+	/** Point는 지정 위치, Volume은 영역 안 임의 위치, Both는 두 후보를 가중치로 함께 사용합니다. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Map Event|Locations")
+	ENPMapEventLocationSource LocationSource = ENPMapEventLocationSource::Both;
 
 private:
 	UFUNCTION()
@@ -105,6 +127,10 @@ private:
 
 	UPROPERTY(ReplicatedUsing = OnRep_IsActive)
 	bool bIsActive = false;
+
+	/** GameState의 서버 동기화 시간 기준 이벤트 종료 시각입니다. */
+	UPROPERTY(Replicated)
+	float EventEndServerWorldTime = 0.0f;
 
 	/** 카탈로그 엔트리에서 주입된 서버 런타임 선택 가중치입니다. */
 	float RuntimeSelectionWeight = 1.0f;
